@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { LayoutGrid } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import EmptyState from "@components/Common/EmptyState";
 import AppLauncherCard from "@components/Common/AppLauncherCard";
@@ -35,23 +34,23 @@ const PersonalProgramsPage: React.FC = () => {
 
   return (
     <div
-      className="it-technology-page w-full flex-1 mx-auto px-[var(--ws-space-3)] py-[var(--ws-space-4)] md:px-[var(--ws-space-4)]"
+      className="it-technology-page flex w-full flex-1 flex-col px-[var(--ws-space-3)] py-[var(--ws-space-4)] md:px-[var(--ws-space-4)]"
       style={{ maxWidth: "var(--ws-shell-max-width)" }}
     >
       {loading ? (
-        <div className="grid gap-[var(--ws-layout-gap)]" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))" }}>
-          {[1, 2].map((i) => (
-            <div key={i} className="rounded-xl bg-surface-2 p-[var(--ws-panel-padding)] space-y-[var(--ws-space-2)]">
-              <Skeleton className="h-10 w-10 rounded-lg" />
-              <Skeleton className="h-5 w-1/2" />
-              <Skeleton className="h-4 w-11/12" />
-              <Skeleton className="h-4 w-8/12" />
+        <div className="border-y border-[var(--ws-color-border-secondary)]">
+          <div className="flex min-h-[76px] items-center gap-3 py-3">
+            <Skeleton className="h-9 w-9 shrink-0 rounded-md" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <Skeleton className="h-4 w-40 max-w-full" />
+              <Skeleton className="h-3 w-64 max-w-full" />
             </div>
-          ))}
+          </div>
         </div>
       ) : xbkEnabled ? (
-        <div className="grid gap-[var(--ws-layout-gap)]" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))" }}>
+        <div className="grid grid-cols-1">
           <AppLauncherCard
+            layout="row"
             title="校本课（XBK）处理系统"
             description="校本课数据处理与管理。"
             icon={<LayoutGrid className="h-5 w-5" />}
@@ -62,18 +61,16 @@ const PersonalProgramsPage: React.FC = () => {
           />
         </div>
       ) : (
-        <Card className="rounded-xl border-none bg-surface-2">
-          <CardContent>
-            <EmptyState
-              description="暂无公开的个人程序"
-              action={
-                <Button variant="outline" size="sm" onClick={() => navigate("/")}>
-                  返回首页
-                </Button>
-              }
-            />
-          </CardContent>
-        </Card>
+        <div className="flex min-h-60 flex-1 items-center justify-center border-y border-[var(--ws-color-border-secondary)]">
+          <EmptyState
+            description="暂无公开的个人程序"
+            action={
+              <Button variant="outline" size="sm" onClick={() => navigate("/home")}>
+                返回首页
+              </Button>
+            }
+          />
+        </div>
       )}
     </div>
   );

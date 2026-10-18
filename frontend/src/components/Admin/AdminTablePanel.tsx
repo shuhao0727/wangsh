@@ -5,8 +5,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import EmptyState from "@components/Common/EmptyState";
 
 type Props = {
+  className?: string;
   title?: React.ReactNode;
   extra?: React.ReactNode;
+  filters?: React.ReactNode;
   /** 自定义 aria-label，当 title 为 ReactNode 时建议提供 */
   ariaLabel?: string;
   loading?: boolean;
@@ -37,7 +39,8 @@ const TableSkeleton: React.FC = () => (
 );
 
 const AdminTablePanel: React.FC<Props> = ({
-  title, extra, ariaLabel,
+  className,
+  title, extra, filters, ariaLabel,
   loading = false,
   isEmpty = false,
   emptyDescription, emptyAction,
@@ -97,7 +100,7 @@ const AdminTablePanel: React.FC<Props> = ({
   };
 
   return (
-    <div className="flex flex-col min-h-0 overflow-hidden flex-1" role="region" aria-label={resolvedAriaLabel}>
+    <div className={`flex flex-col min-h-0 overflow-hidden flex-1 ${className ?? ""}`} role="region" aria-label={resolvedAriaLabel}>
       {(title || extra) && (
         <div className="flex items-center justify-between px-4 py-3">
           {title && <div className="text-base font-semibold text-text-base">{title}</div>}
@@ -105,6 +108,7 @@ const AdminTablePanel: React.FC<Props> = ({
         </div>
       )}
 
+      {filters}
       <div className="flex-1 overflow-hidden flex flex-col">
         {renderBody()}
       </div>

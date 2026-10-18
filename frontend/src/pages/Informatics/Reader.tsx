@@ -522,7 +522,7 @@ const InformaticsReaderPage: React.FC = () => {
     <div className="flex h-full flex-col">
       {renderSearch()}
         <Tabs defaultValue="docs" className="informatics-full-height-tabs">
-          <TabsList className="grid w-full grid-cols-2 gap-[calc(var(--ws-space-1)/2)] rounded-lg bg-surface-2 p-[calc(var(--ws-space-1)/2)]">
+          <TabsList className="grid w-full grid-cols-2 gap-[calc(var(--ws-space-1)/2)] rounded-none bg-transparent p-[calc(var(--ws-space-1)/2)]">
           <TabsTrigger value="docs" className="w-full justify-center gap-[var(--ws-space-1)] text-[var(--ws-text-sm)] data-[state=active]:bg-primary-soft data-[state=active]:text-primary">
             <FileText className="h-4 w-4" />文档列表
           </TabsTrigger>

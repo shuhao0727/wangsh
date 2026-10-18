@@ -49,7 +49,6 @@ import { ConfirmDialog } from "@components/Common/ConfirmDialog";
 import { ActivityDetailContent } from "@components/ActivityDetailDrawer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { DataTable, DataTablePagination } from "@/components/ui/data-table";
 import { Input } from "@/components/ui/input";
 import {
@@ -173,7 +172,7 @@ const SortableItem: React.FC<{
         {...attributes}
         {...listeners}
         type="button"
-        className="inline-flex h-6 w-6 appearance-none items-center justify-center rounded border-0 bg-transparent text-text-tertiary hover:bg-[var(--ws-color-hover-bg)]"
+        className="inline-flex h-6 w-6 appearance-none items-center justify-center rounded-sm border-0 bg-transparent text-text-tertiary hover:bg-[var(--ws-color-hover-bg)]"
         aria-label="拖动排序"
       >
         <GripVertical className="h-4 w-4" />
@@ -1151,20 +1150,27 @@ const ClassroomPlanPage: React.FC = () => {
 
   return (
     <AdminPage scrollable={false}>
-      <div className="flex min-h-0 flex-1 flex-col gap-3 lg:flex-row">
+      <section
+        className={cn(
+          "flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border-secondary bg-surface lg:flex-row",
+          rightView.type !== "none" && "divide-y divide-border-secondary lg:divide-x lg:divide-y-0",
+        )}
+        aria-label="课堂计划工作区"
+      >
         <div
           className={cn(
-            "flex min-h-0 flex-col",
-            rightView.type === "none" ? "w-full flex-1" : "w-full lg:w-[36%] lg:flex-none",
+            "flex min-h-0 min-w-0 flex-col overflow-hidden",
+            rightView.type === "none" ? "w-full flex-1" : "w-full flex-1 lg:w-[38%] lg:flex-none",
           )}
         >
-          <Card className="flex min-h-0 flex-1 flex-col overflow-hidden border border-border bg-surface">
-            <div className="flex items-center justify-between border-b border-border px-3 py-2">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border-secondary px-3 py-2">
               <div className="text-sm font-semibold">计划列表</div>
               <div className="flex items-center gap-1.5">
                 <Button
                   size="sm"
                   variant="outline"
+                  className="h-8"
                   onClick={() => {
                     void handleRefreshList().catch((error) => {
                       showMessage.error(parseErr(error, "刷新失败"));
@@ -1175,7 +1181,7 @@ const ClassroomPlanPage: React.FC = () => {
                   {listLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
                   刷新
                 </Button>
-                <Button size="sm" onClick={openCreate}>
+                <Button size="sm" className="h-8" onClick={openCreate}>
                   <Plus className="h-3.5 w-3.5" />
                   新建
                 </Button>
@@ -1200,8 +1206,8 @@ const ClassroomPlanPage: React.FC = () => {
                 }
               />
             </div>
-          </Card>
-          <div className="mt-2 flex flex-shrink-0 justify-end border-t border-border-secondary bg-surface pt-3">
+          </div>
+          <div className="flex shrink-0 justify-end border-t border-border-secondary px-3 py-2">
             <DataTablePagination
               currentPage={Math.max(1, page)}
               totalPages={Math.max(1, totalPages)}
@@ -1221,20 +1227,19 @@ const ClassroomPlanPage: React.FC = () => {
         </div>
 
         {rightView.type !== "none" && (
-          <div className="flex w-full min-h-0 flex-col lg:w-[64%]">
-            <Card className="flex h-full min-h-0 flex-col overflow-hidden border border-border bg-surface">
-              <div className="flex items-center justify-between border-b border-border px-3 py-2">
+          <div className="flex min-h-0 min-w-0 w-full flex-1 flex-col overflow-hidden lg:w-[62%]">
+            <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border-secondary px-3 py-2">
                 <div className="truncate pr-4 text-sm font-semibold">{rightTitle}</div>
-                <Button size="sm" variant="outline" onClick={() => setRightView({ type: "none" })}>
+                <Button size="sm" variant="outline" className="h-8 shrink-0" onClick={() => setRightView({ type: "none" })}>
                   收起
                 </Button>
-              </div>
-              <div
-                className={cn(
-                  "min-h-0 flex-1 px-3 py-3",
-                  rightView.type === "form" ? "overflow-hidden" : "overflow-auto",
-                )}
-              >
+            </div>
+            <div
+              className={cn(
+                "min-h-0 flex-1 px-3 py-3",
+                rightView.type === "form" ? "overflow-hidden" : "overflow-auto",
+              )}
+            >
                 {rightView.type === "form" && (
                   <PlanFormPanel
                     key={editingPlan ? `edit-${editingPlan.id}` : "new"}
@@ -1260,11 +1265,10 @@ const ClassroomPlanPage: React.FC = () => {
                     onRequestError={handlePlanRequestError}
                   />
                 )}
-              </div>
-            </Card>
+            </div>
           </div>
         )}
-      </div>
+      </section>
       <ConfirmDialog
         open={deleteTarget !== null}
         onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}

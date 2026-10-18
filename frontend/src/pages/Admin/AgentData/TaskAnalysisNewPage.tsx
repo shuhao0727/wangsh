@@ -6,6 +6,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, ArrowLeft, Search, Check, ChevronRight, ChevronLeft } from "lucide-react";
 import dayjs from "dayjs";
@@ -195,10 +196,10 @@ const TaskAnalysisNewPage: React.FC = () => {
   const selectedAnalysisAgentName = agentOptions.find((o) => o.value === analysisAgentId)?.label || "未选择";
 
   return (
-    <div className="h-screen flex flex-col bg-[var(--ws-color-bg)]">
+    <div className="ws-task-analysis-shell flex h-screen flex-col">
       {/* Header */}
-      <header className="shrink-0 border-b border-border-secondary bg-surface/90 backdrop-blur-sm px-6 py-3 flex items-center gap-3">
-        <Button variant="ghost" size="sm" onClick={() => window.close()}><ArrowLeft className="h-4 w-4 mr-1" />关闭</Button>
+      <header className="ws-task-analysis-header flex shrink-0 items-center gap-3 px-5">
+        <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => window.close()}><ArrowLeft className="h-4 w-4 mr-1" />关闭</Button>
         <div className="h-5 w-px bg-border-secondary" />
         <span className="text-sm font-semibold">{isChain ? "新建学生问题链分析" : "新建热点问题分析"}</span>
       </header>
@@ -206,29 +207,29 @@ const TaskAnalysisNewPage: React.FC = () => {
       {saving ? (
         /* 分析进度 */
         <div className="flex-1 flex items-center justify-center px-6">
-          <div className="w-full max-w-xl space-y-5 rounded-2xl border border-border-secondary bg-surface p-6 shadow-sm">
+          <div className="ws-task-analysis-section w-full max-w-xl space-y-5">
             <div className="text-center space-y-3">
               <Loader2 className="h-10 w-10 animate-spin text-primary mx-auto" />
               <div className="text-sm font-medium">{isChain ? "正在分析学生问题链" : "正在分析课程热点问题"}</div>
               <div className="h-2 overflow-hidden rounded-full bg-surface-2"><div className="h-full rounded-full bg-primary transition-all duration-500" style={{ width: `${progress}%` }} /></div>
               <div className="text-xs text-text-tertiary">{progress}%</div>
             </div>
-            <div className="space-y-1.5 max-h-44 overflow-auto rounded-lg bg-surface-2 p-3">
+            <div className="max-h-44 space-y-1.5 overflow-auto rounded-sm bg-surface-2 p-3">
               {progressSteps.map((s, i) => <div key={i} className="text-sm text-text-secondary">{s}</div>)}
             </div>
             {partialResults.length > 0 && (
               <div className="space-y-1.5">
                 <div className="text-xs font-medium text-text-tertiary">阶段结果</div>
-                {partialResults.map((r, i) => <div key={i} className="rounded-lg border border-border-secondary bg-surface px-3 py-2 text-sm text-text-secondary">{r}</div>)}
+                {partialResults.map((r, i) => <div key={i} className="rounded-sm border border-border-secondary bg-surface px-3 py-2 text-sm text-text-secondary">{r}</div>)}
               </div>
             )}
           </div>
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto">
-          <div className="mx-auto max-w-2xl px-6 py-10">
+          <div className="ws-task-analysis-content max-w-2xl">
             {/* Step indicator */}
-            <div className="flex items-center gap-2 mb-8">
+            <div className="mb-6 flex items-center gap-2">
               {STEP_LABELS.map((label, i) => {
                 const s = i + 1;
                 const done = s < step;
@@ -236,7 +237,7 @@ const TaskAnalysisNewPage: React.FC = () => {
                 return (
                   <React.Fragment key={label}>
                     {i > 0 && <div className={`flex-1 h-px ${done ? "bg-primary" : "bg-border"}`} />}
-                    <button onClick={() => { if (done) setStep(s); }} className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all ${active ? "bg-primary text-white shadow-sm" : done ? "bg-primary-soft text-primary cursor-pointer" : "bg-surface-2 text-text-tertiary"}`}>
+                    <button onClick={() => { if (done) setStep(s); }} className={`flex items-center gap-1.5 rounded-sm px-3 py-1.5 text-xs font-medium transition-colors ${active ? "bg-primary text-white shadow-none" : done ? "bg-primary-soft text-primary cursor-pointer" : "bg-surface-2 text-text-tertiary"}`}>
                       {done ? <Check className="h-3 w-3" /> : <span>{s}</span>}
                       <span>{label}</span>
                     </button>
@@ -247,13 +248,13 @@ const TaskAnalysisNewPage: React.FC = () => {
 
             {/* Step 1: 数据源 */}
             {step === 1 && (
-              <div className="space-y-5 rounded-2xl border border-border/40 bg-surface p-6">
+              <div className="ws-task-analysis-section space-y-5">
                 <h2 className="text-base font-semibold">选择数据源</h2>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
                     <label className="text-xs font-medium text-text-secondary">数据来源智能体</label>
                     <Select value={agentId || "__empty__"} onValueChange={(v) => setAgentId(v === "__empty__" ? "" : v)}>
-                      <SelectTrigger className="mt-1.5 h-9"><SelectValue placeholder="选择智能体" /></SelectTrigger>
+                      <SelectTrigger aria-label="数据来源智能体" className="mt-1.5"><SelectValue placeholder="选择智能体" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="__empty__">请选择</SelectItem>
                         {agentOptions.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
@@ -268,21 +269,21 @@ const TaskAnalysisNewPage: React.FC = () => {
                   </div>
                   <div>
                     <label className="text-xs font-medium text-text-secondary">班级（可选）</label>
-                    <Input placeholder="全部班级" value={className} onChange={(e) => setClassName(e.target.value)} className="mt-1.5 h-9" />
+                    <Input aria-label="班级" placeholder="全部班级" value={className} onChange={(e) => setClassName(e.target.value)} className="mt-1.5" />
                   </div>
                   <div>
                     <label className="text-xs font-medium text-text-secondary">开始日期</label>
-                    <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="mt-1.5 h-9" />
+                    <Input aria-label="开始日期" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="mt-1.5" />
                   </div>
                   <div>
                     <label className="text-xs font-medium text-text-secondary">结束日期</label>
-                    <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="mt-1.5 h-9" />
+                    <Input aria-label="结束日期" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="mt-1.5" />
                   </div>
                 </div>
                 <div>
                   <label className="text-xs font-medium text-text-secondary">时间桶粒度</label>
                   <div className="mt-1.5 flex gap-1.5">
-                    {[60, 180, 300].map((v) => <button key={v} onClick={() => setBucketSeconds(v)} className={`px-3 py-1.5 rounded-lg text-xs border transition-colors ${bucketSeconds === v ? "bg-primary text-white border-primary" : "bg-surface border-border text-text-tertiary hover:border-primary/30"}`}>{v / 60} 分钟</button>)}
+                    {[60, 180, 300].map((v) => <button key={v} onClick={() => setBucketSeconds(v)} className={`px-3 py-1.5 rounded-sm text-xs border transition-colors ${bucketSeconds === v ? "bg-primary text-white border-primary" : "bg-surface border-border text-text-tertiary hover:border-primary/30"}`}>{v / 60} 分钟</button>)}
                   </div>
                 </div>
               </div>
@@ -290,12 +291,13 @@ const TaskAnalysisNewPage: React.FC = () => {
 
             {/* Step 2: 教学设计 */}
             {step === 2 && (
-              <div className="space-y-5 rounded-2xl border border-border/40 bg-surface p-6">
+              <div className="ws-task-analysis-section space-y-5">
                 <h2 className="text-base font-semibold">上传教学设计</h2>
                 <div>
                   <label className="text-xs font-medium text-text-secondary">{isChain ? "课程任务单（可选）" : "任务单内容"}{!isChain && <span className="text-red-400 ml-1">*</span>}</label>
-                  <textarea
-                    className="mt-1.5 w-full min-h-[200px] resize-none rounded-xl border border-border/60 bg-surface-2/30 px-4 py-3 text-sm leading-relaxed placeholder:text-text-tertiary/50 focus:outline-none focus:border-primary/40 focus:ring-2 focus:ring-primary/5"
+                  <Textarea
+                    aria-label={isChain ? "课程任务单" : "任务单内容"}
+                    className="mt-1.5 min-h-[200px] resize-none px-4 py-3 leading-relaxed"
                     placeholder={isChain ? "粘贴任务单、教学目标或教师主问题..." : "粘贴任务单中的问题内容...\n\n例如：\n1. 编写一个 for 循环打印 1 到 10\n2. 用 if 判断奇偶数"}
                     value={taskSheet} onChange={(e) => setTaskSheet(e.target.value)}
                   />
@@ -304,13 +306,13 @@ const TaskAnalysisNewPage: React.FC = () => {
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs font-medium text-text-secondary">教师提问标记</span>
-                    <Button variant="ghost" size="sm" onClick={addTeacherMark} className="text-xs h-6 px-2">+ 添加</Button>
+                    <Button variant="ghost" size="sm" onClick={addTeacherMark} className="h-7 px-2 text-xs">+ 添加</Button>
                   </div>
                   <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
                     {teacherMarks.length === 0 ? (
                       <p className="text-xs text-text-tertiary/60 italic">暂未标记。系统将自动识别 teacher 的提问。</p>
                     ) : teacherMarks.map((mark, i) => (
-                      <div key={i} className="flex items-center gap-2 rounded-lg border border-border/40 bg-surface-2/30 px-2.5 py-1.5">
+                      <div key={i} className="flex items-center gap-2 rounded-sm border border-border-secondary bg-surface-2/30 px-2.5 py-1.5">
                         <span className="text-[10px] font-semibold text-text-tertiary w-4">{i + 1}</span>
                         <Input type="time" value={mark.time} onChange={(e) => updateTeacherMark(i, "time", e.target.value)} className="h-7 text-xs w-24" />
                         <Input value={mark.question} onChange={(e) => updateTeacherMark(i, "question", e.target.value)} className="h-7 text-xs flex-1" placeholder="提问内容" />
@@ -324,12 +326,12 @@ const TaskAnalysisNewPage: React.FC = () => {
 
             {/* Step 3: LLM 配置 */}
             {step === 3 && (
-              <div className="space-y-5 rounded-2xl border border-border/40 bg-surface p-6">
+              <div className="ws-task-analysis-section space-y-5">
                 <h2 className="text-base font-semibold">配置 LLM 分析</h2>
                 <div>
                   <label className="text-xs font-medium text-text-secondary">{analysisAgentLabel}</label>
                   <Select value={analysisAgentId || "__empty__"} onValueChange={(v) => setAnalysisAgentId(v === "__empty__" ? "" : v)}>
-                    <SelectTrigger className="mt-1.5 h-9"><SelectValue placeholder="选择带 API Key 的智能体" /></SelectTrigger>
+                    <SelectTrigger aria-label={analysisAgentLabel} className="mt-1.5"><SelectValue placeholder="选择带 API Key 的智能体" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="__empty__">请选择</SelectItem>
                       {agentOptions.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
@@ -353,13 +355,13 @@ const TaskAnalysisNewPage: React.FC = () => {
                     <span className="text-[11px] text-text-tertiary">宽松</span>
                     <input type="range" min={0.20} max={0.50} step={0.05} value={mergeThreshold} onChange={(e) => setMergeThreshold(Number(e.target.value))} className="h-1.5 flex-1 cursor-pointer appearance-none rounded-full bg-surface-2 accent-primary" />
                     <span className="text-[11px] text-text-tertiary">严格</span>
-                    <span className="min-w-[3rem] rounded-md border border-border bg-surface-2 px-2 py-0.5 text-center text-xs font-mono font-medium text-text-base">{mergeThreshold.toFixed(2)}</span>
+                    <span className="min-w-[3rem] rounded-sm border border-border bg-surface-2 px-2 py-0.5 text-center font-mono text-xs font-medium text-text-base">{mergeThreshold.toFixed(2)}</span>
                   </div>
                 </div>
                 <div>
                   <label className="text-xs font-medium text-text-secondary">提示词模板</label>
                   <Select value={promptTemplateId || "__custom__"} onValueChange={(v) => { if (v === "__custom__") { setPromptTemplateId(""); return; } setPromptTemplateId(v); const t = promptTemplates.find((i) => String(i.id) === v); if (t) setCustomPrompt(t.content); }}>
-                    <SelectTrigger className="mt-1.5 h-9"><SelectValue placeholder="选择模板" /></SelectTrigger>
+                    <SelectTrigger aria-label="提示词模板" className="mt-1.5"><SelectValue placeholder="选择模板" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="__custom__">自定义</SelectItem>
                       {promptTemplates.map((t) => <SelectItem key={t.id} value={String(t.id)}>{t.name}{t.is_default ? "（默认）" : ""}</SelectItem>)}
@@ -372,7 +374,7 @@ const TaskAnalysisNewPage: React.FC = () => {
                   </button>
                   {showPromptEditor && (
                     <div className="mt-2">
-                      <textarea className="w-full h-28 resize-none rounded-lg border border-border bg-surface-2/30 px-3 py-2 text-xs focus:outline-none focus:border-primary/40" placeholder="自定义 AI 分析提示词..." value={customPrompt} onChange={(e) => setCustomPrompt(e.target.value)} />
+                      <Textarea className="h-28 resize-none text-xs" placeholder="自定义 AI 分析提示词..." value={customPrompt} onChange={(e) => setCustomPrompt(e.target.value)} />
                       <div className="mt-2 flex gap-2">
                         <Button variant="outline" size="sm" onClick={handleSaveTemplate}>保存为模板</Button>
                         {promptTemplateId && <Button variant="ghost" size="sm" onClick={handleDeleteTemplate}>删除模板</Button>}
@@ -385,7 +387,7 @@ const TaskAnalysisNewPage: React.FC = () => {
 
             {/* Step 4: 确认 */}
             {step === 4 && (
-              <div className="space-y-5 rounded-2xl border border-border/40 bg-surface p-6">
+              <div className="ws-task-analysis-section space-y-5">
                 <h2 className="text-base font-semibold">确认分析配置</h2>
                 <div className="grid gap-3 text-sm">
                   {[
@@ -416,7 +418,7 @@ const TaskAnalysisNewPage: React.FC = () => {
               {step < 4 ? (
                 <Button onClick={goNext}>下一步<ChevronRight className="h-4 w-4 ml-1" /></Button>
               ) : (
-                <Button size="lg" className="px-8 shadow-lg shadow-primary/20" onClick={handleSave}>
+                <Button size="lg" className="px-8 shadow-none" onClick={handleSave}>
                   <Search className="h-4 w-4 mr-2" />{isChain ? "开始问题链分析" : "开始热点分析"}
                 </Button>
               )}

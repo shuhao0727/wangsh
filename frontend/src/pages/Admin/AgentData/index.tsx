@@ -1,6 +1,6 @@
 /**
  * 智能体数据页面
- * 布局：统计卡片 → Tab 导航 → 内容面板（flex 撑满，分页固定底部）
+ * 布局：摘要与页签同一工作区顶栏 → 内容面板（flex 撑满，分页固定底部）
  */
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -64,32 +64,32 @@ const AdminAgentData: React.FC = () => {
 
   return (
     <AdminPage padding="var(--ws-panel-padding)" scrollable={false}>
-      <div className="flex min-h-0 flex-1 flex-col gap-4">
-        {/* 统计卡片 */}
-        <StatisticsCards data={statistics} />
-
-        {/* Tab 导航 + 内容 */}
+      <div className="flex min-h-0 flex-1 flex-col">
+        {/* 摘要、页签与内容处于同一条工作区顶栏 */}
         <Tabs
           value={activeTabKey}
           onValueChange={handleTabChange}
           className="flex min-h-0 flex-1 flex-col"
         >
-          <TabsList className="inline-flex h-10 w-fit gap-1">
-            <TabsTrigger value="usage" className="gap-1.5">
-              <BarChart3 className="h-3.5 w-3.5" />
-              使用记录
-            </TabsTrigger>
-            <TabsTrigger value="hot" className="gap-1.5">
-              <MessageSquareText className="h-3.5 w-3.5" />
-              热点问题
-            </TabsTrigger>
-            <TabsTrigger value="chains" className="gap-1.5">
-              <GitFork className="h-3.5 w-3.5" />
-              学生问题链
-            </TabsTrigger>
-          </TabsList>
+          <div className="ws-usage-topline">
+            <StatisticsCards data={statistics} />
+            <TabsList className="ws-usage-tabs">
+              <TabsTrigger value="usage" className="gap-1.5">
+                <BarChart3 className="h-3.5 w-3.5" />
+                使用记录
+              </TabsTrigger>
+              <TabsTrigger value="hot" className="gap-1.5">
+                <MessageSquareText className="h-3.5 w-3.5" />
+                热点问题
+              </TabsTrigger>
+              <TabsTrigger value="chains" className="gap-1.5">
+                <GitFork className="h-3.5 w-3.5" />
+                学生问题链
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
-          <div style={{ display: activeTabKey === "usage" ? "flex" : "none" }} className="flex-1 min-h-0 flex-col pt-3">
+          <div style={{ display: activeTabKey === "usage" ? "flex" : "none" }} className="flex-1 min-h-0 flex-col">
             <UsageRecordPanel onFilterChange={handleFilterChange} />
           </div>
           <div style={{ display: activeTabKey === "hot" ? "flex" : "none" }} className="flex-1 min-h-0 flex-col pt-3">

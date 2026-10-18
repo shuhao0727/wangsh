@@ -23,7 +23,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { ArrowLeft, Loader2, Save } from "lucide-react";
+import { Loader2, Save } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { AdminPage } from "@components/Admin";
 import { assessmentConfigApi } from "@services/assessment";
@@ -132,29 +132,20 @@ const EditorPage: React.FC = () => {
 
   return (
     <AdminPage scrollable>
-      <div className="mx-auto max-w-[680px] py-5">
-        <div className="mb-6 flex items-center">
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => void navigate("/admin/assessment")}
-            className="text-text-secondary"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            返回列表
-          </Button>
-        </div>
-
-        <div className="rounded-md border border-border bg-surface px-5 py-5">
-          <div className="mb-5 text-base font-semibold">新建测评</div>
+      <div className="mx-auto w-full max-w-[760px] py-4">
+        <div className="rounded-sm border border-border bg-surface px-4 py-4 md:px-5 md:py-5">
+          <div className="mb-4 flex items-center justify-between border-b border-border-secondary pb-3">
+            <div className="text-base font-semibold">新建测评</div>
+            <span className="text-xs text-text-tertiary">基本信息</span>
+          </div>
 
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-3.5">
               <FormField
                 control={form.control}
                 name="title"
                 render={({ field }) => (
-                  <FormItem>
+                  <FormItem className="space-y-1.5">
                     <FormLabel>测评标题</FormLabel>
                     <FormControl>
                       <Input
@@ -169,12 +160,12 @@ const EditorPage: React.FC = () => {
                 )}
               />
 
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 <FormField
                   control={form.control}
                   name="grade"
                   render={({ field }) => (
-                    <FormItem>
+                    <FormItem className="space-y-1.5">
                       <FormLabel>年级</FormLabel>
                       <Select
                         value={field.value || "__none__"}
@@ -204,7 +195,7 @@ const EditorPage: React.FC = () => {
                   control={form.control}
                   name="agent_id"
                   render={({ field }) => (
-                    <FormItem>
+                    <FormItem className="space-y-1.5">
                       <FormLabel>智能体</FormLabel>
                       <Select
                         value={field.value || undefined}
@@ -235,7 +226,7 @@ const EditorPage: React.FC = () => {
                 control={form.control}
                 name="knowledge_points"
                 render={({ field }) => (
-                  <FormItem>
+                  <FormItem className="space-y-1.5">
                     <FormLabel>知识点</FormLabel>
                     <FormControl>
                       <Input
@@ -254,7 +245,7 @@ const EditorPage: React.FC = () => {
                 control={form.control}
                 name="teaching_objectives"
                 render={({ field }) => (
-                  <FormItem>
+                  <FormItem className="space-y-1.5">
                     <FormLabel>教学目标</FormLabel>
                     <FormControl>
                       <Textarea
@@ -269,12 +260,11 @@ const EditorPage: React.FC = () => {
                 )}
               />
 
-              <div className="pt-2 text-right">
+              <div className="flex items-center justify-end gap-2 border-t border-border-secondary pt-4">
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => navigate("/admin/assessment")}
-                  className="mr-3"
                   disabled={saving}
                 >
                   取消

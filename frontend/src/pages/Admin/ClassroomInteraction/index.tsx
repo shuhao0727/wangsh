@@ -12,6 +12,7 @@ import {
 import {
   Plus,
   RefreshCw,
+  Search,
   Square,
   Trash2,
 } from "lucide-react";
@@ -227,6 +228,7 @@ const AdminClassroomInteractionPage: React.FC = () => {
   };
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const hasFilters = Boolean(search.trim() || statusFilter || typeFilter);
 
   const rowSelection = useMemo<RowSelectionState>(() => {
     const selected = new Set(selectedRowKeys.map((id) => String(id)));
@@ -307,94 +309,129 @@ const AdminClassroomInteractionPage: React.FC = () => {
 
   return (
     <AdminPage scrollable={false}>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <AdminFilterBar className="mb-0">
-          <Input
-            placeholder="搜索标题"
-            className="w-[220px]"
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
-          />
+      <section
+        className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border-secondary bg-surface"
+        aria-label="课堂互动活动工作区"
+      >
+        <AdminFilterBar
+          className="mb-0 flex-none px-4"
+          searchSlot={
+            <div className="relative w-[220px] max-w-full">
+              <Input
+                aria-label="搜索活动标题"
+                placeholder="搜索标题"
+                className="pl-9"
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPage(1);
+                }}
+              />
+              <Search
+                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary"
+                aria-hidden="true"
+              />
+            </div>
+          }
+          filterSlot={
+            <>
+              <Select
+                value={statusFilter || FILTER_ALL}
+                onValueChange={(v) => {
+                  setStatusFilter(v === FILTER_ALL ? "" : v);
+                  setPage(1);
+                }}
+              >
+                <SelectTrigger aria-label="活动状态" className="w-[132px]">
+                  <SelectValue placeholder="全部状态" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={FILTER_ALL}>全部状态</SelectItem>
+                  <SelectItem value="draft">草稿</SelectItem>
+                  <SelectItem value="active">进行中</SelectItem>
+                  <SelectItem value="ended">已结束</SelectItem>
+                </SelectContent>
+              </Select>
 
-          <Select
-            value={statusFilter || FILTER_ALL}
-            onValueChange={(v) => {
-              setStatusFilter(v === FILTER_ALL ? "" : v);
-              setPage(1);
-            }}
-          >
-            <SelectTrigger className="w-[120px]">
-              <SelectValue placeholder="状态" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={FILTER_ALL}>全部状态</SelectItem>
-              <SelectItem value="draft">草稿</SelectItem>
-              <SelectItem value="active">进行中</SelectItem>
-              <SelectItem value="ended">已结束</SelectItem>
-            </SelectContent>
-          </Select>
+              <Select
+                value={typeFilter || FILTER_ALL}
+                onValueChange={(v) => {
+                  setTypeFilter(v === FILTER_ALL ? "" : v);
+                  setPage(1);
+                }}
+              >
+                <SelectTrigger aria-label="活动类型" className="w-[132px]">
+                  <SelectValue placeholder="全部类型" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={FILTER_ALL}>全部类型</SelectItem>
+                  <SelectItem value="vote">投票</SelectItem>
+                  <SelectItem value="fill_blank">填空</SelectItem>
+                </SelectContent>
+              </Select>
+            </>
+          }
+          bulkSlot={
+            selectedRowKeys.length > 0 ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-8 px-3 text-destructive hover:text-destructive"
+                onClick={() => setBulkDeleteOpen(true)}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                批量删除 ({selectedRowKeys.length})
+              </Button>
+            ) : null
+          }
+          actionSlot={
+            <>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-8 px-3"
+                onClick={() => void handleRefreshList()}
+                disabled={isLoading}
+              >
+                <RefreshCw
+                  className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`}
+                  aria-hidden="true"
+                />
+                刷新
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                className="h-8 px-3"
+                onClick={openCreate}
+              >
+                <Plus className="h-3.5 w-3.5" />
+                创建活动
+              </Button>
+            </>
+          }
+        />
 
-          <Select
-            value={typeFilter || FILTER_ALL}
-            onValueChange={(v) => {
-              setTypeFilter(v === FILTER_ALL ? "" : v);
-              setPage(1);
-            }}
-          >
-            <SelectTrigger className="w-[120px]">
-              <SelectValue placeholder="类型" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={FILTER_ALL}>全部类型</SelectItem>
-              <SelectItem value="vote">投票</SelectItem>
-              <SelectItem value="fill_blank">填空</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => void handleRefreshList()}
-            disabled={isLoading}
-          >
-            {isLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-            刷新
-          </Button>
-
-          {selectedRowKeys.length > 0 ? (
-            <Button
-              type="button"
-              variant="ghost"
-              className="text-destructive hover:text-destructive"
-              onClick={() => setBulkDeleteOpen(true)}
-            >
-              <Trash2 className="h-4 w-4" />
-              批量删除 ({selectedRowKeys.length})
-            </Button>
-          ) : null}
-        </AdminFilterBar>
-
-        <Button type="button" onClick={openCreate}>
-          <Plus className="h-4 w-4" />
-          创建活动
-        </Button>
-      </div>
-
-      <div className="flex min-h-0 flex-1 flex-col">
-        <div className="min-h-0 flex-1 flex flex-col">
+        <div className="flex min-h-0 flex-1 flex-col">
           <AdminTablePanel
+            ariaLabel="课堂互动活动列表"
             loading={isLoading}
-            isEmpty={!isLoading && activities.length === 0}
-            emptyDescription="暂无课堂互动活动"
+            isEmpty={!isLoading && !hasFilters && activities.length === 0}
+            emptyDescription="暂无活动"
+            noResults={!isLoading && hasFilters && activities.length === 0}
+            noResultsDescription="没有匹配的活动"
           >
-            <DataTable table={table} tableClassName="min-w-[980px]" />
+            <DataTable
+              table={table}
+              className="h-full"
+              tableClassName="min-w-[980px]"
+            />
           </AdminTablePanel>
         </div>
         {total > 0 ? (
-          <div className="mt-2 flex justify-end border-t border-border-secondary pt-3">
+          <div className="flex justify-end border-t border-border-secondary px-4 py-2">
             <DataTablePagination
               currentPage={page}
               totalPages={totalPages}
@@ -410,7 +447,7 @@ const AdminClassroomInteractionPage: React.FC = () => {
             />
           </div>
         ) : null}
-      </div>
+      </section>
 
       <ActivityFormDialog
         open={modalOpen}

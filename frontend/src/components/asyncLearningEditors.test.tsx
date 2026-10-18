@@ -100,11 +100,13 @@ describe("async learning editors", () => {
     });
 
     render(
-      <MindMapEditor
-        mindmapId={1}
-        initialTitle="Root"
-        initialMarkdown="# Root"
-      />,
+      <MemoryRouter>
+        <MindMapEditor
+          mindmapId={1}
+          initialTitle="Root"
+          initialMarkdown="# Root"
+        />
+      </MemoryRouter>,
     );
 
     fireEvent.click(screen.getByRole("button", { name: "预览" }));

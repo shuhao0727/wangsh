@@ -865,8 +865,8 @@ const StatisticsPage: React.FC = () => {
 
   return (
     <AdminPage scrollable>
-      <div className="mb-5 flex flex-wrap items-center gap-2.5">
-        <Button variant="outline" onClick={() => navigate("/admin/assessment")}>
+      <div className="mb-4 flex flex-wrap items-center gap-2 border-b border-border-secondary pb-3">
+        <Button variant="ghost" className="h-8 px-2 text-text-secondary" onClick={() => navigate("/admin/assessment")}>
           <ArrowLeft className="h-4 w-4" />
           返回
         </Button>
@@ -880,7 +880,7 @@ const StatisticsPage: React.FC = () => {
       ) : stats ? (
         <>
           {/* ─── 统计卡片 ─── */}
-          <div className="mb-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-6">
+          <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
             {statItems.map((item, index) => (
               <StatCard
                 key={index}
@@ -889,96 +889,100 @@ const StatisticsPage: React.FC = () => {
                 icon={item.icon}
                 variant="horizontal"
                 color={item.color}
-                className="min-h-0 px-2.5 py-2"
+                className="min-h-0 rounded-sm px-2.5 py-2 shadow-none"
               />
             ))}
           </div>
 
           {/* ─── 筛选卡片 ─── */}
-          <Card className="mb-5 border border-border bg-surface p-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <Calendar className="h-4 w-4 text-text-tertiary shrink-0" />
-              <Select value={timeField} onValueChange={setTimeField}>
-                <SelectTrigger className="h-8 w-[100px] text-xs"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="submitted_at">提交时间</SelectItem>
-                  <SelectItem value="started_at">开始时间</SelectItem>
-                </SelectContent>
-              </Select>
-              <Input
-                type="date"
-                value={startDate}
-                onChange={(e) => { setStartDate(e.target.value); setActivePreset(null); }}
-                className="h-8 w-[135px] text-xs"
-              />
-              <span className="text-xs text-text-tertiary">至</span>
-              <Input
-                type="date"
-                value={endDate}
-                onChange={(e) => { setEndDate(e.target.value); setActivePreset(null); }}
-                className="h-8 w-[135px] text-xs"
-              />
-              {quickPresets.map((preset) => (
+          <Card className="mb-4 rounded-sm border-border bg-surface p-3 shadow-none">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                <Calendar className="h-4 w-4 shrink-0 text-text-tertiary" />
+                <Select value={timeField} onValueChange={setTimeField}>
+                  <SelectTrigger aria-label="时间类型" className="h-8 w-[100px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="submitted_at">提交时间</SelectItem>
+                    <SelectItem value="started_at">开始时间</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Input
+                  type="date"
+                  aria-label="开始日期"
+                  value={startDate}
+                  onChange={(e) => { setStartDate(e.target.value); setActivePreset(null); }}
+                  className="h-8 w-[135px]"
+                />
+                <span className="text-xs text-text-tertiary">至</span>
+                <Input
+                  type="date"
+                  aria-label="结束日期"
+                  value={endDate}
+                  onChange={(e) => { setEndDate(e.target.value); setActivePreset(null); }}
+                  className="h-8 w-[135px]"
+                />
+                {quickPresets.map((preset) => (
+                  <Button
+                    key={preset.label}
+                    size="sm"
+                    variant={activePreset === preset.label ? "default" : "outline"}
+                    onClick={() => applyPreset(preset)}
+                  >
+                    {preset.label}
+                  </Button>
+                ))}
+                {(startDate || endDate) && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => { setStartDate(""); setEndDate(""); setActivePreset(null); }}
+                    title="清除时间筛选"
+                    aria-label="清除时间筛选"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+                <span className="mx-0.5 h-5 w-px bg-border" />
+                <Select value={filterClass || FILTER_ALL} onValueChange={(value) => setFilterClass(value === FILTER_ALL ? undefined : value)}>
+                  <SelectTrigger aria-label="班级" className="h-8 w-[115px]"><SelectValue placeholder="班级" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={FILTER_ALL}>全部班级</SelectItem>
+                    {classNames.map((className) => <SelectItem key={className} value={className}>{className}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Select value={filterStatus || FILTER_ALL} onValueChange={(value) => setFilterStatus(value === FILTER_ALL ? undefined : value)}>
+                  <SelectTrigger aria-label="状态" className="h-8 w-[100px]"><SelectValue placeholder="状态" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={FILTER_ALL}>全部状态</SelectItem>
+                    <SelectItem value="in_progress">答题中</SelectItem>
+                    <SelectItem value="submitted">已提交</SelectItem>
+                    <SelectItem value="graded">已评分</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Input
+                  value={searchText}
+                  placeholder="搜索学生"
+                  aria-label="搜索学生"
+                  className="h-8 w-[140px]"
+                  onChange={(e) => setSearchText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") { e.preventDefault(); onSearchSubmit(); }
+                  }}
+                />
                 <Button
-                  key={preset.label}
-                  size="sm"
-                  variant={activePreset === preset.label ? "default" : "outline"}
-                  className="h-7 px-2 text-xs"
-                  onClick={() => applyPreset(preset)}
+                  size="icon"
+                  variant="outline"
+                  className="h-8 w-8"
+                  onClick={onSearchSubmit}
+                  aria-label="搜索学生"
+                  title="搜索学生"
                 >
-                  {preset.label}
+                  <Search className="h-3.5 w-3.5" />
                 </Button>
-              ))}
-              {(startDate || endDate) && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-7 w-7 p-0"
-                  onClick={() => { setStartDate(""); setEndDate(""); setActivePreset(null); }}
-                  title="清除时间筛选"
-                  aria-label="清除时间筛选"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </Button>
-              )}
-              <span className="mx-0.5 h-5 w-px bg-border" />
-              <Select value={filterClass || FILTER_ALL} onValueChange={(value) => setFilterClass(value === FILTER_ALL ? undefined : value)}>
-                <SelectTrigger className="h-8 w-[115px]"><SelectValue placeholder="班级" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={FILTER_ALL}>全部班级</SelectItem>
-                  {classNames.map((className) => <SelectItem key={className} value={className}>{className}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <Select value={filterStatus || FILTER_ALL} onValueChange={(value) => setFilterStatus(value === FILTER_ALL ? undefined : value)}>
-                <SelectTrigger className="h-8 w-[100px]"><SelectValue placeholder="状态" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={FILTER_ALL}>全部状态</SelectItem>
-                  <SelectItem value="in_progress">答题中</SelectItem>
-                  <SelectItem value="submitted">已提交</SelectItem>
-                  <SelectItem value="graded">已评分</SelectItem>
-                </SelectContent>
-              </Select>
-              <Input
-                value={searchText}
-                placeholder="搜索学生"
-                className="h-8 w-[140px]"
-                onChange={(e) => setSearchText(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") { e.preventDefault(); onSearchSubmit(); }
-                }}
-              />
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-8 w-8 p-0"
-                onClick={onSearchSubmit}
-                aria-label="搜索学生"
-                title="搜索学生"
-              >
-                <Search className="h-3.5 w-3.5" />
-              </Button>
-              <div className="flex-1" />
-              {filterClass && (
+              </div>
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
+                {filterClass && (
                 <Button
                   size="sm"
                   variant="outline"
@@ -1024,6 +1028,7 @@ const StatisticsPage: React.FC = () => {
                 )}
                 导出
               </Button>
+              </div>
             </div>
           </Card>
 
@@ -1031,7 +1036,7 @@ const StatisticsPage: React.FC = () => {
           {trendChartOption || scoreDistributionOption ? (
             <div className="mb-5 grid gap-4 lg:grid-cols-2">
               {trendChartOption && (
-                <Card className="chart-panel overflow-hidden border border-border bg-surface p-4">
+                <Card className="chart-panel overflow-hidden rounded-sm border border-border bg-surface p-4 shadow-none">
                   <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
                     <div className="flex items-center gap-2 text-sm font-semibold">
                       <TrendingUp className="h-4 w-4 text-primary" />
@@ -1049,7 +1054,7 @@ const StatisticsPage: React.FC = () => {
                 </Card>
               )}
               {scoreDistributionOption && (
-                <Card className="chart-panel overflow-hidden border border-border bg-surface p-4">
+                <Card className="chart-panel overflow-hidden rounded-sm border border-border bg-surface p-4 shadow-none">
                   <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
                     <div className="flex items-center gap-2 text-sm font-semibold">
                       <BarChart3 className="h-4 w-4 text-secondary" />
@@ -1071,7 +1076,7 @@ const StatisticsPage: React.FC = () => {
 
           {/* ─── 学生列表 + 雷达图 ─── */}
           <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-            <Card className="flex min-h-[420px] flex-col overflow-hidden border border-border bg-surface">
+            <Card className="flex min-h-[420px] flex-col overflow-hidden rounded-sm border border-border bg-surface shadow-none">
               <div className="shrink-0 flex flex-wrap items-center gap-2 border-b border-border px-3 py-2">
                 <span className="text-sm font-semibold">学生答题列表{total > 0 ? ` (${total})` : ""}</span>
                 {selectedRowKeys.length > 0 && (
@@ -1145,19 +1150,19 @@ const StatisticsPage: React.FC = () => {
               </div>
             </Card>
 
-            <Card className="overflow-hidden border border-border bg-surface">
+            <Card className="overflow-hidden rounded-sm border border-border bg-surface shadow-none">
               <div className="border-b border-border px-3 py-2 text-sm font-semibold">知识点掌握率</div>
               <div className="space-y-2 p-3">
                 <div className="grid grid-cols-2 gap-2">
                   <Select value={pickToValue(radarLeft) || FILTER_ALL} onValueChange={(value) => setRadarLeft(parsePickerValue(value))}>
-                    <SelectTrigger className="h-8"><SelectValue placeholder="选择数据" /></SelectTrigger>
+                    <SelectTrigger aria-label="雷达图主数据" className="h-8"><SelectValue placeholder="选择数据" /></SelectTrigger>
                     <SelectContent>
                       {radarOptions.map((option) => (<SelectItem key={`left-${option.value}`} value={option.value}>{`${option.group} · ${option.label}`}</SelectItem>))}
                     </SelectContent>
                   </Select>
 
                   <Select value={pickToValue(radarRight) || FILTER_ALL} onValueChange={(value) => setRadarRight(value === FILTER_ALL ? null : parsePickerValue(value))}>
-                    <SelectTrigger className="h-8"><SelectValue placeholder="对比" /></SelectTrigger>
+                    <SelectTrigger aria-label="雷达图对比数据" className="h-8"><SelectValue placeholder="对比" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value={FILTER_ALL}>不对比</SelectItem>
                       {radarOptions.map((option) => (<SelectItem key={`right-${option.value}`} value={option.value}>{`${option.group} · ${option.label}`}</SelectItem>))}

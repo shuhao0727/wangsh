@@ -366,9 +366,9 @@ const ActivityFormDialog: React.FC<ActivityFormDialogProps> = ({
                             key={item.value}
                             type="button"
                             className={cn(
-                              "rounded px-3 py-1.5 text-xs transition-colors",
+                              "rounded-sm px-3 py-1.5 text-xs transition-colors",
                               field.value === item.value
-                                ? "bg-surface text-text shadow-sm"
+                                ? "bg-surface text-text shadow-none"
                                 : "text-text-tertiary hover:text-text",
                             )}
                             onClick={() => {

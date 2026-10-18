@@ -239,23 +239,23 @@ const MlBookEditor: React.FC<Props> = ({ onBack }) => {
 
   return (
     <AdminPage padding="var(--ws-panel-padding)" scrollable={false}>
-      <div className="flex h-full min-h-0 flex-col gap-3">
+      <div className="ws-fullscreen-editor-root ws-ml-book-editor-root flex h-full min-h-0 flex-col">
         {/* Header */}
-        <div className="flex flex-wrap items-center gap-3 shrink-0">
+        <div className="ws-editor-toolbar flex flex-wrap items-center gap-3 shrink-0">
           <Button variant="link" onClick={handleBack} className="!p-0 text-text-secondary">
             ← 返回 IT 应用管理
           </Button>
           <BookOpen className="h-5 w-5 text-primary" />
           <div className="min-w-0 flex-1">
-            <h1 className="text-base font-bold text-text-base sm:text-lg">ML 学习书编辑器</h1>
+            <h1 className="text-sm font-semibold text-text-base">ML 学习书编辑器</h1>
             <p className="text-xs text-text-tertiary">{bookTitle} · {chapters.length} 章</p>
           </div>
           <div className="flex items-center gap-2">
-            <Badge variant="outline" className="text-text-secondary">
+            <Badge variant="outline" className="ws-book-active-chapter max-w-[240px] truncate text-text-secondary">
               <Eye className="mr-1 h-3 w-3" />
               {isNewChapter ? "新建章节" : `编辑: ${activeChapter?.title ?? ""}`}
             </Badge>
-            <Button size="sm" onClick={saveChapter} disabled={saving || loading}>
+            <Button size="sm" onClick={saveChapter} disabled={saving || loading || !bookId}>
               <Save className="mr-2 h-4 w-4" />
               {saving ? "保存中..." : "保存 (⌘S)"}
             </Button>
@@ -266,20 +266,22 @@ const MlBookEditor: React.FC<Props> = ({ onBack }) => {
         {loading ? (
           <div className="flex flex-1 items-center justify-center text-sm text-text-tertiary">加载中...</div>
         ) : (
-          <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[260px_minmax(0,1fr)_280px]">
+          <div className="ws-book-editor-grid grid min-h-0 flex-1 lg:grid-cols-[240px_minmax(0,1fr)_260px]">
             {/* Left: Chapter List */}
-            <ChapterList
-              chapters={chapters}
-              activeSlug={activeSlug}
-              onSelectChapter={setActiveSlug}
-              onDeleteChapter={deleteChapter}
-              onToggleChapter={toggleChapter}
-              onReorder={handleReorder}
-              onNewChapter={handleNewChapter}
-            />
+            <div className="ws-book-editor-aside min-h-0 min-w-0">
+              <ChapterList
+                chapters={chapters}
+                activeSlug={activeSlug}
+                onSelectChapter={setActiveSlug}
+                onDeleteChapter={deleteChapter}
+                onToggleChapter={toggleChapter}
+                onReorder={handleReorder}
+                onNewChapter={handleNewChapter}
+              />
+            </div>
 
             {/* Center: Markdown Editor */}
-            <div className="flex min-h-0 min-w-0 flex-col gap-2 rounded-lg border border-border bg-surface">
+            <div className="ws-editor-panel flex min-h-0 min-w-0 flex-col gap-2">
               {/* Toolbar */}
               <div className="flex flex-wrap items-center gap-0.5 border-b border-border-secondary px-3 py-1.5 shrink-0">
                 <span className="mr-2 text-xs text-text-tertiary">快捷工具</span>
@@ -316,7 +318,8 @@ const MlBookEditor: React.FC<Props> = ({ onBack }) => {
                       key={mode}
                       variant={editMode === mode ? "secondary" : "ghost"}
                       size="sm"
-                      className="h-7 px-2 text-xs"
+                      className="h-8 px-2 text-sm"
+                      aria-pressed={editMode === mode}
                       onClick={() => setEditMode(mode)}
                     >
                       {mode === "edit" ? "编辑" : mode === "split" ? "分屏" : "预览"}
@@ -326,11 +329,11 @@ const MlBookEditor: React.FC<Props> = ({ onBack }) => {
               </div>
 
               {/* Editor Body */}
-              <div className="flex min-h-0 flex-1 flex-col">
+              <div className={`ws-book-editor-body flex min-h-0 flex-1 ${editMode === "split" ? "flex-col xl:flex-row" : "flex-col"}`}>
                 {/* Edit mode */}
                 {(editMode === "edit" || editMode === "split") && (
-                  <div className={editMode === "split" ? "flex min-h-0 flex-1 flex-col lg:w-1/2" : "flex min-h-0 flex-1 flex-col"}>
-                    <div className="min-h-[300px] flex-1 overflow-hidden">
+                  <div className={editMode === "split" ? "flex min-h-0 flex-1 flex-col xl:w-1/2" : "flex min-h-0 flex-1 flex-col"}>
+                    <div className="flex min-h-[300px] flex-1 overflow-hidden">
                       <LineNumberedMarkdownTextArea
                         id="ml-book-editor-textarea"
                         value={editedChapter.markdown ?? ""}
@@ -347,8 +350,8 @@ const MlBookEditor: React.FC<Props> = ({ onBack }) => {
 
                 {/* Preview mode - renders with react-markdown + GFM + KaTeX */}
                 {(editMode === "preview" || editMode === "split") && (
-                  <div className={editMode === "split" ? "flex min-h-0 flex-1 flex-col border-l border-border lg:w-1/2" : "flex min-h-0 flex-1 flex-col"}>
-                    <div className="overflow-auto p-4">
+                  <div className={editMode === "split" ? "flex min-h-0 flex-1 flex-col border-l border-border xl:w-1/2" : "flex min-h-0 flex-1 flex-col"}>
+                    <div className="min-h-0 flex-1 overflow-auto p-4">
                       {(editedChapter.markdown) ? (
                         <div className="ws-markdown text-sm leading-7 text-text-base">
                           <ReactMarkdown
@@ -370,11 +373,13 @@ const MlBookEditor: React.FC<Props> = ({ onBack }) => {
             </div>
 
             {/* Right: Metadata Panel */}
-            <MetadataPanel
-              chapter={editedChapter}
-              allChapters={chapters}
-              onChange={setEditedChapter}
-            />
+            <div className="ws-book-editor-aside min-h-0 min-w-0">
+              <MetadataPanel
+                chapter={editedChapter}
+                allChapters={chapters}
+                onChange={setEditedChapter}
+              />
+            </div>
           </div>
         )}
       </div>

@@ -13,6 +13,7 @@ import test from "node:test";
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const repoRoot = new URL("..", import.meta.url);
+const sourceVersion = JSON.parse(read("frontend/package.json")).version;
 
 const requiredReleaseImages = [
   "wangsh-backend",
@@ -56,23 +57,23 @@ function runDeployWithFakeDocker({
   const expectedImages =
     composeImages ??
     [
-      "shuhao07/wangsh-backend:2.1.3",
-      "shuhao07/wangsh-typst-worker:2.1.3",
-      "shuhao07/wangsh-pythonlab-worker:2.1.3",
-      "shuhao07/pythonlab-sandbox:2.1.3",
-      "shuhao07/wangsh-frontend:2.1.3",
-      "shuhao07/wangsh-gateway:2.1.3",
+      `shuhao07/wangsh-backend:${sourceVersion}`,
+      `shuhao07/wangsh-typst-worker:${sourceVersion}`,
+      `shuhao07/wangsh-pythonlab-worker:${sourceVersion}`,
+      `shuhao07/pythonlab-sandbox:${sourceVersion}`,
+      `shuhao07/wangsh-frontend:${sourceVersion}`,
+      `shuhao07/wangsh-gateway:${sourceVersion}`,
     ];
   const envValues = {
-    APP_VERSION: "2.1.3",
-    REACT_APP_VERSION: "2.1.3",
-    IMAGE_TAG: "2.1.3",
+    APP_VERSION: sourceVersion,
+    REACT_APP_VERSION: sourceVersion,
+    IMAGE_TAG: sourceVersion,
     IMAGE_REPOSITORY_PREFIX: "shuhao07",
     IMAGE_NAME_BACKEND: "wangsh-backend",
     IMAGE_NAME_WORKER: "wangsh-typst-worker",
     IMAGE_NAME_PYTHONLAB_WORKER: "wangsh-pythonlab-worker",
     IMAGE_NAME_GATEWAY: "wangsh-gateway",
-    PYTHONLAB_SANDBOX_IMAGE: "shuhao07/pythonlab-sandbox:2.1.3",
+    PYTHONLAB_SANDBOX_IMAGE: `shuhao07/pythonlab-sandbox:${sourceVersion}`,
     ...envOverrides,
   };
 
@@ -110,7 +111,7 @@ if [[ "$*" == *"buildx imagetools inspect"* ]]; then
   case "$ref" in
 ${requiredReleaseImages
   .map((image) => {
-    const ref = `shuhao07/${image}:2.1.3`;
+    const ref = `shuhao07/${image}:${sourceVersion}`;
     const digest = dockerDigestOverrides[image] ?? defaultDigest;
     return `    ${ref}) printf 'Name: %s\\nDigest: %s\\n' "$ref" '${digest}' ;;`;
   })
@@ -124,7 +125,7 @@ if [[ "$*" == image\\ inspect* ]]; then
   case "$ref" in
 ${requiredReleaseImages
   .map((image) => {
-    const ref = `shuhao07/${image}:2.1.3`;
+    const ref = `shuhao07/${image}:${sourceVersion}`;
     const digest = localDigestOverrides[image] ?? defaultDigest;
     return `    ${ref}) printf '%s\\n' 'shuhao07/${image}@${digest}' ;;`;
   })
@@ -165,7 +166,7 @@ exit 1
 }
 
 function makeReleaseSet({
-  version = "2.1.3",
+  version = sourceVersion,
   rows = requiredReleaseImages,
   digest = null,
   refOverrides = {},
@@ -1292,11 +1293,11 @@ test("verify-release-set accepts a complete release set with matching compose an
 
 test("verify-release-set accepts one full SemVer for application and image tag", () => {
   const result = runDeployWithFakeDocker({
-    releaseSet: makeReleaseSet({ version: "2.1.3" }),
+    releaseSet: makeReleaseSet({ version: sourceVersion }),
     envOverrides: {
-      APP_VERSION: "2.1.3",
-      REACT_APP_VERSION: "2.1.3",
-      IMAGE_TAG: "2.1.3",
+      APP_VERSION: sourceVersion,
+      REACT_APP_VERSION: sourceVersion,
+      IMAGE_TAG: sourceVersion,
     },
   });
 
@@ -1615,7 +1616,7 @@ test("version consistency prints the exact image tag", () => {
   );
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
-  assert.equal(result.stdout, "2.1.3");
+  assert.equal(result.stdout, sourceVersion);
 });
 
 test("version consistency rejects drift in production and release defaults", () => {

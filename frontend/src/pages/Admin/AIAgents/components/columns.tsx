@@ -97,7 +97,7 @@ export const getAgentColumns = (
     size: 260,
     meta: {
       headerClassName: "w-[260px] min-w-[260px]",
-      cellClassName: "w-[260px] min-w-[260px] align-top",
+      cellClassName: "w-[260px] min-w-[260px] align-middle",
     },
     cell: ({ row }) => {
       const record = row.original;
@@ -127,12 +127,17 @@ export const getAgentColumns = (
     size: 132,
     meta: {
       headerClassName: "w-[132px] min-w-[132px]",
-      cellClassName: "w-[132px] min-w-[132px] align-top whitespace-nowrap",
+      cellClassName: "w-[132px] min-w-[132px] align-middle whitespace-nowrap",
     },
     cell: ({ row }) => {
       const config = getTypeConfig(row.original.agent_type);
       return (
-        <Badge variant={config.variant} className={["whitespace-nowrap", config.className].filter(Boolean).join(" ")}>
+        <Badge
+          variant={config.variant}
+          className={["whitespace-nowrap", config.className]
+            .filter(Boolean)
+            .join(" ")}
+        >
           {config.icon}
           {config.text}
         </Badge>
@@ -146,7 +151,7 @@ export const getAgentColumns = (
     size: 360,
     meta: {
       headerClassName: "min-w-[320px]",
-      cellClassName: "min-w-[320px] max-w-[520px] align-top",
+      cellClassName: "min-w-[320px] max-w-[520px] align-middle",
     },
     cell: ({ row }) => {
       const value = (row.original.description || "").trim();
@@ -168,12 +173,14 @@ export const getAgentColumns = (
     size: 156,
     meta: {
       headerClassName: "w-[156px] min-w-[156px]",
-      cellClassName: "w-[156px] min-w-[156px] align-top whitespace-nowrap",
+      cellClassName: "w-[156px] min-w-[156px] align-middle whitespace-nowrap",
     },
     cell: ({ row }) => {
       const record = row.original;
       return (
-        <HoverTip title={record.has_api_key ? "已保存API密钥" : "未配置API密钥"}>
+        <HoverTip
+          title={record.has_api_key ? "已保存API密钥" : "未配置API密钥"}
+        >
           <div>
             <Badge
               variant={record.has_api_key ? "warning" : "outline"}
@@ -194,7 +201,7 @@ export const getAgentColumns = (
     size: 140,
     meta: {
       headerClassName: "w-[140px] min-w-[140px]",
-      cellClassName: "w-[140px] min-w-[140px] align-top whitespace-nowrap",
+      cellClassName: "w-[140px] min-w-[140px] align-middle whitespace-nowrap",
     },
     cell: ({ row }) => {
       const record = row.original;
@@ -203,9 +210,13 @@ export const getAgentColumns = (
         <div className="flex items-center gap-2">
           <Switch
             checked={isActive}
-            onCheckedChange={(checked) => handleToggleActive(record.id, checked)}
+            onCheckedChange={(checked) =>
+              handleToggleActive(record.id, checked)
+            }
           />
-          <span className="text-xs text-text-tertiary">{isActive ? "启用" : "停用"}</span>
+          <span className="text-xs text-text-tertiary">
+            {isActive ? "启用" : "停用"}
+          </span>
         </div>
       );
     },
@@ -217,7 +228,7 @@ export const getAgentColumns = (
     size: 132,
     meta: {
       headerClassName: "w-[132px] min-w-[132px]",
-      cellClassName: "w-[132px] min-w-[132px] align-top whitespace-nowrap",
+      cellClassName: "w-[132px] min-w-[132px] align-middle whitespace-nowrap",
     },
     cell: ({ row }) => (
       <span className="whitespace-nowrap tabular-nums">
@@ -231,7 +242,7 @@ export const getAgentColumns = (
     size: 184,
     meta: {
       headerClassName: "w-[184px] min-w-[184px]",
-      cellClassName: "w-[184px] min-w-[184px] align-top whitespace-nowrap",
+      cellClassName: "w-[184px] min-w-[184px] align-middle whitespace-nowrap",
     },
     cell: ({ row }) => {
       const record = row.original;
@@ -242,13 +253,23 @@ export const getAgentColumns = (
               <Button
                 variant="ghost"
                 size="sm"
+                className="h-7 w-7 p-0"
+                aria-label="查看详情"
+                title="查看详情"
                 onClick={() => handleViewDetails(record)}
               >
                 <Eye className="h-4 w-4" />
               </Button>
             </HoverTip>
             <HoverTip title="编辑">
-              <Button variant="ghost" size="sm" onClick={() => handleEdit(record)}>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 w-7 p-0"
+                aria-label="编辑"
+                title="编辑"
+                onClick={() => handleEdit(record)}
+              >
                 <Pencil className="h-4 w-4" />
               </Button>
             </HoverTip>
@@ -256,6 +277,9 @@ export const getAgentColumns = (
               <Button
                 variant="ghost"
                 size="sm"
+                className="h-7 w-7 p-0"
+                aria-label="测试连接"
+                title="测试连接"
                 onClick={() => handleTestAgent(record.id, record.name)}
               >
                 <Zap className="h-4 w-4 text-[var(--ws-color-warning)]" />
@@ -265,6 +289,9 @@ export const getAgentColumns = (
               <Button
                 variant="ghost"
                 size="sm"
+                className="h-7 w-7 p-0"
+                aria-label="删除"
+                title="删除"
                 onClick={() => handleDelete(record.id)}
               >
                 <Trash2 className="h-4 w-4 text-destructive" />

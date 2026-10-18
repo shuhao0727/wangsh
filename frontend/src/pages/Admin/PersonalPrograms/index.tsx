@@ -47,8 +47,9 @@ const AdminPersonalPrograms: React.FC = () => {
   };
 
   return (
-    <AdminPage padding="var(--ws-space-4)">
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+    <AdminPage padding="var(--ws-panel-padding)">
+      <div className="ws-personal-programs-shell">
+      <div className="ws-personal-programs-grid">
         <AdminAppCard
           title="校本课 (XBK)"
           description="校本课程作业提交与处理系统"
@@ -57,10 +58,12 @@ const AdminPersonalPrograms: React.FC = () => {
           loading={loading || saving}
           onToggle={handleToggleXbk}
           color="var(--ws-color-warning)"
+          className="ws-it-admin-card"
           actionLabel="打开"
           actionIcon={<ArrowRight className="h-4 w-4" />}
           onAction={() => window.open("/xbk", "_blank")}
         />
+      </div>
       </div>
     </AdminPage>
   );

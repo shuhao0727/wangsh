@@ -91,7 +91,7 @@ function DataTable<TData>({
     <div
       className={cn(
         !stickyHeader && "overflow-hidden",
-        "rounded-md border border-border",
+        "ws-data-table rounded-md border border-border",
         minWidthPreset && TABLE_MIN_WIDTH_PRESETS[minWidthPreset],
         className,
       )}
@@ -157,7 +157,7 @@ function DataTable<TData>({
               </TableRow>
             ))
           ) : (
-            <TableRow>
+            <TableRow className="data-table-empty-row">
               <TableCell colSpan={columnCount}>{emptyState}</TableCell>
             </TableRow>
           )}

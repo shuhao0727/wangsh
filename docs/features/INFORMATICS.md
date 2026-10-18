@@ -218,6 +218,9 @@
 
 ## 前端页面
 
+Typst 编辑器侧栏与正文共享工作区边界，侧栏独立滚动。进入窄屏时，分屏模式自动切换为编辑模式；预览编译、保存和资源管理仍遵循原有流程。
+
+
 - `/informatics` — 公开笔记列表（`pages/Informatics/index.tsx`）
 - `/informatics/:id` — PDF 阅读器（Reader.tsx + Detail.tsx）
 - `/admin/informatics` — 笔记管理后台（`pages/Admin/Informatics/index.tsx`）

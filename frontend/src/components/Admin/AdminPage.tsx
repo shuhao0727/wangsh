@@ -15,7 +15,7 @@ const AdminPage: React.FC<Props> = ({
 }) => {
   return (
     <div
-      className="ws-admin-page"
+      className="ws-admin-page ws-embedded-controls"
       style={{
         width: "100%",
         flex: 1,

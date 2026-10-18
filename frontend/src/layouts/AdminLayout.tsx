@@ -177,7 +177,7 @@ const AdminLayout: React.FC = () => {
           void navigate(item.key);
           if (isMobile) setCollapsed(true);
         }}
-        className={`appearance-none border-0 bg-transparent flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:ring-[var(--ws-color-focus-ring)] ${
+        className={`appearance-none border-0 bg-transparent flex w-full items-center gap-2 rounded-sm px-3 py-2 text-left text-sm transition-colors focus-visible:ring-1 focus-visible:ring-primary ${
           active
             ? "bg-primary-soft text-primary shadow-[inset_3px_0_0_var(--ws-color-accent)]"
             : "text-text-secondary hover:bg-[var(--ws-color-primary-muted)]"
@@ -192,7 +192,7 @@ const AdminLayout: React.FC = () => {
   };
 
   return (
-    <div className="h-screen overflow-hidden bg-surface">
+    <div className="ws-embedded-controls h-screen overflow-hidden bg-surface">
       {isMobile && !collapsed ? (
         <div
           className="fixed inset-0 z-[var(--ws-z-overlay)] bg-black/30"
@@ -215,7 +215,7 @@ const AdminLayout: React.FC = () => {
       >
         <button
           type="button"
-          className="flex w-full appearance-none items-center gap-2.5 border-0 bg-transparent px-4 py-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ws-color-focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          className="flex w-full appearance-none items-center gap-2.5 border-0 bg-transparent px-4 py-4 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary focus-visible:ring-offset-0 focus-visible:ring-offset-background"
           onClick={() => void navigate("/admin/dashboard")}
           aria-label="返回管理后台首页"
         >
@@ -251,7 +251,7 @@ const AdminLayout: React.FC = () => {
                       }
                       setAgentsOpen((v) => !v);
                     }}
-                    className={`appearance-none border-0 bg-transparent flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:ring-[var(--ws-color-focus-ring)] ${
+                    className={`appearance-none border-0 bg-transparent flex w-full items-center gap-2 rounded-sm px-3 py-2 text-left text-sm transition-colors focus-visible:ring-1 focus-visible:ring-primary ${
                       inAgentGroup
                         ? "bg-primary-soft text-primary"
                         : "text-text-secondary hover:bg-[var(--ws-color-hover-bg)]"
@@ -293,7 +293,7 @@ const AdminLayout: React.FC = () => {
             <>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button type="button" className="mb-2 flex w-full items-center gap-2 rounded-lg px-1 py-1.5 text-left transition-colors hover:bg-[var(--ws-color-hover-bg)] appearance-none border-0 bg-transparent cursor-pointer">
+                  <button type="button" className="mb-2 flex w-full items-center gap-2 rounded-sm px-1 py-1.5 text-left transition-colors hover:bg-[var(--ws-color-hover-bg)] appearance-none border-0 bg-transparent cursor-pointer">
                     <Avatar className="h-7 w-7 shrink-0 bg-primary/10">
                       <AvatarFallback className="bg-primary/10 text-primary">
                         <User className="h-4 w-4" />

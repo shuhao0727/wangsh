@@ -6,7 +6,7 @@ import {
   getCoreRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { Plus, RefreshCw, Loader2, Pencil, Trash2 } from "lucide-react";
+import { Plus, RefreshCw, Loader2, Pencil, Search, Trash2 } from "lucide-react";
 import { AdminPage, AdminTablePanel } from "@components/Admin";
 import { ConfirmDialog } from "@components/Common/ConfirmDialog";
 import { githubSyncApi, typstCategoriesApi, typstNotesApi } from "@services";
@@ -467,8 +467,12 @@ const AdminInformatics: React.FC = () => {
   return (
     <>
     <AdminPage scrollable={false}>
-      <div className="mb-4 flex flex-wrap justify-between gap-3">
-        <div className="flex flex-wrap gap-2">
+      <section
+        className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border-secondary bg-surface"
+        aria-label="信息学笔记工作区"
+      >
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border-secondary px-3 py-2.5">
+        <div className="flex min-w-0 flex-[1_1_460px] flex-wrap items-center gap-2">
           <Select
             value={categoryFilter || FILTER_ALL}
             onValueChange={(v) => {
@@ -476,7 +480,7 @@ const AdminInformatics: React.FC = () => {
               setPage(1);
             }}
           >
-            <SelectTrigger className="w-72">
+            <SelectTrigger className="w-full sm:w-64" aria-label="按分类筛选">
               <SelectValue placeholder="按分类筛选" />
             </SelectTrigger>
             <SelectContent>
@@ -488,29 +492,33 @@ const AdminInformatics: React.FC = () => {
               ))}
             </SelectContent>
           </Select>
-          <Input
-            value={titleKeyword}
-            placeholder="搜索标题..."
-            className="w-64"
-            onChange={(e) => {
-              setTitleKeyword(e.target.value);
-              setPage(1);
-            }}
-          />
+          <div className="relative w-full sm:w-60">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
+            <Input
+              aria-label="搜索笔记标题"
+              value={titleKeyword}
+              placeholder="搜索标题"
+              className="pl-9"
+              onChange={(e) => {
+                setTitleKeyword(e.target.value);
+                setPage(1);
+              }}
+            />
+          </div>
         </div>
 
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {canManageGithubSync ? (
-            <Button type="button" variant="outline" onClick={() => setSyncModalOpen(true)}>
+            <Button type="button" size="sm" variant="outline" className="h-8" onClick={() => setSyncModalOpen(true)}>
               <RefreshCw className="h-4 w-4" />
               GitHub同步
             </Button>
           ) : null}
-          <Button type="button" variant="outline" onClick={() => void load()} disabled={loading}>
+          <Button type="button" size="sm" variant="outline" className="h-8" onClick={() => void load()} disabled={loading}>
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             刷新
           </Button>
-          <Button type="button" onClick={() => openEditor("/admin/informatics/editor/new")}>
+          <Button type="button" size="sm" className="h-8" onClick={() => openEditor("/admin/informatics/editor/new")}>
             <Plus className="h-4 w-4" />
             新建笔记
           </Button>
@@ -518,17 +526,16 @@ const AdminInformatics: React.FC = () => {
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col">
-        <div className="min-h-0 flex-1 flex flex-col">
-          <AdminTablePanel
-            loading={loading}
-            isEmpty={displayedItems.length === 0}
-            emptyDescription="暂无笔记数据"
-          >
-            <DataTable table={table} tableClassName="min-w-[980px]" />
-          </AdminTablePanel>
-        </div>
+        <AdminTablePanel
+          ariaLabel="信息学笔记列表"
+          loading={loading}
+          isEmpty={displayedItems.length === 0}
+          emptyDescription="暂无笔记数据"
+        >
+          <DataTable table={table} tableClassName="min-w-[980px]" />
+        </AdminTablePanel>
         {displayedItems.length > 0 ? (
-          <div className="mt-2 flex justify-end border-t border-border-secondary pt-3">
+          <div className="flex shrink-0 justify-end border-t border-border-secondary px-3 py-2">
             <DataTablePagination
               currentPage={Math.max(1, page)}
               totalPages={Math.max(1, totalPages)}
@@ -547,6 +554,7 @@ const AdminInformatics: React.FC = () => {
           </div>
         ) : null}
       </div>
+      </section>
 
       {canManageGithubSync ? (
       <Dialog open={syncModalOpen} onOpenChange={setSyncModalOpen}>

@@ -53,6 +53,14 @@ test("backend Docker context excludes cached Docker CLI binaries", () => {
   );
 });
 
+test("application Docker contexts exclude private environment files", () => {
+  for (const app of ["frontend", "backend"]) {
+    const patterns = activePatterns(path.join(repoRoot, app, ".dockerignore"));
+    assert.ok(patterns.includes(".env"), `${app} must exclude private .env`);
+    assert.ok(patterns.includes(".env.*"), `${app} must exclude private environment variants`);
+  }
+});
+
 test("Git ignores local Codex coordination files", () => {
   const gitignore = activePatterns(path.join(repoRoot, ".gitignore"));
   assert.ok(

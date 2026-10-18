@@ -116,9 +116,9 @@ export default function ArticleMarkdownEditorCard({ viewMode, canSplit, onViewMo
                 type="button"
                 onClick={() => onViewModeChange(item.value)}
                 className={cn(
-                  "rounded px-2.5 py-1 text-xs transition-colors",
+                  "rounded-sm px-2.5 py-1 text-xs transition-colors",
                   viewMode === item.value
-                    ? "bg-surface text-text shadow-sm"
+                    ? "bg-surface text-text shadow-none"
                     : "text-text-tertiary hover:text-text",
                 )}
               >

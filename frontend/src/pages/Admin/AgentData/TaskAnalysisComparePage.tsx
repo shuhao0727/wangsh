@@ -158,7 +158,7 @@ const TaskAnalysisComparePage: React.FC = () => {
 
   if (ids.length < 2) {
     return (
-      <div className="flex h-screen items-center justify-center bg-[var(--ws-color-bg)]">
+      <div className="ws-task-analysis-shell flex h-screen items-center justify-center">
         <div className="text-center space-y-3">
           <p className="text-sm text-text-tertiary">请至少选择 2 条分析记录进行对比</p>
           <Button variant="outline" onClick={() => window.close()}>返回</Button>
@@ -168,8 +168,8 @@ const TaskAnalysisComparePage: React.FC = () => {
   }
 
   return (
-    <div className="flex h-screen flex-col bg-[var(--ws-color-bg)]">
-      <header className="shrink-0 border-b border-border-secondary bg-surface px-6 py-3 flex items-center gap-3">
+    <div className="ws-task-analysis-shell flex h-screen flex-col">
+      <header className="ws-task-analysis-header flex shrink-0 items-center gap-3 px-6">
         <Button variant="ghost" size="sm" onClick={() => window.close()}><ArrowLeft className="h-4 w-4 mr-1" />关闭</Button>
         <span className="text-sm font-semibold">多课时对比分析</span>
         <span className="text-xs text-text-tertiary">({ids.length} 条记录)</span>
@@ -184,9 +184,9 @@ const TaskAnalysisComparePage: React.FC = () => {
           </div>
         </div>
       ) : (
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6 max-w-6xl mx-auto w-full">
+        <div className="ws-task-analysis-content flex-1 space-y-5 overflow-y-auto">
           {/* ① 对比概览表格 */}
-          <section className="rounded-xl border border-border bg-surface p-4 shadow-sm">
+          <section className="ws-task-analysis-section">
             <h2 className="text-base font-semibold mb-3">对比概览</h2>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -221,21 +221,21 @@ const TaskAnalysisComparePage: React.FC = () => {
           </section>
 
           {/* ② Bloom 认知层级对比 */}
-          <section className="rounded-xl border border-border bg-surface p-4 shadow-sm">
+          <section className="ws-task-analysis-section">
             <h2 className="text-base font-semibold mb-1">Bloom 认知层级对比</h2>
             <p className="text-xs text-text-tertiary mb-3">观察不同课时学生提问的认知层级分布差异</p>
             <div ref={bloomRef} style={{ width: "100%", height: 280 }} />
           </section>
 
           {/* ③ 时序热点叠加 */}
-          <section className="rounded-xl border border-border bg-surface p-4 shadow-sm">
+          <section className="ws-task-analysis-section">
             <h2 className="text-base font-semibold mb-1">时序提问量对比</h2>
             <p className="text-xs text-text-tertiary mb-3">X轴为课堂相对时间，观察哪节课的爆发点更早/更密集</p>
             <div ref={timelineRef} style={{ width: "100%", height: 280 }} />
           </section>
 
           {/* ④ 生发问题对比 */}
-          <section className="rounded-xl border border-border bg-surface p-4 shadow-sm">
+          <section className="ws-task-analysis-section">
             <h2 className="text-base font-semibold mb-1">生发问题对比</h2>
             <p className="text-xs text-text-tertiary mb-3">跨课时重复出现的生发问题 = 任务单系统性盲区</p>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

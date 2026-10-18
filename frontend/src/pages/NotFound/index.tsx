@@ -1,20 +1,32 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
+import { ArrowLeft, Home } from 'lucide-react';
 
 const NotFoundPage: React.FC = () => {
   const navigate = useNavigate();
 
   return (
-    <div className="flex h-full min-h-[calc(100dvh-var(--ws-header-height)-80px)] items-center justify-center bg-bg p-6 sm:min-h-[calc(100dvh-var(--ws-header-height)-40px)] sm:p-4">
-      <div className="text-center">
-        <div className="text-7xl font-bold text-text-tertiary mb-2">404</div>
-        <div className="text-base text-text-secondary mb-6">抱歉，您访问的页面不存在。</div>
-        <Button onClick={() => navigate('/')}>
-          返回首页
-        </Button>
+    <main className="flex min-h-[calc(100dvh-var(--ws-header-height))] items-center justify-center bg-bg px-5 py-10">
+      <div className="w-full max-w-md">
+        <div className="flex items-center gap-4 border-b border-border-secondary pb-5">
+          <span className="text-4xl font-semibold tabular-nums text-text-tertiary">404</span>
+          <div className="min-w-0 border-l border-border-secondary pl-4">
+            <h1 className="text-base font-semibold text-text-base">页面不存在</h1>
+          </div>
+        </div>
+        <div className="mt-5 flex flex-wrap items-center gap-2">
+          <Button onClick={() => navigate('/home')}>
+            <Home className="mr-2 h-4 w-4" />
+            返回首页
+          </Button>
+          <Button variant="ghost" onClick={() => navigate(-1)}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            返回上一页
+          </Button>
+        </div>
       </div>
-    </div>
+    </main>
   );
 };
 

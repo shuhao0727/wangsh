@@ -127,8 +127,8 @@ const AgentSidebar: React.FC<AgentSidebarProps> = ({
         </div>
 
         {/* 当前智能体信息卡 */}
-        <div className="rounded-lg p-[var(--ws-panel-padding-sm)] mb-4 bg-surface-2">
-          <div className="flex items-center justify-between mb-2">
+        <div className="mb-3 border-b border-[var(--ws-color-border-secondary)] pb-3">
+          <div className="mb-1.5 flex items-center justify-between">
             <div className="flex items-center gap-2 min-w-0">
               <Avatar className="h-6 w-6 rounded-md">
                 <AvatarFallback className="rounded-md text-white text-xs" style={{ backgroundColor: currentAgent.color }}>
@@ -183,7 +183,7 @@ const AgentSidebar: React.FC<AgentSidebarProps> = ({
                       <div key={key}>
                         <div
                           onClick={() => toggleGroup(key)}
-                          className="flex items-center justify-between px-1 py-1 cursor-pointer hover:bg-surface-2 rounded transition-colors"
+                          className="flex cursor-pointer items-center justify-between rounded-sm px-1 py-1 transition-colors hover:bg-surface-2"
                         >
                           <span className="text-sm font-medium text-text-tertiary">
                             {label} <span className="text-text-tertiary">({data.length})</span>
@@ -196,7 +196,7 @@ const AgentSidebar: React.FC<AgentSidebarProps> = ({
                               <div
                                 key={s.session_id}
                                 onClick={() => onSelectSession(s.session_id)}
-                                className={`rounded-lg p-2.5 cursor-pointer transition-colors duration-150 ${
+                                className={`cursor-pointer rounded-sm px-2 py-2 transition-colors duration-150 ${
                                   s.session_id === currentSessionId ? "bg-primary-soft" : "hover:bg-surface-2"
                                 }`}
                               >

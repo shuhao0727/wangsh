@@ -432,7 +432,7 @@ export const RightPanel = React.memo(function RightPanel() {
                 <Button
                   variant="ghost"
                   type="button"
-                  className="h-8 w-8 rounded-md p-0"
+                  className="h-8 w-8 rounded-sm p-0"
                   disabled={(runner.status as string) === "starting" || (!controlMatrix.run && (runner.status as string) !== "starting" && runner.status !== "running" && runner.status !== "paused")}
                   onClick={(e) => {
                     e.preventDefault();
@@ -457,7 +457,7 @@ export const RightPanel = React.memo(function RightPanel() {
               >
                 <Button
                   variant="ghost"
-                  className="h-8 w-8 rounded-md p-0"
+                  className="h-8 w-8 rounded-sm p-0"
                   onClick={handleDebugClick}
                   disabled={!controlMatrix.debug}
                 >
@@ -468,7 +468,7 @@ export const RightPanel = React.memo(function RightPanel() {
                 <PanelTooltip title={runner.sourceMismatchMessage || "流程图与运行代码版本不一致，请重建流程图映射"}>
                   <Button
                     variant="ghost"
-                    className="h-8 w-8 rounded-md p-0"
+                    className="h-8 w-8 rounded-sm p-0"
                     onClick={async () => {
                       setRebuildError(null);
                       try {
@@ -485,7 +485,7 @@ export const RightPanel = React.memo(function RightPanel() {
               <PanelTooltip title="暂停 (Pause)">
                 <Button
                   variant="ghost"
-                  className="h-8 w-8 rounded-md p-0"
+                  className="h-8 w-8 rounded-sm p-0"
                   onClick={onPause}
                   disabled={!controlMatrix.pause}
                 >
@@ -493,29 +493,29 @@ export const RightPanel = React.memo(function RightPanel() {
                 </Button>
               </PanelTooltip>
               <PanelTooltip title="继续 (Continue)">
-                <Button variant="ghost" className="h-8 w-8 rounded-md p-0" onClick={onContinue} disabled={!controlMatrix.continue}>
+                <Button variant="ghost" className="h-8 w-8 rounded-sm p-0" onClick={onContinue} disabled={!controlMatrix.continue}>
                   <FastForward className="text-lg" />
                 </Button>
               </PanelTooltip>
               <div className="mx-2 h-4 w-px bg-border" />
               <PanelTooltip title="单步跳过 (Step Over)">
-                <Button variant="ghost" className="h-8 w-8 rounded-md p-0" onClick={onStepOver} disabled={!controlMatrix.stepOver}>
+                <Button variant="ghost" className="h-8 w-8 rounded-sm p-0" onClick={onStepOver} disabled={!controlMatrix.stepOver}>
                   <ChevronRight className="h-4 w-4" />
                 </Button>
               </PanelTooltip>
               <PanelTooltip title="单步进入 (Step Into)">
-                <Button variant="ghost" className="h-8 w-8 rounded-md p-0" onClick={onStepInto} disabled={!controlMatrix.stepInto}>
+                <Button variant="ghost" className="h-8 w-8 rounded-sm p-0" onClick={onStepInto} disabled={!controlMatrix.stepInto}>
                   <LogIn className="h-4 w-4" />
                 </Button>
               </PanelTooltip>
               <PanelTooltip title="单步跳出 (Step Out)">
-                <Button variant="ghost" className="h-8 w-8 rounded-md p-0" onClick={onStepOut} disabled={!controlMatrix.stepOut}>
+                <Button variant="ghost" className="h-8 w-8 rounded-sm p-0" onClick={onStepOut} disabled={!controlMatrix.stepOut}>
                   <LogOut className="h-4 w-4" />
                 </Button>
               </PanelTooltip>
               <div className="mx-2 h-4 w-px bg-border" />
               <PanelTooltip title="重置/停止 (Reset)">
-                <Button variant="destructive" className="h-8 w-8 rounded-md p-0" onClick={onReset}>
+                <Button variant="destructive" className="h-8 w-8 rounded-sm p-0" onClick={onReset}>
                   <RefreshCw className="h-4 w-4" />
                 </Button>
               </PanelTooltip>
@@ -572,15 +572,15 @@ export const RightPanel = React.memo(function RightPanel() {
           className="h-full flex flex-col"
         >
           <TabsList className="h-9 w-full justify-start rounded-none border-b border-[color:var(--ws-color-border-secondary)] bg-transparent p-1">
-            <TabsTrigger value="terminal" className="h-7 gap-1.5 rounded-md px-2 py-1 text-xs data-[state=active]:shadow-none">
+            <TabsTrigger value="terminal" className="h-7 gap-1.5 rounded-none px-2 py-1 text-xs data-[state=active]:shadow-none">
               <Terminal className="h-4 w-4" />
               终端交互
             </TabsTrigger>
-            <TabsTrigger value="debug" className="h-7 gap-1.5 rounded-md px-2 py-1 text-xs data-[state=active]:shadow-none">
+            <TabsTrigger value="debug" className="h-7 gap-1.5 rounded-none px-2 py-1 text-xs data-[state=active]:shadow-none">
               <Bug className="h-4 w-4" />
               调试器
             </TabsTrigger>
-            <TabsTrigger value="pipeline" className="h-7 gap-1.5 rounded-md px-2 py-1 text-xs data-[state=active]:shadow-none">
+            <TabsTrigger value="pipeline" className="h-7 gap-1.5 rounded-none px-2 py-1 text-xs data-[state=active]:shadow-none">
               <Eye className="h-4 w-4" />
               参考
             </TabsTrigger>

@@ -407,7 +407,7 @@ const ArticleDetailPage: React.FC = () => {
                       <div className="group relative">
                         <button
                           type="button"
-                          className="absolute right-2 top-2 z-10 inline-flex items-center gap-1 rounded-md bg-[var(--ws-color-surface-2)] px-2 py-1 text-xs text-text-secondary opacity-0 transition-opacity hover:bg-accent group-hover:opacity-100"
+                          className="absolute right-2 top-2 z-10 inline-flex items-center gap-1 rounded-sm bg-[var(--ws-color-surface-2)] px-2 py-1 text-xs text-text-secondary opacity-0 transition-opacity hover:bg-accent group-hover:opacity-100"
                           onClick={async () => {
                             try {
                               await navigator.clipboard.writeText(codeText);

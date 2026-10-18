@@ -57,6 +57,7 @@
   --ws-color-bg: #F0FDFA;
   --ws-color-surface: #FFFFFF;
   --ws-color-surface-2: #E6F5F3;
+  --ws-color-workspace-muted: color-mix(in srgb, var(--ws-color-text) 3%, var(--ws-color-surface));
   --ws-color-overlay: rgba(0, 0, 0, 0.4);
 
   /* 边框 */
@@ -171,6 +172,9 @@
   --ws-transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
   /* 间距 */
+  /* 固定 4px 网格用于已验收控件的精确几何；响应式页面间距继续使用下方 space token。 */
+  --ws-space-unit: 4px;
+  --ws-border-width: 1px;
   --ws-space-1: clamp(4px, calc(0.18vw + 3.8px), 10px);
   --ws-space-2: clamp(8px, calc(0.26vw + 6.8px), 14px);
   --ws-space-3: clamp(12px, calc(0.38vw + 9.6px), 20px);
@@ -205,6 +209,10 @@
   --ws-control-height-sm: 28px;
   --ws-control-height: 36px;
   --ws-control-height-lg: 44px;
+  --ws-control-bg: var(--ws-color-surface);
+  --ws-control-border: var(--ws-color-border);
+  --ws-control-action-bg: var(--ws-color-surface);
+  --ws-control-action-border: var(--ws-color-border);
   --ws-search-input-padding-start: 2.25rem;
   --ws-module-card-min-height: 128px;
   --ws-opacity-decoration-strong: 0.3;

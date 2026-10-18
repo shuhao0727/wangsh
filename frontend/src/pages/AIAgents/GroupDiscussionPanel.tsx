@@ -718,9 +718,9 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
             key={item.key}
             type="button"
             className={cn(
-              "flex items-center justify-center gap-1.5 rounded px-3 py-1.5 text-sm transition-colors",
+              "flex items-center justify-center gap-1.5 rounded-sm px-3 py-1.5 text-sm transition-colors",
               introMode === item.key
-                ? "bg-surface text-text shadow-sm"
+                ? "bg-surface text-text shadow-none"
                 : "text-text-tertiary hover:text-text",
             )}
             onClick={() => setIntroMode(item.key as "join" | "create")}

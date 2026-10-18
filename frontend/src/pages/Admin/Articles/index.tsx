@@ -130,13 +130,13 @@ const getArticleColumns = (
       const record = row.original;
       return (
         <div className="flex items-center gap-1.5">
-          <Button variant="outline" size="sm" className="h-8 px-2.5" onClick={() => handleEdit(record)}>
+          <Button variant="outline" size="sm" className="px-2.5" onClick={() => handleEdit(record)}>
             <Pencil className="h-4 w-4" />
             编辑
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="更多操作">
+              <Button variant="ghost" size="icon" className="h-[var(--ws-control-height-sm)] w-[var(--ws-control-height-sm)]" aria-label="更多操作">
                 <Ellipsis className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -437,21 +437,25 @@ const AdminArticles: React.FC = () => {
       {
         id: "select",
         header: ({ table }) => (
-          <Checkbox
-            aria-label="选择当前页全部文章"
-            checked={
-              table.getIsAllPageRowsSelected() ||
-              (table.getIsSomePageRowsSelected() ? "indeterminate" : false)
-            }
-            onCheckedChange={(checked) => table.toggleAllPageRowsSelected(checked === true)}
-          />
+          <label className="inline-flex h-[var(--ws-control-height-sm)] w-[var(--ws-control-height-sm)] cursor-pointer items-center justify-center">
+            <Checkbox
+              aria-label="选择当前页全部文章"
+              checked={
+                table.getIsAllPageRowsSelected() ||
+                (table.getIsSomePageRowsSelected() ? "indeterminate" : false)
+              }
+              onCheckedChange={(checked) => table.toggleAllPageRowsSelected(checked === true)}
+            />
+          </label>
         ),
         cell: ({ row }) => (
-          <Checkbox
-            aria-label={`选择文章 ${row.original.title}`}
-            checked={row.getIsSelected()}
-            onCheckedChange={(checked) => row.toggleSelected(checked === true)}
-          />
+          <label className="inline-flex h-[var(--ws-control-height-sm)] w-[var(--ws-control-height-sm)] cursor-pointer items-center justify-center">
+            <Checkbox
+              aria-label={`选择文章 ${row.original.title}`}
+              checked={row.getIsSelected()}
+              onCheckedChange={(checked) => row.toggleSelected(checked === true)}
+            />
+          </label>
         ),
         enableSorting: false,
         enableHiding: false,
@@ -484,68 +488,71 @@ const AdminArticles: React.FC = () => {
 
   return (
     <AdminPage scrollable={false}>
-      <AdminFilterBar>
-        <Select
-          value={categoryFilter != null ? String(categoryFilter) : "__all__"}
-          onValueChange={(value) => {
-            const next = value === "__all__" ? undefined : Number(value);
-            setCategoryFilter(next);
-            setSearchParams((prev) => ({ ...prev, page: 1, category_id: next }));
-          }}
-        >
-          <SelectTrigger className="w-[220px]">
-            <SelectValue placeholder="按分类筛选" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__all__">按分类筛选</SelectItem>
-            {categories.map((category) => (
-              <SelectItem key={category.id} value={String(category.id)}>
-                {category.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Input
-          value={titleKeyword}
-          placeholder="搜索标题..."
-          className="w-[220px]"
-          onChange={(e) => setTitleKeyword(e.target.value)}
-        />
-        <div className="flex-1" />
-        {selectedRowKeys.length > 0 ? (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline">
-                <Ellipsis className="h-4 w-4" />
-                批量操作 ({selectedRowKeys.length})
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => handleBatchPublish(true)}>
-                批量发布
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleBatchPublish(false)}>
-                批量转为草稿
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-destructive" onClick={handleBatchDelete}>
-                批量删除
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ) : null}
-        <Button variant="outline" onClick={invalidateArticles} disabled={isLoading || mutating}>
-          {(isLoading || mutating) ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
-          刷新
-        </Button>
-        <Button variant="outline" onClick={() => setCategoryModalVisible(true)}>
-          <FolderOpen className="h-4 w-4" />
-          分类管理
-        </Button>
-        <Button onClick={handleAddArticle}>
-          <Plus className="h-4 w-4" />
-          新建文章
-        </Button>
+      <AdminFilterBar className="ws-articles-toolbar">
+        <div className="ws-articles-toolbar__filters">
+          <Select
+            value={categoryFilter != null ? String(categoryFilter) : "__all__"}
+            onValueChange={(value) => {
+              const next = value === "__all__" ? undefined : Number(value);
+              setCategoryFilter(next);
+              setSearchParams((prev) => ({ ...prev, page: 1, category_id: next }));
+            }}
+          >
+            <SelectTrigger className="w-[220px] max-[640px]:w-[calc(50%-4px)]">
+              <SelectValue placeholder="按分类筛选" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">按分类筛选</SelectItem>
+              {categories.map((category) => (
+                <SelectItem key={category.id} value={String(category.id)}>
+                  {category.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Input
+            value={titleKeyword}
+            placeholder="搜索标题..."
+            className="w-[220px] max-[640px]:w-[calc(50%-4px)]"
+            onChange={(e) => setTitleKeyword(e.target.value)}
+          />
+        </div>
+        <div className="ws-articles-toolbar__actions">
+          {selectedRowKeys.length > 0 ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline">
+                  <Ellipsis className="h-4 w-4" />
+                  批量操作 ({selectedRowKeys.length})
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => handleBatchPublish(true)}>
+                  批量发布
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleBatchPublish(false)}>
+                  批量转为草稿
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="text-destructive" onClick={handleBatchDelete}>
+                  批量删除
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
+          <Button variant="outline" onClick={invalidateArticles} disabled={isLoading || mutating}>
+            {(isLoading || mutating) ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+            刷新
+          </Button>
+          <Button variant="outline" onClick={() => setCategoryModalVisible(true)}>
+            <FolderOpen className="h-4 w-4" />
+            分类管理
+          </Button>
+          <Button onClick={handleAddArticle}>
+            <Plus className="h-4 w-4" />
+            新建文章
+          </Button>
+        </div>
       </AdminFilterBar>
 
       <div className="flex min-h-0 flex-1 flex-col">
@@ -558,7 +565,7 @@ const AdminArticles: React.FC = () => {
             <DataTable
               table={table}
               className="h-full"
-              tableClassName="min-w-[1100px]"
+              tableClassName="!min-w-[1100px]"
             />
           </AdminTablePanel>
         </div>

@@ -48,9 +48,12 @@ const rowActionButton = (
     <TooltipTrigger asChild>
       <Button
         type="button"
-        size="icon"
+        size="sm"
         variant="ghost"
-        className={cn(options?.danger ? "text-destructive hover:text-destructive" : "")}
+        className={cn(
+          "h-8 w-8 px-0",
+          options?.danger ? "text-destructive hover:text-destructive" : "",
+        )}
         disabled={options?.disabled}
         onClick={onClick}
         aria-label={title}
@@ -179,8 +182,8 @@ export const getActivityColumns = (handlers: ActivityColumnHandlers): ColumnDef<
     {
       id: "actions",
       header: "操作",
-      size: 260,
-      meta: { className: "w-[260px]" },
+      size: 168,
+      meta: { className: "w-[168px]" },
       cell: ({ row }) => {
         const record = row.original;
         const isDraft = record.status === "draft";

@@ -6,6 +6,7 @@ import MindMapEditor from "@/pages/Admin/ITTechnology/learning/MindMapEditor";
 
 vi.mock("react-router-dom", () => ({
   useParams: () => ({ moduleKey: "ml" }),
+  useNavigate: () => vi.fn(),
 }));
 
 vi.mock("@/lib/toast", () => ({

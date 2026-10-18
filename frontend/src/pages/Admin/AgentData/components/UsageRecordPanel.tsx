@@ -11,12 +11,15 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 import dayjs from "dayjs";
+import { Download } from "lucide-react";
 
 import SearchBar from "./SearchBar";
 import DetailModal from "./DetailModal";
 import { getAgentDataColumns } from "./columns";
 import { AdminTablePanel } from "@components/Admin";
+import EmptyState from "@components/Common/EmptyState";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Button } from "@/components/ui/button";
 import { DataTable, DataTablePagination } from "@/components/ui/data-table";
 
 import type { AgentUsageData, SearchFilterParams } from "@services/znt/types";
@@ -170,23 +173,48 @@ const UsageRecordPanel: React.FC<{ onFilterChange?: (params: SearchFilterParams)
   });
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-2">
+    <div className="flex min-h-0 flex-1 flex-col">
       <SearchBar
         searchParams={searchParams}
         onSearch={handleSearch}
         onReset={handleReset}
-        onExport={handleExportSelected}
-        exportDisabled={selectedRowKeys.length === 0}
-        exportLoading={exportLoading}
+        actionSlot={selectedRowKeys.length > 0 ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={handleExportSelected}
+            disabled={exportLoading}
+            aria-label={exportLoading ? "正在导出选中会话" : "导出选中会话"}
+            title={exportLoading ? "正在导出选中会话" : "导出选中会话"}
+            className="shrink-0"
+          >
+            <Download className="h-4 w-4" />
+          </Button>
+        ) : null}
       />
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border-secondary bg-surface-1">
+      <div className={`ws-usage-results flex min-h-0 flex-1 flex-col overflow-hidden${!isLoading && data.length === 0 ? " ws-usage-results-empty" : ""}`}>
         <AdminTablePanel
           loading={isLoading}
-          isEmpty={!isLoading && data.length === 0}
-          emptyDescription="暂无使用记录"
         >
-          <DataTable table={table} className="h-full !overflow-visible !rounded-none !border-0" tableClassName="min-w-[1180px] table-fixed" />
+          <div className="ws-usage-table-area">
+            <DataTable
+              table={table}
+              className="ws-usage-data-table h-full !overflow-visible !rounded-none !border-0"
+              tableClassName="min-w-[1024px] table-fixed"
+              emptyState={<div className="ws-usage-empty-spacer" aria-hidden="true" />}
+            />
+            {!isLoading && data.length === 0 ? (
+              <div className="ws-usage-empty-overlay">
+                <EmptyState
+                  title="暂无使用记录"
+                  description="可以调整筛选条件，或等待学生使用智能体后查看。"
+                  className="ws-usage-empty-state"
+                />
+              </div>
+            ) : null}
+          </div>
         </AdminTablePanel>
         {total > 0 ? (
           <div className="flex-none flex justify-end border-t border-border-secondary px-4 py-3">

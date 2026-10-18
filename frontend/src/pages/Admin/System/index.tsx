@@ -3,7 +3,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { AdminCard, AdminPage } from "@components/Admin";
 import { api } from "@services";
@@ -78,24 +78,15 @@ const AdminSystem: React.FC = () => {
 
   return (
     <AdminPage>
-      <div className="mb-4 flex items-center justify-end gap-2">
-        <div className="inline-flex rounded-lg bg-surface-2 p-1">
-          <Button
-            size="sm"
-            variant={tab === "system" ? "default" : "ghost"}
-            onClick={() => setTab("system")}
-          >
-            系统
-          </Button>
-          <Button
-            size="sm"
-            variant={tab === "typst" ? "default" : "ghost"}
-            onClick={() => setTab("typst")}
-          >
-            Typst
-          </Button>
-        </div>
-        <Button variant="outline" onClick={load} disabled={loading}>
+      <div className="ws-system-shell">
+      <div className="ws-system-toolbar flex items-center justify-between gap-2">
+        <Tabs value={tab} onValueChange={(value) => setTab(value as "system" | "typst")}>
+          <TabsList aria-label="系统设置分区">
+            <TabsTrigger value="system">系统</TabsTrigger>
+            <TabsTrigger value="typst">Typst</TabsTrigger>
+          </TabsList>
+        </Tabs>
+        <Button size="sm" variant="outline" onClick={load} disabled={loading} className="h-8">
           <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           刷新
         </Button>
@@ -106,15 +97,16 @@ const AdminSystem: React.FC = () => {
       ) : (
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
           <div className="lg:col-span-2">
-            <AdminCard title="前端导航可见性" className="rounded-lg border border-border bg-surface" size="small">
+            <AdminCard title="前端导航可见性" className="ws-system-group" size="small">
               <div className="grid grid-cols-1 gap-2 md:grid-cols-3 xl:grid-cols-5">
                 {NAV_VISIBILITY_ITEMS.map((item) => (
                   <div
                     key={item.path}
-                    className="flex items-center justify-between rounded-md border border-border-secondary bg-surface-2 px-2.5 py-1.5"
+                    className="ws-system-nav-item flex items-center justify-between border border-border-secondary bg-surface-2 px-2.5 py-1.5"
                   >
                     <span className="text-sm text-text-base">{item.label}</span>
                     <Switch
+                      aria-label={`${item.label}导航可见性`}
                       checked={navVisibleMap[item.path] !== false}
                       disabled={!!navToggleLoading[item.path]}
                       onCheckedChange={(checked) => handleNavToggle(item, checked)}
@@ -125,7 +117,7 @@ const AdminSystem: React.FC = () => {
             </AdminCard>
           </div>
 
-          <AdminCard title="基本设置" className="rounded-lg border border-border bg-surface" size="small">
+          <AdminCard title="基本设置" className="ws-system-group" size="small">
             <InfoRow
               label="服务状态"
               value={
@@ -150,28 +142,16 @@ const AdminSystem: React.FC = () => {
             />
           </AdminCard>
 
-          <AdminCard title="安全设置" className="rounded-lg border border-border bg-surface" size="small">
-            <div className="flex flex-col gap-2.5">
-              <div className="grid grid-cols-[120px_minmax(0,1fr)_auto] items-center gap-2">
-                <span className="text-sm text-text-secondary">JWT 过期时间</span>
-                <Input value={settings?.security?.jwt_expire_minutes ?? ""} readOnly className="h-9" />
-                <span className="text-sm text-text-tertiary">分钟</span>
-              </div>
-              <div className="grid grid-cols-[120px_minmax(0,1fr)] items-center gap-2">
-                <span className="text-sm text-text-secondary">算法</span>
-                <Input value={settings?.security?.algorithm ?? ""} readOnly className="h-9" />
-              </div>
-              <div className="grid grid-cols-[120px_minmax(0,1fr)] items-center gap-2">
-                <span className="text-sm text-text-secondary">Auto Create Tables</span>
-                <Input value={String(settings?.features?.auto_create_tables ?? "")} readOnly className="h-9" />
-              </div>
-            </div>
+          <AdminCard title="安全设置" className="ws-system-group" size="small">
+            <InfoRow label="JWT 过期时间" value={settings?.security?.jwt_expire_minutes != null ? `${settings.security.jwt_expire_minutes} 分钟` : "—"} valueClassName="text-sm text-text-base" />
+            <InfoRow label="算法" value={settings?.security?.algorithm ?? "—"} valueClassName="text-sm text-text-base" />
+            <InfoRow label="自动建表" value={settings?.features?.auto_create_tables == null ? "—" : settings.features.auto_create_tables ? "开启" : "关闭"} valueClassName="text-sm text-text-base" />
           </AdminCard>
 
           <div className="lg:col-span-2">
-            <AdminCard title="观测指标" className="rounded-lg border border-border bg-surface" size="small">
+            <AdminCard title="观测指标" className="ws-system-group" size="small">
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                <div className="rounded-md border border-border-secondary bg-surface-2 px-3 py-2">
+                <div className="ws-system-metric border border-border-secondary bg-surface-2 px-3 py-2">
                   <span className="mb-1.5 block text-sm font-semibold">HTTP</span>
                   <MetricRow label="总请求" value={overview?.observability?.http?.total ?? "-"} />
                   <MetricRow label="4xx" value={overview?.observability?.http?.["4xx"] ?? "-"} />
@@ -179,7 +159,7 @@ const AdminSystem: React.FC = () => {
                   <MetricRow label="In-flight" value={overview?.observability?.http?.inflight ?? "-"} />
                   <MetricRow label="p95(ms)" value={overview?.observability?.http?.dur_ms?.p95 ?? "-"} />
                 </div>
-                <div className="rounded-md border border-border-secondary bg-surface-2 px-3 py-2">
+                <div className="ws-system-metric border border-border-secondary bg-surface-2 px-3 py-2">
                   <span className="mb-1.5 block text-sm font-semibold">DB Pool</span>
                   <MetricRow label="pool_size" value={overview?.observability?.db?.pool_size ?? "-"} />
                   <MetricRow label="checked_in" value={overview?.observability?.db?.checked_in ?? "-"} />
@@ -192,6 +172,7 @@ const AdminSystem: React.FC = () => {
           </div>
         </div>
       )}
+      </div>
     </AdminPage>
   );
 };

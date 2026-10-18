@@ -704,8 +704,8 @@ const QuestionsPage: React.FC = () => {
         </Button>
       </div>
 
-      <Card className="mb-5 border border-border bg-surface p-4 md:p-5">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+      <Card className="mb-4 rounded-sm border-border bg-surface p-4 shadow-none md:p-5">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-border-secondary pb-3">
           <h3 className="text-base font-semibold text-text-base">基本设置</h3>
           <Button size="sm" disabled={saveConfigMutation.isPending} onClick={() => void handleSaveConfig()}>
             {saveConfigMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
@@ -834,8 +834,8 @@ const QuestionsPage: React.FC = () => {
         </div>
       </Card>
 
-      <Card className="mb-5 border border-border bg-surface p-4 md:p-6">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+      <Card className="mb-4 rounded-sm border-border bg-surface p-4 shadow-none md:p-5">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-border-secondary pb-3">
           <div className="flex items-center gap-2">
             <h3 className="text-base font-semibold text-text-base">固定题</h3>
             <Badge variant="info">{items.length}</Badge>
@@ -956,8 +956,8 @@ const QuestionsPage: React.FC = () => {
         ) : null}
       </Card>
 
-      <Card className="mb-5 border border-border bg-surface p-4 md:p-6">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+      <Card className="mb-4 rounded-sm border-border bg-surface p-4 shadow-none md:p-5">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-border-secondary pb-3">
           <div>
             <div className="flex items-center gap-2">
               <h3 className="text-base font-semibold text-text-base">自适应知识点题</h3>
@@ -987,33 +987,36 @@ const QuestionsPage: React.FC = () => {
             </Button>
           </div>
         ) : (
-          <div className="min-h-[220px] space-y-3">
-            <div
-              className="grid gap-2 px-2 text-xs font-medium text-text-tertiary"
-              style={{ gridTemplateColumns: "32px 1fr 2fr 110px 90px 90px 90px 40px" }}
-            >
-              <span>#</span>
-              <span>知识点</span>
-              <span>考察内容</span>
-              <span>题型</span>
-              <span>分值</span>
-              <span title="连续答对几题判定掌握">掌握</span>
-              <span title="最多尝试几次">上限</span>
-              <span />
-            </div>
-            {adaptiveKPs.map((kp, index) => (
+          <div className="min-h-[220px] overflow-x-auto">
+            <div className="min-w-[860px] space-y-2">
               <div
-                key={kp.key}
-                className="grid items-center gap-2 rounded-md bg-surface-2 px-3 py-3"
+                className="grid gap-2 px-2 text-xs font-medium text-text-tertiary"
                 style={{ gridTemplateColumns: "32px 1fr 2fr 110px 90px 90px 90px 40px" }}
               >
+                <span>#</span>
+                <span>知识点</span>
+                <span>考察内容</span>
+                <span>题型</span>
+                <span>分值</span>
+                <span title="连续答对几题判定掌握">掌握</span>
+                <span title="最多尝试几次">上限</span>
+                <span />
+              </div>
+              {adaptiveKPs.map((kp, index) => (
+                <div
+                  key={kp.key}
+                  className="grid items-center gap-2 rounded-sm bg-surface-2 px-3 py-2"
+                  style={{ gridTemplateColumns: "32px 1fr 2fr 110px 90px 90px 90px 40px" }}
+                >
                 <span className="text-sm font-medium text-text-secondary">{index + 1}</span>
                 <Input
+                  className="h-8 text-xs"
                   value={kp.knowledge_point}
                   placeholder="如：for循环"
                   onChange={(e) => updateAdaptive(kp.key, "knowledge_point", e.target.value)}
                 />
                 <Input
+                  className="h-8 text-xs"
                   value={kp.prompt_hint}
                   placeholder="给 AI 的出题提示"
                   onChange={(e) => updateAdaptive(kp.key, "prompt_hint", e.target.value)}
@@ -1024,7 +1027,7 @@ const QuestionsPage: React.FC = () => {
                     updateAdaptive(kp.key, "question_type", value as "choice" | "fill")
                   }
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="h-8 text-xs">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -1033,6 +1036,7 @@ const QuestionsPage: React.FC = () => {
                   </SelectContent>
                 </Select>
                 <Input
+                  className="h-8 text-xs"
                   type="number"
                   min={1}
                   max={100}
@@ -1042,6 +1046,7 @@ const QuestionsPage: React.FC = () => {
                   }
                 />
                 <Input
+                  className="h-8 text-xs"
                   type="number"
                   min={1}
                   max={10}
@@ -1055,6 +1060,7 @@ const QuestionsPage: React.FC = () => {
                   }
                 />
                 <Input
+                  className="h-8 text-xs"
                   type="number"
                   min={1}
                   max={20}
@@ -1077,8 +1083,9 @@ const QuestionsPage: React.FC = () => {
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </Button>
-              </div>
-            ))}
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </Card>

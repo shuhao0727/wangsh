@@ -123,7 +123,14 @@ export const getUserColumns = (props: ColumnConfigProps): ColumnDef<User>[] => {
             <div className="flex items-center gap-1">
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="sm" onClick={() => handleView(record)}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-[var(--ws-control-height-sm)] w-[var(--ws-control-height-sm)] p-0"
+                    aria-label={`查看用户 ${record.full_name} 详情`}
+                    title="查看详情"
+                    onClick={() => handleView(record)}
+                  >
                     <Eye className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
@@ -132,7 +139,14 @@ export const getUserColumns = (props: ColumnConfigProps): ColumnDef<User>[] => {
 
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="sm" onClick={() => handleEdit(record)}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-[var(--ws-control-height-sm)] w-[var(--ws-control-height-sm)] p-0"
+                    aria-label={`编辑用户 ${record.full_name}`}
+                    title="编辑"
+                    onClick={() => handleEdit(record)}
+                  >
                     <Pencil className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
@@ -144,6 +158,9 @@ export const getUserColumns = (props: ColumnConfigProps): ColumnDef<User>[] => {
                   <Button
                     variant="ghost"
                     size="sm"
+                    className="h-[var(--ws-control-height-sm)] w-[var(--ws-control-height-sm)] p-0"
+                    aria-label={`删除用户 ${record.full_name}`}
+                    title="删除"
                     onClick={() => handleDelete(record.id)}
                   >
                     <Trash2 className="h-4 w-4 text-destructive" />
