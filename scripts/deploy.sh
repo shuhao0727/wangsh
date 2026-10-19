@@ -604,6 +604,7 @@ case "${cmd}" in
     sim_lock_dir="${TMPDIR:-/tmp}/wangsh-production-simulate.lock"
     sim_lock_acquired=false
     tmp_env=""
+    tmp_compose=""
     sim_workspace_dir=""
     simulation_started=false
 
@@ -709,6 +710,14 @@ case "${cmd}" in
         fi
       fi
 
+      if [ -n "${tmp_compose}" ]; then
+        rm -f "${tmp_compose}"
+        command_rc=$?
+        if [ "${command_rc}" -ne 0 ] && [ "${cleanup_rc}" -eq 0 ]; then
+          cleanup_rc="${command_rc}"
+        fi
+      fi
+
       if [ "${sim_lock_acquired}" = "true" ]; then
         rm -rf -- "${sim_lock_dir}"
         command_rc=$?
@@ -785,6 +794,17 @@ REACT_APP_API_URL=/api/v1
 REACT_APP_ENV=production
 WEB_PORT=${sim_web_port}
 EOF
+
+    # Project names alone do not isolate explicit container names or bind mounts.
+    # Render once with the synthetic environment, then reject/replace host resources
+    # before any Compose down/up command. The normalized file contains credentials.
+    tmp_compose="$(mktemp -t wangsh_sim_compose_XXXXXX)"
+    chmod 600 "${tmp_compose}"
+    run_sim_compose config --format json \
+      | python3 scripts/prepare-production-simulation.py \
+          --workspace "${sim_workspace_dir}" --port "${sim_web_port}" \
+          > "${tmp_compose}"
+    compose_file="${tmp_compose}"
 
     run_sim_deploy verify-local-images
     run_sim_deploy down-v

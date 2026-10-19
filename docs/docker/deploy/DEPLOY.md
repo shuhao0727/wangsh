@@ -353,8 +353,13 @@ SIM_CLEANUP=false
 `simulate` 是本地生产镜像验证入口，不消费 `release-set.txt`。一次性隔离数据库在迁移与
 健康检查后会自动完成合成 AUTH authority enrollment，并用独立 session 核验 `ready=true`，
 然后才运行需要登录的 smoke；这不适用于正式数据库，正式切换仍必须执行本页前述
-`auth/cutover.py` 停流、排空、配对快照与显式 apply 流程。脚本会先确认 Compose
-引用和 PythonLab sandbox 镜像均已存在于本机，再停止旧的 `wangsh_sim` 栈并清理
+`auth/cutover.py` 停流、排空、配对快照与显式 apply 流程。脚本先解析生产 Compose，
+通过 `scripts/prepare-production-simulation.py` 生成权限为 `0600` 的临时隔离配置：
+移除固定容器名，PG/Redis 改用模拟专属 named volumes，所有卷均由 `wangsh_sim`
+项目拥有，移除外部网络，网关仅绑定 loopback；除 Docker socket 和本次 PythonLab
+目录外拒绝宿主挂载。生产的 `data/postgres`、`data/redis` 不会作为模拟数据源。
+生成和校验失败时在启动/停止容器前退出。脚本再确认 Compose 引用和 PythonLab
+sandbox 镜像均已存在于本机，随后停止旧的 `wangsh_sim` 栈并清理
 `data/pythonlab/simulations/run.*` 残留目录。模拟固定覆盖
 `COMPOSE_PROJECT_NAME=wangsh_sim`、版本、镜像、端口和
 `PYTHONLAB_CONTAINER_NAMESPACE=wangsh_sim` 等关键变量，不受父 shell 同名变量影响。
@@ -364,7 +369,8 @@ SIM_CLEANUP=false
 每次模拟使用独立的 `data/pythonlab/simulations/run.*` 工作区，不会读写或删除
 `data/pythonlab/workspaces`。运行失败时会自动清理模拟栈和本次工作区；
 `SIM_CLEANUP=true` 时成功后也会清理。显式保留成功栈时，本次隔离工作区会随栈保留，
-并在下一次 simulate 停止旧栈后作为残留清理。清理命令失败不会被忽略：原流程成功但
+并在下一次 simulate 停止旧栈后作为残留清理。临时隔离配置含合成凭据，随临时环境文件
+在退出时删除。清理命令失败不会被忽略：原流程成功但
 清理失败时，`deploy.sh` 返回非零。
 
 `SIM_RUN_PROD_SMOKE=true` 时，随机生成的临时管理员密码只在当前进程内传给

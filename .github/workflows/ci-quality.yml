@@ -35,7 +35,7 @@ jobs:
         run: node --test scripts/env-consistency.test.mjs
       - name: local cleanup and catalog contracts
         run: |
-          node --test scripts/clean-local-artifacts.test.mjs scripts/sync-ai-partner-catalog.test.mjs
+          node --test scripts/clean-local-artifacts.test.mjs scripts/sync-ai-partner-catalog.test.mjs scripts/prepare-production-simulation.test.mjs
           node scripts/sync-ai-partner-catalog.mjs --check
       - name: shell syntax
         run: |
