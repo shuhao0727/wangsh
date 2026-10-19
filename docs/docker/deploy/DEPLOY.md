@@ -14,7 +14,7 @@
 已切换。参数合同、真实 TCP 与 TLS/Sentinel 验收不得混计，实际证据见
 [TEST_STATUS](../testing/TEST_STATUS.md)。
 
-> 最后更新：2026-09-27
+> 最后更新：2026-10-19
 
 ---
 
@@ -154,7 +154,7 @@ first visible answer、terminal/error、上游取消和 cleanup latency。
 - **域名**: wangsh.cn
 - **SSH 端口**: 6607
 - **用户**: shuhao
-- **当前镜像版本**: 2.1.4（Docker 镜像标签 `2.1.4`；服务器实际版本须在部署前核对）
+- **当前镜像版本**: 2.1.5（Docker 镜像标签 `2.1.5`；本轮未部署服务器，实际运行版本须在部署前核对）
 
 ### 快速连接
 ```bash
@@ -242,13 +242,13 @@ bash scripts/deploy.sh deploy
 `scripts/check-version-consistency.mjs` 阻止版本漂移：
 
 ```bash
-APP_VERSION=2.1.4
-IMAGE_TAG=2.1.4
-REACT_APP_VERSION=2.1.4
+APP_VERSION=2.1.5
+IMAGE_TAG=2.1.5
+REACT_APP_VERSION=2.1.5
 IMAGE_REPOSITORY_PREFIX=shuhao07
 ```
 
-`frontend/package.json` 的 `version` 是完整 SemVer（如 `2.1.4`）的权威源；
+`frontend/package.json` 的 `version` 是完整 SemVer（如 `2.1.5`）的权威源；
 `IMAGE_TAG`、release-set、`APP_VERSION`、`VERSION`（如配置）和 `REACT_APP_VERSION`
 必须使用同一个完整版本号。`check-version-consistency.mjs` 与 `verify-release-set` 均按完全一致
 校验，避免补丁版本复用旧镜像标签或同标签镜像漂移。
@@ -320,12 +320,12 @@ DEBIAN_SECURITY_MIRROR=http://deb.debian.org/debian-security
 ```
 
 构建的镜像列表：
-- `shuhao07/wangsh-backend:2.1.4` - 后端 FastAPI 服务
-- `shuhao07/wangsh-frontend:2.1.4` - 前端静态文件
-- `shuhao07/wangsh-gateway:2.1.4` - Caddy 网关
-- `shuhao07/wangsh-typst-worker:2.1.4` - Typst PDF 编译 worker
-- `shuhao07/wangsh-pythonlab-worker:2.1.4` - PythonLab 调试 worker
-- `shuhao07/pythonlab-sandbox:2.1.4` - PythonLab 沙箱镜像
+- `shuhao07/wangsh-backend:2.1.5` - 后端 FastAPI 服务
+- `shuhao07/wangsh-frontend:2.1.5` - 前端静态文件
+- `shuhao07/wangsh-gateway:2.1.5` - Caddy 网关
+- `shuhao07/wangsh-typst-worker:2.1.5` - Typst PDF 编译 worker
+- `shuhao07/wangsh-pythonlab-worker:2.1.5` - PythonLab 调试 worker
+- `shuhao07/pythonlab-sandbox:2.1.5` - PythonLab 沙箱镜像
 
 ### 2. 本地生产模拟验证
 
@@ -343,7 +343,7 @@ SIM_RUN_PROD_SMOKE=true SIM_CLEANUP=true bash scripts/deploy.sh simulate
 默认模拟参数：
 
 ```bash
-SIM_VERSION=2.1.4
+SIM_VERSION=2.1.5
 SIM_IMAGE_REPOSITORY_PREFIX=shuhao07
 SIM_WEB_PORT=16608
 SIM_RUN_PROD_SMOKE=false
@@ -411,9 +411,9 @@ bash scripts/deploy.sh push
 
 ```bash
 # 确认 .env 使用生产配置
-APP_VERSION=2.1.4
-IMAGE_TAG=2.1.4
-REACT_APP_VERSION=2.1.4
+APP_VERSION=2.1.5
+IMAGE_TAG=2.1.5
+REACT_APP_VERSION=2.1.5
 IMAGE_REPOSITORY_PREFIX=shuhao07
 
 # 将发布 workflow 生成的 release-set.txt 放到仓库根目录。
@@ -507,9 +507,9 @@ docker compose -f docker-compose.dev.yml down
 
 ### 版本配置
 ```bash
-APP_VERSION=2.1.4          # 应用版本号
-IMAGE_TAG=2.1.4             # Docker 镜像标签（完整 SemVer，与 package.json 完全一致）
-REACT_APP_VERSION=2.1.4     # 前端版本号
+APP_VERSION=2.1.5          # 应用版本号
+IMAGE_TAG=2.1.5             # Docker 镜像标签（完整 SemVer，与 package.json 完全一致）
+REACT_APP_VERSION=2.1.5     # 前端版本号
 IMAGE_REPOSITORY_PREFIX=shuhao07  # Docker Hub 镜像命名空间
 ```
 
