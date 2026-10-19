@@ -78,6 +78,7 @@ _sensitive_value_variants = _redaction._sensitive_value_variants
 _redact_known_values = _redaction._redact_known_values
 _redact_unquoted_field = _redaction._redact_unquoted_field
 CHILD_ENV_PASSTHROUGH_KEYS = {
+    "ANALYSIS_AGENT_ID",
     "CI",
     "COLORTERM",
     "CURL_CA_BUNDLE",

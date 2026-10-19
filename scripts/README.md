@@ -109,6 +109,10 @@ node scripts/sync-ai-partner-catalog.mjs --write
 node scripts/sync-ai-partner-catalog.mjs --check
 ```
 
+需要验证小组对比分析时，可用 `ANALYSIS_AGENT_ID` 指定该环境内已配置的分析智能体，
+runner 会将此非敏感 ID 传给原烟测脚本，保留真实请求、落库和缓存断言。
+隔离环境可使用临时本地供应商桩；桩验证须单独注明，不能据此宣称真实模型能力通过。
+
 清理脚本只扫描明确的后端源码和脚本目录，不进入工作树、虚拟环境、业务数据、
 上传目录、依赖或构建输出，也不跟随符号链接。`.codex/` 始终保留。
 AI 伙伴双端 JSON 都随源码提交，前后端 Docker 上下文独立构建，运行时不跨目录读取。
