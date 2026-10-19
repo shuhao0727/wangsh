@@ -29,23 +29,6 @@ export type {
   CategoryFilterParams,
 } from "./wz";
 
-// ZNT 相关服务 (AI智能体测试等)
-export {
-  testAIAgent,
-  quickTest,
-  AIAgentTester,
-  zntUsersApi,
-  studentAuthApi,
-} from "./znt";
-export type {
-  TestResult,
-  ZntUser,
-  StudentInfo,
-  StudentLoginRequest,
-  StudentLoginResponse,
-  TokenValidationResult,
-} from "./znt";
-
 // 用户管理服务
 export { userApi } from "./users";
 export type {
@@ -117,7 +100,7 @@ export type {
  * 使用示例：
  *
  * 1. 导入所有需要的服务：
- *    import { api, config, articleApi, testAIAgent, userApi } from "@services";
+ *    import { api, config, articleApi, userApi } from "@services";
  *
  * 2. 按需导入类型：
  *    import type { Article, ApiResponse, User } from "@services";

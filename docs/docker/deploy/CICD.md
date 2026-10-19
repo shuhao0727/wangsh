@@ -1,6 +1,6 @@
 # CI/CD 工作流说明
 
-> 最后更新：2026-09-20
+> 最后更新：2026-10-19
 
 ## 一、概览
 
@@ -88,6 +88,8 @@ WangSh 项目使用 GitHub Actions 进行持续集成，使用 Docker Compose + 
   `pythonlab-debug-smoke.mjs`，命令行只包含用户名和报告路径，不出现密码参数
 - **实时输出**：浏览器及 Python smoke 均通过 `redact_exec.py` 执行，合并脱敏
   stdout/stderr，同时保留普通退出码和 shell 兼容的信号退出码
+- **共享脱敏边界**：`log_redaction.py` 只依赖 Python 标准库，供两个 CLI 与
+  smoke runner 共用；CLI 不导入编排器，runner 保留旧函数入口以兼容现有调用和测试
 - **失败日志**：backend、Celery worker 和 Vite 日志仅发布最后 200 行，并通过
   `scripts/prod-smoke/redact.py` 清除 query/userinfo、Bearer/Basic、JSON/字典、
   Cookie、password、api_key 和已知环境敏感值
@@ -134,6 +136,9 @@ WangSh 项目使用 GitHub Actions 进行持续集成，使用 Docker Compose + 
   - Compose：使用已跟踪的 `.env.example` 校验开发/生产配置和镜像版本
   - 根脚本：对部署、回滚、迁移、健康检查、生产 smoke 和本地开发启动/停止入口执行
     Bash 语法检查
+  - 整理合同：用临时仓库验证本地清理的白名单、跟踪文件、符号链接与浏览器证据保护；
+    检查 AI 伙伴目录的生成副本与服务端维护源字节一致。清理测试不删除工作区文件，
+    目录检查不自动覆盖漂移内容，维护命令见 [根脚本说明](../../../scripts/README.md)。
   - 数据库：动态解析 Alembic heads，强制单 head；空库创建 legacy baseline 后执行完整 `alembic upgrade head`
   - 后端：安装 `backend/requirements-dev.txt`，执行 Python 文件规模/复杂度
     ratchet 和 `pytest -q --cov=app --cov-report=json`；PR、main push 与镜像发布

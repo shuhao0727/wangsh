@@ -19,8 +19,11 @@ CI 和生产镜像中稳定解析 `scripts.bootstrap_db`。仓库根目录另有
 - `check_changed_lines_coverage.py` - changed-lines 覆盖率门禁（审计 T-2 / 治理 §4.3）
 
 ### 功能验证与测试
-- `verify_async_analysis.py` - 深度分析异步任务完整性验证（Celery 任务、API 路由、数据模型、文档）
-- `test_async_analysis.py` - 深度分析异步任务工作流测试（Celery worker 状态、任务流程、结果存储）
+
+异步分析的维护用例位于 [tests/ai_agents/test_async_analysis.py](../tests/ai_agents/test_async_analysis.py)，
+在 `backend/` 运行 `pytest -q tests/ai_agents/test_async_analysis.py`。
+这组用例检查任务签名、路由和 schema，不代表真实 Redis、Celery worker、模型调用及结果落库的端到端验收。
+当前接口与运行边界见 [AI_AGENTS.md](../../docs/features/AI_AGENTS.md#深度分析异步任务)。
 
 ### 烟测套件
 - `smoke_openapi_sweep.py` - 只读 GET 广覆盖扫雷

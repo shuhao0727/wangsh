@@ -24,6 +24,7 @@ on:
       - "frontend/src/lib/monacoSetup.ts"
       - "frontend/src/lib/monacoWorkers.ts"
       - "frontend/src/pages/Admin/ITTechnology/pythonLab/**"
+      - "frontend/src/features/it-technology/python-lab/**"
       - "frontend/src/pages/ITTechnology/PythonLab.tsx"
       - "frontend/scripts/pythonlab-debug-smoke.mjs"
       - "frontend/package.json"

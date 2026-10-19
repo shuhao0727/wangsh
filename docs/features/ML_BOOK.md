@@ -1,6 +1,8 @@
 # ML/AI/Agents 学习书籍系统
 
-> 最后更新：2026-07-24
+> 状态：active
+> Owner：ml-book
+> 最近复核：2026-10-19
 
 ## 概述
 
@@ -127,6 +129,11 @@ ML Book 是面向"教科书"场景的书籍系统，Learning 平台是通用化�
 
 阅读器提供：Markdown 渲染、侧边栏章节目录、内容大纲导航、滚动位置跟踪、KaTeX 数学公式 + Mermaid 图表支持。
 
+内置课程源位于 `frontend/src/features/it-technology/courses/{ml,ai,agents}/`，每门课程
+分别维护 `book.ts`、`chapters/`、`content/` 和 `LearningPage.tsx`。
+通用阅读器位于 `frontend/src/features/it-technology/learning/BookReader.tsx`，由公开阅读页
+与管理端 Learning 编辑预览共同使用；原有阅读样式与章节正文保持不变。
+
 ### 管理端（编辑）
 
 | 路由 | 页面组件 | 说明 |
@@ -134,6 +141,10 @@ ML Book 是面向"教科书"场景的书籍系统，Learning 平台是通用化�
 | `/admin/it-technology/ml-book-editor` | `AdminMLBookEditorPage` | 书籍编辑器，管理三本书的书籍元数据和章节内容 |
 | `/admin/it-technology/learning/:moduleKey` | `AdminLearningEditorPage` | Learning 内容编辑器（关联模块） |
 | `/admin/it-technology/learning/:moduleKey/:section` | `AdminTabEditorPage` | 多标签编辑器页面 |
+
+专用书籍编辑器保留在 `frontend/src/pages/Admin/ITTechnology/ml/editor/`，通用 Learning
+管理编辑器保留在 `frontend/src/pages/Admin/ITTechnology/learning/`。管理入口与公开课程
+通过共享 feature 复用内容和阅读器，不把管理编辑实现并入公开课程包。
 
 ---
 

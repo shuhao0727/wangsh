@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo } from "react";
 import { Navigate, useParams } from "react-router-dom";
 import PythonLabStudio from "../Admin/ITTechnology/pythonLab/PythonLabStudio";
-import { loadPythonLabExperiments } from "../Admin/ITTechnology/pythonLab/storage";
+import { loadPythonLabExperiments } from "@/features/it-technology/python-lab/storage";
 
 const lastExperimentKey = "python_lab_last_experiment_id";
 

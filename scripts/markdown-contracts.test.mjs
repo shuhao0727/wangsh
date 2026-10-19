@@ -39,7 +39,7 @@ function runFixture(candidate, summaryLines, setup) {
   for (const moduleName of ["ml", "ai", "agents"]) {
     writeFixtureFile(
       fixtureRoot,
-      `frontend/src/pages/Admin/ITTechnology/${moduleName}/chapters/one.md`,
+      `frontend/src/features/it-technology/courses/${moduleName}/chapters/one.md`,
       `# ${moduleName}\n`,
     );
   }

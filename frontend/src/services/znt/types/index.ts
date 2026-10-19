@@ -1,5 +1,4 @@
-// ZNT 类型定义 - 前端保留，后端已移除
-// 这些类型现在仅供前端编译使用
+// 智能体管理、使用统计与模型发现的前端类型。
 
 // AI智能体类型
 export interface AIAgent {
@@ -207,63 +206,6 @@ export enum ExportFormat {
   Excel = "excel",
   PDF = "pdf",
   JSON = "json",
-}
-
-// ZNT用户类型
-export interface ZntUser {
-  id: number;
-  student_id: string;
-  full_name: string;
-  class_name: string;
-  study_year: string;
-  role_code: string;
-  created_at: string;
-  updated_at: string;
-  is_active: boolean;
-}
-
-// 测试结果
-export interface TestResult {
-  success: boolean;
-  message?: string;
-  response_time?: number;
-  error?: string;
-  timestamp: string;
-}
-
-// 学生信息
-export interface StudentInfo {
-  id: number;
-  student_id: string;
-  full_name: string;
-  class_name: string;
-  study_year: string;
-  role_code: string;
-  is_active: boolean;
-}
-
-// 登录相关类型
-export interface StudentLoginRequest {
-  username: string;
-  password: string;
-}
-
-export interface StudentLoginResponse {
-  access_token: string;
-  token_type: string;
-  expires_in: number;
-  role_code: string;
-  full_name: string;
-  student_id: string;
-  class_name: string;
-  study_year: string;
-}
-
-export interface TokenValidationResult {
-  valid: boolean;
-  user_id?: string;
-  expires_at?: string;
-  issued_at?: string;
 }
 
 // 基础类型

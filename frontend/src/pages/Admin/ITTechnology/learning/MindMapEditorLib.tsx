@@ -11,12 +11,12 @@ import {
   MINDMAP_EDITOR_UNAVAILABLE_MESSAGE,
 } from "@/lib/mindmapRuntime";
 import { ArrowLeft, Save, ExternalLink } from "lucide-react";
-import MindMapViewer from "./MindMapViewer";
+import MindMapViewer from "@/features/it-technology/learning/MindMapViewer";
 import {
   markdownToMindMapData,
   mindMapDataToMarkdown,
   type MindMapNode,
-} from "./mindMapData";
+} from "@/features/it-technology/learning/mindMapData";
 
 interface MindMapRuntimeWindow extends Window {
   takeOverAppMethods?: {

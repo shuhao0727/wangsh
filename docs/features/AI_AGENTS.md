@@ -1,6 +1,6 @@
 # AI 智能体系统文档
 
-> 最后更新：2026-10-16
+> 最后更新：2026-10-19
 > 
 > **注意**：SSE流式输出修复已于2026-03-23完成，Dify集成已支持完整流式效果。
 
@@ -63,6 +63,10 @@ AI 智能体系统是项目的核心功能模块，支持多平台 AI 对话、�
   不新增管理员、数据库表或 migration。排名、有效期及错误码以 [API 合同](../development/API.md#ai伙伴临时共享榜单未发布) 为准。
 - 新一课通过更换轮次配置开始，不增加管理员操作入口；见 [配置说明](../docker/deploy/DEPLOY.md#ai伙伴临时共享榜单配置未发布)。
   独立源码构建与静态资源边界见 [前端脚本说明](../../frontend/scripts/README.md#ai伙伴独立源码入口未发布)。
+- AI 伙伴选型目录的唯一维护源为 `backend/app/services/ai_partner_catalog.json`。修改后在仓库根目录运行
+  `node scripts/sync-ai-partner-catalog.mjs --write`，生成 `frontend/ai-partner/src/catalog.json` 并同时保留两份变更；
+  前后端各自携带运行资源，继续独立构建。CI 使用 `node scripts/sync-ai-partner-catalog.mjs --check` 检查副本漂移，
+  不直接编辑前端派生副本；脚本入口见 [scripts/README.md](../../scripts/README.md)。
 
 本节仅记录未发布变更，不表示已构建镜像、推送或部署；本轮实际测试结果由主线程统一写入
 [TEST_STATUS](../docker/testing/TEST_STATUS.md)，此处不复制测试数字。
@@ -317,6 +321,50 @@ HTTP 200 后无有效 SSE，均返回结构化错误而不是成功的空 `messa
 - legacy、热点和学生问题链三张分析表使用独立自增主键，不能用同一个整数 ID 跨表
   猜测记录。legacy 路由只操作 legacy 表；typed 删除仅在业务字段、创建时间、任务单和
   结果快照唯一匹配时清理 legacy 双写副本。
+
+### 深度分析异步任务
+
+热点问题和学生问题链各有独立 Celery 任务，复用上节的分析管线。以下是默认
+`/api/v1` 前缀下的完整路径，全部使用 `require_admin` 校验管理员权限：
+
+| 方法 | 路径 | 用途 |
+|---|---|---|
+| POST | `/api/v1/ai-agents/analyses/hot-questions/async` | 提交热点分析，返回 `task_id` 和 `pending` |
+| POST | `/api/v1/ai-agents/analyses/student-chains/async` | 提交学生问题链分析，返回 `task_id` 和 `pending` |
+| GET | `/api/v1/ai-agents/analyses/tasks/{task_id}` | 查询排队、进度、完成结果或失败信息 |
+| DELETE | `/api/v1/ai-agents/analyses/tasks/{task_id}` | 请求撤销尚未就绪的任务 |
+| GET | `/api/v1/ai-agents/analyses/tasks` | 列出已保存的分析记录 |
+
+两个提交接口都要求 `agent_id`、ISO 格式的 `start_at` 和 `end_at`；热点分析另要求
+`task_sheet`，并支持 `bucket_seconds`。问题链分析支持可选任务单与 `merge_threshold`。
+班级、教师标记、自定义提示词和标题等字段以路由 schema 与 [API 合同](../development/API.md)
+为准。提交时会把当前管理员 ID 传入任务的 `created_by`。
+
+查询状态返回 `pending`、`progress`、`completed` 或 `failed`。完成结果包含
+`analysis_id`，持久化结果分别进入 `HotQuestionAnalysis` 和 `StudentChainAnalysis`。
+仅收到 `task_id` 不代表模型调用或结果落库已经完成。
+
+取消接口在任务已就绪时返回 `success: false`；其他情况调用 Celery
+`revoke(terminate=True)`。撤销请求不能作为数据库已回滚、结果未写入或 worker 已停止的证明，
+需要结合最终任务状态与分析记录核验。
+
+列表接口读取数据库中的分析记录，不提供运行中队列清单。指定 `analysis_type` 为
+`hot_questions` 或 `student_chains` 时应用 `skip`、`limit`；未指定时分别取两类各
+`limit // 2` 条并合并，当前不应用 `skip`。响应 `total` 是本次返回条数，不能作为全库总数。
+混合列表的统一分页是 [项目整理台账](../docker/plans/project-consolidation.md#未解决与待复核事项)
+中的后续事项。
+
+运行依赖 Redis broker/result backend、Celery worker 和数据库；配置、启动、超时与运行检查
+统一遵循 [部署指南](../docker/deploy/DEPLOY.md)，不在本文复制启动命令。
+实现入口为 `backend/app/api/endpoints/agents/ai_agents/analysis_async.py` 和
+`backend/app/tasks/agent_analysis.py`，任务注册由 `backend/app/core/celery_app.py` 维护。
+维护用例 `backend/tests/ai_agents/test_async_analysis.py` 检查签名、路由与 schema；
+真实模型、队列进度、失败/撤销和落库仍需专项端到端验证，结果只记入
+[TEST_STATUS.md](../docker/testing/TEST_STATUS.md)。
+
+数据库索引、归档与输入防护分别由 [数据库性能指南](../DATABASE_PERFORMANCE_GUIDE.md)、
+[DATA_ARCHIVING.md](DATA_ARCHIVING.md) 和 [XSS_PROTECTION.md](../security/XSS_PROTECTION.md) 维护。
+历史分析报告中的容量、提速倍数和缓存收益是当时的估算或快照，未经当前负载复跑不能作为性能承诺。
 
 ### 安全策略
 

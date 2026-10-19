@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { showMessage } from "@/lib/toast";
 import MindMapEditor from "@/pages/Admin/ITTechnology/learning/MindMapEditor";
 import MindMapEditorLib from "@/pages/Admin/ITTechnology/learning/MindMapEditorLib";
-import MindMapViewer from "@/pages/Admin/ITTechnology/learning/MindMapViewer";
+import MindMapViewer from "@/features/it-technology/learning/MindMapViewer";
 import TabEditorPage from "@/pages/Admin/ITTechnology/learning/TabEditorPage";
 
 vi.mock("@/lib/toast", () => ({

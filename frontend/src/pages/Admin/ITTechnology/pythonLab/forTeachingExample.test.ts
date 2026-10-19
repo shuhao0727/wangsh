@@ -3,8 +3,8 @@
  */
 import { generatePythonFromFlow } from "./flow/ir";
 import { buildUnifiedFlowFromPython } from "./flow/python_sync";
-import { FOR_TEACHING_EXAMPLE_CODE, FOR_TEACHING_EXAMPLE_HEADER } from "./forTeachingExample";
-import { loadPythonLabExperiments } from "./storage";
+import { FOR_TEACHING_EXAMPLE_CODE, FOR_TEACHING_EXAMPLE_HEADER } from "@/features/it-technology/python-lab/forTeachingExample";
+import { loadPythonLabExperiments } from "@/features/it-technology/python-lab/storage";
 
 test("循环默认示例统一为 for i in range(1, 10)", () => {
   localStorage.clear();

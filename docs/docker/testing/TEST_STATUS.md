@@ -3,8 +3,50 @@
 > 状态：active
 > Owner：testing
 > 当前版本：2.1.4 镜像已发布（服务器尚未部署）
-> 最近更新：2026-10-18
+> 最近更新：2026-10-19
 > 说明：本文件是当前测试事实的唯一汇总入口；阶段报告只引用本页，不复制新基线。
+
+## 2026-10-19 v2.1.5 发布候选（验证中，服务器未部署）
+
+- **授权与版本：** 用户已授权把已完成的项目整理提交 GitHub 并重新发布镜像。候选使用独立 `codex/release-2.1.5` 分支，版本、环境示例、Compose 默认值、沙箱和发布工作流同步为 `2.1.5`，保留既有 `2.1.4` 正式标签。
+- **发布前复核：** 两个 agent 只读复核了前端课程迁移、依赖与动态导入，以及测评计分、smoke 脱敏、清理白名单和 catalog/CI，未发现所查范围内的阻断回归；此前整理验证仍见下一节，不重复计为新发布 CI。
+- **当前状态：** 正在构建六个本地候选镜像，准备隔离生产模拟与完整 prod-smoke；GitHub PR 完整质量门禁、正式构建和 registry release-set 校验尚未完成。不执行服务器部署或正常业务数据修改。
+
+## 2026-10-19 项目文件与共享模块整理（整理阶段，本地未提交）
+
+- **范围与保护：** 基于 `codex/release-2.1.4` 的 `1db95a91bc2502360995fb072b0051ba5b21d35c`，在 `/Users/wsh/wangsh/.claude/worktrees/beautiful-satoshi-b71479` 整理。保留既有 dirty 修改，主目录不覆盖；本轮不提交、推送、构建发布镜像、部署、迁移或修改业务数据，已发布版本身份不变。
+- **实际整理：** 归档九份日期报告、收敛当前 owner 与台账；移除四个闲置组件、五个旧模拟 API 导出、六个专用类型和九项多余直接依赖。锁文件未升级保留包版本。共享课程、阅读器、只读导图及稳定实验资源迁入 `features/it-technology`；Admin 编辑器、PythonLab Studio、画布和调试状态机保留原边界。
+- **前端门禁：** `npm test` 为 **100 files / 723 tests passed**；`npm run type-check`、`npm run test:scripts`（30 tests）、`npm run build:check` 均退出成功。token 检查为 `0 undefined tokens across 2064 references`，UI audit 为 `899 hits` 且沿用原门禁。构建保留已有 Browserslist、PDF.js eval 和大 chunk 警告，不据此宣称包体已全部优化。
+- **lint 基线：** 同一依赖、ESLint 配置和 tsconfig 下，HEAD 为 `0 errors / 465 warnings`，当前为 `0 / 462`；按迁移路径映射后新增警告 **0**，减少的三条来自删除的旧模拟用户 API。未通过降阈值或批量关闭规则清零。
+- **共享内容保真：** 基线与当前的 41 个课程/书籍导出深度一致，51 个章节 Markdown 的 SHA-256 一致，13 个移动模块的非 import 实现一致，BookReader CSS 字节一致；PythonLab 共享与 flow 类型为原合同精确切分。相关 **9 files / 30 tests** 通过。
+- **测评纯计算：** 外部隔离 runner `/tmp/wangsh-session-scoring-20261019/run_isolated.py` 运行六个选定文件，结果 **130 passed / 1 deselected / 8 warnings**。明确排除真实 PG schema 用例 `test_generate_class_profile_isolates_students_by_class`，不计为通过。collection 前禁 dotenv/secrets、正常 conftest、自动插件及网络/DNS/子进程，限制 scratch 写域，使用 SQLite/mock；首次成绩去重、分数分布和聚合循环 AST 保真，session 服务查询、事务和 monkeypatch 入口保留。八条为已有 Pydantic 弃用警告。
+- **smoke 脱敏：** 定向工作流回归 **15 tests passed**，覆盖独立 CLI 导入、stdout/stderr、普通/信号退出码、跨行敏感值和编码；后端 `test_prod_smoke_compose_context.py` 的 **11 tests passed**。外部 runner 禁 dotenv、网络和正常配置，仅允许精确 Python stdin 脱敏子进程。最初完全禁子进程时该 CLI 合同被隔离守卫拦截，限定白名单后全部通过，未执行真实 Docker 或部署 smoke。
+- **Python 治理：** `python scripts/check_python_governance.py check` 为 `0 errors / 37 warnings`；不把已有复杂度和文件规模警告当作已处理。
+- **浏览器抽查：** 无 Browser 插件，使用现有 Playwright/Chrome 和实际挂载本树的 `localhost:6608`。管理员登录后，ML、AI、Agents 三页在 `1440×900` 的首章、目录及第二章切换均正常，无框架错误层、运行错误或失败请求；三页桌面及 AI 页 `390×844` 无页面横向溢出。Agents 学习地图呈现 SVG，导图广场为空，因此未验证真实单张预览。PythonLab 默认 `seq_basic` 的代码区和示例流程正常，仅观察页面自动解析与语法检查，未点击 Run/Debug、保存或调用模型。匿名学习接口 401 与已登录状态分开记录。
+- **根脚本与配置：** `node --test scripts/*.test.mjs` 为 **82 passed / 0 failed / 0 skipped**，包括 61 项工作流、十项 Markdown、六项环境合同和五项清理/catalog 合同；目录同步检查、版本一致性、开发/生产 Compose config 及八个 Bash 入口语法检查均通过。
+- **缓存清理：** 按最终预览精确清理 **69 项、7012 KiB** 的已忽略测试/Python缓存，实际删除集合与预览完全一致；清理后预览为零项。未纳入浏览器转储、`.codex/`、其他工作树、依赖、构建或业务数据。
+- **文档派生摘要：** Markdown checker 与十项合同通过，为 `140 files / 624 links / 0 missing`，`git diff --check` 通过。
+- **既有改动保护：** 主目录 HEAD、Git 状态及九个初始 dirty 文件 SHA-256 全部未变；发布工作树的 AGENTS、开发 Compose、DEPLOY 三份原有修改按 SHA-256 保持，原 TEST_STATUS 内容完整保留，仅更新日期并新增本节。
+- **证据与限制：** 初始 patch、内容校验、测试、lint 对照及 agent 结果位于 `.codex/project-consolidation-2026-10-19/`；浏览器截图位于 `/tmp/wangsh-consolidation-ui-20261019/`。本轮不是全量后端、真实 PostgreSQL/Redis/模型、PythonLab Chrome/WebKit 调试、生产部署或用户视觉终验。后续异步分页、隐私闭环和高风险架构问题仍留在当前整理台账。
+
+## 2026-10-18 Docker Hub 发布与依赖标签整理（已完成，服务器未部署）
+
+- **远端发布：** Docker Hub 上的六个 `shuhao07/*:2.1.4` 均可读取，registry manifest digest 与 `/Users/wsh/wangsh/.codex/releases/2.1.4/release-set.txt` 完全一致，并包含 `linux/amd64`。正式发布对应 GitHub Actions run `39128634727`，源码提交为 `4656faec87b989e15c20028d01011c64e4222c0f`；没有重复覆盖正式标签。
+- **当前业务标签：** `shuhao07/wangsh-backend:2.1.4`、`shuhao07/wangsh-frontend:2.1.4`、`shuhao07/wangsh-gateway:2.1.4`、`shuhao07/wangsh-typst-worker:2.1.4`、`shuhao07/wangsh-pythonlab-worker:2.1.4`、`shuhao07/pythonlab-sandbox:2.1.4`。
+- **依赖标签：** 统一保留官方有效标签 `postgres:16-alpine`、`redis:7-alpine`、`node:20-alpine`、`adminer:4.8.1`。已精确删除无人引用的 `postgres:16-alpine-amd64` 和 `redis:7-alpine-amd64`；没有升级依赖，也没有把官方依赖重复推送到 WangSh 仓库。
+- **本机快照：** 当前共 10 个镜像标签（6 个业务 + 4 个官方依赖）；7 个运行容器保持原 ID、正常运行且零重启，6 个数据卷保留。首页、后端和前端代理健康检查仍为 HTTP 200 / healthy。
+- **验证记录：** `verify-release-set` 退出码为 0，输出 `version=2.1.4 images=6`；远端 manifest 和依赖整理证据位于 `/Users/wsh/.codex/artifacts/wangsh-hub-tags-20261018/review-221903/`。
+- **文档门禁：** `node scripts/check-markdown-contracts.mjs`（137 files / 534 links / 0 missing）、`node --test scripts/markdown-contracts.test.mjs`（10 tests passed）和 `git diff --check` 均通过。
+- **边界：** 镜像已提交 Docker Hub，可供后续服务器部署拉取；本轮没有执行服务器部署、代码提交/推送、数据迁移或生产环境切换。正式业务镜像当前验证平台为 `linux/amd64`。
+
+## 2026-10-18 镜像命名规范与版本辨识（依赖整理前的记录）
+
+- **规范：** 部署指南集中维护开发 `:dev`、清理长日期/工作树名/无引用 `latest` 及版本身份核对流程；AGENTS 提供默认入口。开发 Compose 镜像名称已在上一轮显式固定。
+- **新鲜核对：** 当前工作树与远端 main 均为 `1db95a9`，版本一致性检查为 `2.1.4 / 2.1.4`。已完成的构建 39128634727 实查 success，正式后端 registry digest 与原 release-set 一致。
+- **运行辨识：** 开发容器仍挂载当前工作树代码，但环境中的 APP_VERSION 保留创建时的 2.1.3；旧验证栈 2.2.0 不是最新正式发布。命名、Compose 和文档的本地修改尚未构成新正式版本。
+- **文档检查：** Markdown 派生摘要为 `137 files / 534 links / 0 missing`；文档和配置 diff 无空白错误。
+- **边界：** 本节记录依赖整理前的状态；后续 Docker Hub 发布核对和依赖标签整理以本页顶部的最新条目为准。
+
 
 ## 2026-10-18 v2.1.4 检查与镜像推送（完成，服务器未部署）
 

@@ -2,7 +2,7 @@
 
 > 状态：active
 > Owner：pythonlab
-> 最近复核：2026-09-10
+> 最近复核：2026-10-19
 
 ## 沙箱启动恢复与资源归属边界（2026-09-09）
 
@@ -392,6 +392,19 @@ HTTP provider 仅对选定的 `NetworkError` / `TimeoutException` 类型进入�
 - `FloatingPopup.tsx` - 浮动弹窗
 - `OptimizationDialog.tsx` - 优化对话框
 
+### 共享实验资源
+
+**位置**：`frontend/src/features/it-technology/python-lab/`
+
+- `types.ts`：实验难度、场景与 `PythonLabExperiment` 合同。
+- `storage.ts`：内置实验目录与既有本地存储读写，保留存储键和兼容行为。
+- `forTeachingExample.ts`：正式教学实验示例。
+
+公开 PythonLab 入口直接从共享资源读取实验；`PythonLabStudio.tsx`、flow、调试状态机、
+worker 与 Monaco 实现仍留在 Admin 的原目录，公开入口目前继续复用该 Studio。
+`FlowNodeShape`、`FlowNodeTemplate` 属于画布实现，仍在原 `pythonLab/types.ts`。
+此边界只提取稳定资源，不改变 Run、Debug、Continue、Reset 或终端生命周期。
+
 ### addNode 坐标修复
 
 **问题**：拖拽添加节点位置不准确
@@ -509,7 +522,9 @@ PythonLab 右侧调试控制按钮是高频连续点击控件，点击可靠性�
 
 ### 前端
 
-- `frontend/src/pages/Admin/ITTechnology/pythonLab/` - 页面组件
+- `frontend/src/pages/Admin/ITTechnology/pythonLab/` - Studio、画布和调试实现
+- `frontend/src/features/it-technology/python-lab/` - 共享实验资源、存储与实验类型
+- `frontend/src/pages/ITTechnology/PythonLab.tsx` - 公开入口
 
 ### 测试脚本
 

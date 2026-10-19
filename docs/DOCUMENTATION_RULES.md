@@ -2,7 +2,7 @@
 
 > 状态：active
 > Owner：docs
-> 最近复核：2026-07-18
+> 最近复核：2026-10-19
 > 复核周期：每 90 天
 
 本文是 WangSh 文档维护、归属、生命周期、整理和自动检查的唯一权威规则。
@@ -36,12 +36,14 @@
 | 功能行为 | `docs/features/*.md` | 功能、架构、权限和用户可见行为变化 |
 | Assessment | `docs/features/ASSESSMENT.md` | 评估设计、DB、API、前端、提示词或测试入口变化 |
 | 脚本入口 | 各脚本目录 README | 新增、删除、迁移或重命名脚本 |
-| 当前执行计划 | `docs/docker/plans/` | 当前批次、治理或发布动作变化 |
+| 当前项目整理计划 | `docs/docker/plans/project-consolidation.md` | 整理批次、历史审计复核和未解决台账变化 |
+| 当前 UI 视觉与进度 | `docs/docker/frontend/EMBEDDED_UI_STYLE_GUIDE.md`、`UI_REDESIGN_ROADMAP.md` | 已确认视觉规则、逐页实现或验收状态变化 |
+| 隐私数据管理实现 | `docs/compliance/GDPR.md` | 导出、删除、审计、同意管理的实际覆盖范围变化 |
 | 历史归档 | `docs/docker/archive/README.md` | 新增、移动或删除归档正文 |
 
-动态测试数字只写入 `TEST_STATUS.md`。当前文件整理步骤只写入
-`2026-07-14-project-file-consolidation-plan.md`；发布操作以 `DEPLOY.md` 为准，
-历史发布结果由 `RELEASE_NOTES.md` 和 reference 计划记录，不得复制新的“最终结果”。
+动态测试数字只写入 `TEST_STATUS.md`。当前项目整理步骤和未解决事项只写入
+[`project-consolidation.md`](docker/plans/project-consolidation.md)；发布操作以 `DEPLOY.md` 为准，
+历史发布结果由 `RELEASE_NOTES.md` 和归档记录追溯，不得复制新的“最终结果”。
 
 ## 三、文档类型与目录
 

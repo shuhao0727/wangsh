@@ -35,7 +35,7 @@
 ### 当前计划与治理 (`docker/plans/`)
 
 - [docker/plans/README.md](docker/plans/README.md) - 当前计划与稳定 reference 索引
-- [docker/archive/2026-07-11-project-governance-30-60-90-execution-plan.md](docker/archive/2026-07-11-project-governance-30-60-90-execution-plan.md) - 30/60/90 天详细执行计划与验收标准
+- [docker/plans/project-consolidation.md](docker/plans/project-consolidation.md) - 当前项目整理计划、历史审计复核和未解决台账
 
 > 2026-09-15 文件整理、旧 2.0 标签清理和 2.1 发布闭环的历史执行计划已移入 [docker/archive/README.md](docker/archive/README.md)。
 > 已完成的阶段报告、批次摘要和发布历史已压缩为一份归档摘要，详见
@@ -56,11 +56,17 @@
 - [features/XBK.md](features/XBK.md) - 校本课选课系统
 - [features/ARTICLES.md](features/ARTICLES.md) - 文章管理系统
 - [features/ASSESSMENT.md](features/ASSESSMENT.md) - 自主检测系统（测评、画像、API、DB、前端和 prompt 总 owner）
+- [features/DATA_ARCHIVING.md](features/DATA_ARCHIVING.md) - 对话归档与数据生命周期管理
 
 ### 评估系统 Prompt Owner (`features/assessment/`)
 
 - [features/assessment/hot_agent.md](features/assessment/hot_agent.md) - 热点问题教学诊断智能体指令
 - [features/assessment/chain_agent.md](features/assessment/chain_agent.md) - 学生问题链认知诊断智能体指令
+
+## 安全、隐私与数据管理 (`security/`, `compliance/`)
+
+- [security/XSS_PROTECTION.md](security/XSS_PROTECTION.md) - 富文本、Markdown 与用户输入的 XSS 防护边界
+- [compliance/GDPR.md](compliance/GDPR.md) - 隐私数据接口、审计记录和当前实现边界；不作为整体法规合规认证
 
 ## 开发协作 (`development/`)
 
@@ -87,8 +93,9 @@
 
 ## 当前审查
 
-- [全项目审查计划（XBK 优先）](docker/archive/2026-09-08-project-comprehensive-audit-plan.md) — 范围、分工、验证与数据保护边界。
-- [全项目首轮问题台账](docker/archive/2026-09-08-project-audit-findings.md) — 初审候选与准确性复核状态、反证、限制及修复决策；不等同已确认 bug 清单；动态验证结果见 [当前测试状态](docker/testing/TEST_STATUS.md)。
+- [当前项目整理台账](docker/plans/project-consolidation.md) — 已授权批次、历史发现的复核方式、未解决事项与退出证据。
+- [历史审查索引](docker/archive/README.md) — 保留旧报告、反证和当时的验证范围；历史完成标记不代表当前版本重新通过。
+- [当前测试状态](docker/testing/TEST_STATUS.md) — 本轮实际执行的检查、证据与未覆盖场景。
 
 ## 整理约定
 

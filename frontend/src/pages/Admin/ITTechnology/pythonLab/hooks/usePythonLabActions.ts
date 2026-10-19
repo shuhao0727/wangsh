@@ -3,7 +3,7 @@ import type { FlowEdge, FlowNode, PortSide } from "../flow/model";
 import type { FlowNodeTemplate } from "../types";
 import { nodeSize } from "../flow/ports";
 import { normalizeTitleForEditInput } from "../flow/titleSemantics";
-import { FOR_TEACHING_EXAMPLE_DESCRIPTION } from "../forTeachingExample";
+import { FOR_TEACHING_EXAMPLE_DESCRIPTION } from "@/features/it-technology/python-lab/forTeachingExample";
 import type { VariableRow } from "../stores/UIContext";
 
 export function usePythonLabActions(params: {

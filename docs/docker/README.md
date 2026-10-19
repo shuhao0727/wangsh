@@ -28,7 +28,7 @@
 - [frontend/ACCESSIBILITY_GUIDE.md](frontend/ACCESSIBILITY_GUIDE.md) - 无障碍访问改进指南
 - [frontend/EMBEDDED_UI_STYLE_GUIDE.md](frontend/EMBEDDED_UI_STYLE_GUIDE.md) - 基于 XBK 的嵌入式页面整理规范
 - [frontend/UI_REDESIGN_ROADMAP.md](frontend/UI_REDESIGN_ROADMAP.md) - 49 个页面族的整理路线图
-- [plans/ui-single-page-governance.md](plans/ui-single-page-governance.md) - UI 样式、单页治理、体检模板和回归基线
+- [plans/ui-single-page-governance.md](plans/ui-single-page-governance.md) - 页面体检模板和交互回归清单；视觉决定以嵌入式规范为准
 
 ### 归档报告
 
@@ -49,9 +49,11 @@
 ### 当前入口文档
 
 - [plans/README.md](plans/README.md) - 当前计划与稳定 reference 索引
+- [plans/project-consolidation.md](plans/project-consolidation.md) - 当前项目整理批次、历史审计复核和未解决台账
 - [../features/PYTHONLAB.md](../features/PYTHONLAB.md#能力边界) - PythonLab 能力矩阵与删除/拆分边界
-- [plans/ui-single-page-governance.md](plans/ui-single-page-governance.md) - UI 治理与回归唯一参考
-- [archive/2026-07-11-project-governance-30-60-90-execution-plan.md](archive/2026-07-11-project-governance-30-60-90-execution-plan.md) - 30/60/90 天详细任务、验证和退出标准
+- [frontend/EMBEDDED_UI_STYLE_GUIDE.md](frontend/EMBEDDED_UI_STYLE_GUIDE.md) - 当前已确认的 UI 视觉规范
+- [frontend/UI_REDESIGN_ROADMAP.md](frontend/UI_REDESIGN_ROADMAP.md) - 页面族的实现与用户确认状态
+- [plans/ui-single-page-governance.md](plans/ui-single-page-governance.md) - 页面体检模板和交互回归参考
 
 ### 已归档计划
 

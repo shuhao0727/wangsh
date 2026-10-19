@@ -6,8 +6,8 @@ import { showMessage } from "@/lib/toast";
 import { api } from "@services";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import type { LearningModuleKey, LearningBook } from "./types";
-import { BookReader } from "./BookReader";
+import type { LearningModuleKey, LearningBook } from "@/features/it-technology/learning/types";
+import { BookReader } from "@/features/it-technology/learning/BookReader";
 import {
   ArrowLeft, Eye, Edit3, Save, BookOpen,
   Bold, Italic, Code, Link, List, ListOrdered, Image,
@@ -36,10 +36,10 @@ const LearningEditorPage: React.FC = () => {
       try {
         let m: any;
         switch (mk) {
-          case "ml": m = await import("../ml/book"); break;
-          case "ai": m = await import("../ai/book"); break;
-          case "agents": m = await import("../agents/book"); break;
-          default: m = await import("../ml/book"); break;
+          case "ml": m = await import("@/features/it-technology/courses/ml/book"); break;
+          case "ai": m = await import("@/features/it-technology/courses/ai/book"); break;
+          case "agents": m = await import("@/features/it-technology/courses/agents/book"); break;
+          default: m = await import("@/features/it-technology/courses/ml/book"); break;
         }
         const b = m.ML_BOOK ?? m.AI_BOOK ?? m.AGENTS_BOOK ?? m.default;
         if (!cancelled && b) {

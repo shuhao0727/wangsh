@@ -7,6 +7,7 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock
 from types import SimpleNamespace
 
+from app.services.assessment import session_service
 from app.services.assessment.session_service import (
     _parse_grading_json,
     start_session,
@@ -424,3 +425,38 @@ def test_get_config_statistics_config_not_found():
         assert False
     except ValueError as e:
         assert "不存在" in str(e)
+
+
+def test_get_config_statistics_keeps_session_service_statistics_patch_points(monkeypatch):
+    """拆出纯计算后，原服务入口仍使用原挂载点，且不增加事务写入。"""
+    config = _make_config()
+    graded = _make_session(id=7, earned_score=80, status="graded")
+    db = _make_db([
+        MockScalarResult(config),
+        MockScalarResult(values=[graded]),
+        MockScalarResult(value=2),
+    ])
+    knowledge = AsyncMock(return_value={"循环": 80.0})
+    trend = AsyncMock(return_value=[{"date": "2026-10-19", "count": 1, "avg_score": 80.0}])
+    distribution = MagicMock(return_value=[{"range": "0-100", "count": 1}])
+    monkeypatch.setattr(session_service, "_calc_knowledge_rates", knowledge)
+    monkeypatch.setattr(session_service, "_calc_trend_data", trend)
+    monkeypatch.setattr(session_service, "_calc_score_distribution", distribution)
+
+    result = asyncio.run(get_config_statistics(db, config_id=1))
+
+    knowledge.assert_awaited_once_with(db, 1, session_ids=[7])
+    distribution.assert_called_once_with([80], 100)
+    trend.assert_awaited_once_with(db, 1, None, None, None, None)
+    assert result["knowledge_rates"] == {"循环": 80.0}
+    assert result["score_distribution"] == [{"range": "0-100", "count": 1}]
+    assert result["trend_data"] == [{"date": "2026-10-19", "count": 1, "avg_score": 80.0}]
+    assert db.execute.await_count == 3
+    db.commit.assert_not_awaited()
+    db.flush.assert_not_awaited()
+
+
+def test_knowledge_rates_empty_explicit_session_set_does_not_query():
+    db = _make_db()
+    assert asyncio.run(session_service._calc_knowledge_rates(db, 1, session_ids=[])) == {}
+    db.execute.assert_not_awaited()

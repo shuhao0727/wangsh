@@ -356,7 +356,7 @@ function audit() {
   for (const moduleName of ["ml", "ai", "agents"]) {
     const chapterDir = path.resolve(
       repoRoot,
-      `frontend/src/pages/Admin/ITTechnology/${moduleName}/chapters`,
+      `frontend/src/features/it-technology/courses/${moduleName}/chapters`,
     );
     const count = fs.readdirSync(chapterDir).filter((name) => name.endsWith(".md")).length;
     const linePattern = new RegExp(`${moduleName}/chapters/\`[^\\n]*（${count} 个）`);

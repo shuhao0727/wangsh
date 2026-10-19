@@ -66,17 +66,8 @@ function manualChunkForModule(id: string) {
   }
 
   if (
-    isPackage("@myriaddreamin/typst.ts") ||
-    isPackage("@myriaddreamin/typst-ts-renderer") ||
-    isPackage("@myriaddreamin/typst-ts-web-compiler")
-  ) {
-    return "typst-vendor";
-  }
-
-  if (
     isPackage("xterm") ||
-    isPackage("xterm-addon-fit") ||
-    isPackage("xterm-addon-webgl")
+    isPackage("xterm-addon-fit")
   ) {
     return "terminal-vendor";
   }

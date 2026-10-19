@@ -208,6 +208,6 @@ LIMIT 10;
 
 ## 相关文档
 
-- [Celery 任务队列（异步分析指南）](../analysis/ASYNC_ANALYSIS.md)
+- [Celery 异步分析任务](AI_AGENTS.md#深度分析异步任务)
 - [数据库性能指南](../DATABASE_PERFORMANCE_GUIDE.md)
 - [系统监控](../operations/MONITORING.md)

@@ -19,7 +19,7 @@ vi.mock("@/lib/toast", () => ({
   },
 }));
 
-vi.mock("@/pages/Admin/ITTechnology/learning/MindMapViewer", () => ({
+vi.mock("@/features/it-technology/learning/MindMapViewer", () => ({
   default: ({ markdown }: { markdown: string }) => (
     <div data-testid="mindmap-viewer">{markdown}</div>
   ),
