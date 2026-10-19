@@ -2,19 +2,26 @@
 
 > 状态：active
 > Owner：testing
-> 当前版本：2.1.4 镜像已发布（服务器尚未部署）
+> 当前版本：2.1.5 镜像已发布（本轮未部署服务器）
 > 最近更新：2026-10-19
 > 说明：本文件是当前测试事实的唯一汇总入口；阶段报告只引用本页，不复制新基线。
 
-## 2026-10-19 v2.1.5 发布候选（验证中，服务器未部署）
+## 2026-10-19 v2.1.5 镜像发布（已完成，服务器未部署）
 
-- **授权与版本：** 用户已授权把已完成的项目整理提交 GitHub 并重新发布镜像。候选使用独立 `codex/release-2.1.5` 分支，版本、环境示例、Compose 默认值、沙箱和发布工作流同步为 `2.1.5`，保留既有 `2.1.4` 正式标签。
+- **GitHub 与来源：** [PR #5](https://github.com/shuhao0727/wangsh/pull/5) 已通过最新源码的六项检查并合并，正式镜像源码为 `d078fec19cc6500d39e08ac55ddbf4ab8c079003`。[正式发布工作流 39193692530](https://github.com/shuhao0727/wangsh/actions/runs/39193692530) 全部成功，输入为 `image_tag=2.1.5`、`push_latest=false`；六个标签在发布前均不存在，保留 `2.1.4`，未更新 `latest`。
+- **远端镜像：** `shuhao07/` 下的 `wangsh-backend`、`wangsh-frontend`、`wangsh-gateway`、`wangsh-typst-worker`、`wangsh-pythonlab-worker`、`pythonlab-sandbox` 六个 `:2.1.5` 镜像已发布。下载官方 `release-set-39193692530` artifact 后，独立读取 registry manifest，六个 digest 全部与清单一致，均包含 `linux/amd64`；使用 `.env.example` 的 `verify-release-set` 退出成功，输出 `version=2.1.5 images=6`。发布源、工作流结果、release-set、manifest 与校验日志归档于 `/Users/wsh/wangsh/.codex/releases/2.1.5/`。
+- **完整质量门禁：** PR 与正式发布工作流均通过仓库配置、完整前端和后端门禁。正式工作流后端为 **3482 passed / 241 skipped / 14 warnings**（226.69 秒），跳过项不计为通过；前端最新 PR 为 **100 files / 723 tests passed**，另有 **30 项脚本测试**，类型检查、lint、token、UI audit 和生产构建均成功。lint 为 **0 errors / 462 warnings**，既有构建与治理警告保留。最终本地根合同为 **88 passed / 0 failed / 0 skipped**，Markdown 为 **140 files / 624 links / 0 missing**，Python 治理为 **0 errors / 37 warnings**。
 - **发布前复核：** 两个 agent 只读复核了前端课程迁移、依赖与动态导入，以及测评计分、smoke 脱敏、清理白名单和 catalog/CI，未发现所查范围内的阻断回归；此前整理验证仍见下一节，不重复计为新发布 CI。
-- **模拟隔离修复：** 发布前发现默认生产模拟沿用固定容器名及 PG/Redis 宿主数据目录。已改为启动/停止前生成临时独立 Compose；真实 `config → helper CLI → config` 只读回读确认八服务、四个项目专属卷、仅 Docker socket/本次工作区两种宿主绑定、网关仅 `127.0.0.1:16608`，healthcheck 字符串保持。未知挂载、外部配置、工作区/端口边界和失败脱敏行为合同通过；真实容器烟测仍待完成。
-- **字体与模型夹具：** 配置修复后全链路 smoke 首次完成为 **10 PASS / 3 WARN / 1 FAIL**；失败为未配置供应商导致小组对比分析 503，不算通过。UI 的十三个 WARN 同源于 KaTeX CDN 字体 CSP 拦截，已改为本地 CSS/字体，type-check 与 build:check 通过，59 个同源字体引用全部存在。新增非敏感 `ANALYSIS_AGENT_ID` 子进程传递，相关隔离合同 **11 passed**；将用一次性本地供应商桩在合成库复跑原模型请求/缓存断言，真实模型能力仍未验证。
-- **当前状态：** 六个本地候选镜像已构建。首轮模拟及补充诊断因 `AI_PARTNER_SCORING_AGENT_ID` 空值触发整数解析错误，后端未启动；已自动清理模拟资源，未记为烟测通过。已完成该字段的空值规范化，定向隔离配置测试 **25 passed**（一条禁用插件后的既有配置警告），其他整数字段的空值仍拒绝；模拟/脱敏相关根合同 **9 passed**，正在增量重建和复跑。GitHub PR 完整质量门禁、正式构建和 registry release-set 校验尚未完成。不执行服务器部署或正常业务数据修改。
+- **模拟隔离修复：** 发布前发现默认生产模拟沿用固定容器名及 PG/Redis 宿主数据目录。已改为启动/停止前生成临时独立 Compose；真实 `config → helper CLI → config` 回读确认八服务、四个项目专属卷、仅 Docker socket/本次工作区两种宿主绑定、网关仅 `127.0.0.1:16608`，healthcheck 字符串保持。未知挂载、外部配置、工作区/端口边界和失败脱敏合同通过；最终真实容器 smoke 已完成并自动清理模拟容器、卷和工作区。
+- **首败与修复：** 首轮模拟与补充诊断因可选 `AI_PARTNER_SCORING_AGENT_ID` 空值触发整数解析错误，后端未启动，不计为通过。修复仅将该字段空串/全空白视为未配置，正整数约束和其他字段严格校验保留，定向隔离配置测试 **25 passed**。配置修复后首轮完整 smoke 为 **10 PASS / 3 WARN / 1 FAIL**：未配置供应商导致小组对比分析 503；UI 十三个 WARN 来自 KaTeX CDN 字体被 CSP 拦截。KaTeX 已改为同源 CSS/字体，59 个字体引用存在；未放宽 CSP 或 smoke 断言。
+- **最终生产模拟：** 修复后六个本地候选镜像的完整 smoke 退出成功，**14 步骤：12 PASS / 2 WARN / 0 FAIL**；UI 为 **13 PASS / 0 WARN / 0 FAIL**。覆盖登录、测评、点名、讨论、Typst、PythonLab owner 并发、DAP step/watch、print visibility 和登录替换 UI。两项 WARN 为：旧 OpenAPI public 名单匿名调用两个需认证的 model-discovery GET 得到 401；合成空库没有 stable learning content/旧 ML book，因此历史内容恢复未验证。
+- **模型验收边界：** 小组对比分析使用临时本地 OpenAI 兼容供应商桩，原脚本三轮请求、落库和二次缓存同 ID 断言均通过；夹具恰好收到三个有效 POST，`real_model_called=false`。这证明本次合成链路与缓存合同，不是真实模型能力验收。
+- **发布收尾文档：** 同步发布记录与部署示例后的 Markdown 派生摘要为 `140 files / 629 links / 0 missing`；发布前的链接数量保留为历史快照。
+- **证据与环境保护：** 本地 smoke 与首次失败、夹具证明、完整 CI 日志、根合同和保护快照位于活动工作树 `.codex/release-2.1.5/`；最终 smoke 位于其 `smoke-final/`。发布收尾再次确认主目录 HEAD/Git 状态/九个初始 dirty 文件哈希与七个正常开发容器的 ID、镜像、运行和重启状态均未变化。本轮没有部署服务器，没有迁移或修改正常业务数据；后续上线仍按 [部署前置](../deploy/DEPLOY.md) 单独核对。
 
-## 2026-10-19 项目文件与共享模块整理（整理阶段，本地未提交）
+## 2026-10-19 项目文件与共享模块整理（整理阶段历史快照）
+
+以下保留整理阶段的验证范围；该批内容随后已随上节 `2.1.5` 合并并发布，原阶段的“不提交/推送”边界不代表当前发布状态。
 
 - **范围与保护：** 基于 `codex/release-2.1.4` 的 `1db95a91bc2502360995fb072b0051ba5b21d35c`，在 `/Users/wsh/wangsh/.claude/worktrees/beautiful-satoshi-b71479` 整理。保留既有 dirty 修改，主目录不覆盖；本轮不提交、推送、构建发布镜像、部署、迁移或修改业务数据，已发布版本身份不变。
 - **实际整理：** 归档九份日期报告、收敛当前 owner 与台账；移除四个闲置组件、五个旧模拟 API 导出、六个专用类型和九项多余直接依赖。锁文件未升级保留包版本。共享课程、阅读器、只读导图及稳定实验资源迁入 `features/it-technology`；Admin 编辑器、PythonLab Studio、画布和调试状态机保留原边界。
