@@ -196,6 +196,8 @@ docker compose -f docker-compose.dev.yml up -d
 - `start-dev.sh`：自动检测端口冲突、支持混合模式、日志管理
 - `docker compose`：简单直接、全部容器化
 
+镜像命名与别名清理遵循下文[镜像命名与整理](#镜像命名与整理)。
+
 **本地开发数据库**：
 
 - 本机 Homebrew PostgreSQL（`127.0.0.1:5432`）是标准开发库，日常开发直接连接它。
@@ -259,6 +261,22 @@ IMAGE_REPOSITORY_PREFIX=shuhao07
 版本未注入、为空或为 `unknown` 时显示 `–`，不回退读取服务器设置。
 因此只修改后端版本或容器运行时环境不会更新已生成的静态页面，需重新构建前端镜像；
 验收时应核对镜像来源、实际页面版本与构建注入值。系统接口的超级管理员权限不变。
+
+### 镜像命名与整理
+
+- 项目镜像沿用既有仓库名。开发后端和 worker 显式使用 `shuhao07/wangsh-<组件>:dev`，例如 `shuhao07/wangsh-backend:dev`，不再让 Compose 按工作树目录自动命名。
+- 正式发布使用完整版本号，以 release-set digest 确认发布身份。`dev` 是本地开发用途标签，不是新的发布版本，不推送为正式版本。
+- 本地每个镜像实体保留一个用途明确的标签；不再新增含长日期、工作树名称或临时批次名称的标签，也不保留没有实际引用的 `latest` 别名。日期、架构、源码 revision 和 Image ID 保存到整理清单，不堆叠在标签中。
+- 清理既有长标签、工作树名称或多余 `latest` 时，先核对容器实际 Image ID、有效 Compose 和 PythonLab 按需创建的镜像引用，再迁移配置、校验新标签指向，最后移除旧别名。不能只按名称或创建日期删除镜像实体。
+- 基础依赖沿用官方仓库名及上游有效标签，例如 `postgres:16-alpine`、`redis:7-alpine`、`node:20-alpine`、`adminer:4.8.1`。依赖版本独立于应用版本，不统一改成应用的发布 tag，也不为本机架构追加临时 tag 后缀。架构通过 manifest 和 `platform` 选择；异构验证结束后，确认无容器或有效配置引用再清理不再需要的副本。官方依赖按其仓库拉取，不作为 WangSh 自建镜像重复推送。
+- 旧验证镜像保留其真实版本号；是否属于正式发布由源码、构建记录和 release-set 判断，不按标签数字大小推断。历史验证标签不能冒充最新正式版本。
+
+### 如何确认当前最新内容
+
+- 最新源码：核对远端 `main` 提交、实际开发工作树及 `frontend/package.json`，同时检查未提交改动。开发站点挂载的工作树才是页面内容的来源，其他旧 checkout 的版本不能代表它。
+- 最新正式发布：核对成功构建的源码提交、版本号和完整 release-set；registry digest 必须与清单一致。构建后新增的本地配置或文档修改仍是未发布改动，不能仅改标签就视作新版本。
+- 实际运行版本：核对容器 Image ID / RepoDigest、代码挂载、环境及页面构建注入值。开发容器的环境值不会随源码热更新自动刷新，`Config.Image` 也保留创建时的字符串；这些字段单独不能证明当前代码版本。
+- 镜像已推送不等于服务器已部署；需要另行核对目标服务器的实际镜像。本地整理标签不会改变镜像内容、源码版本或服务器版本。
 
 ---
 
@@ -335,8 +353,13 @@ SIM_CLEANUP=false
 `simulate` 是本地生产镜像验证入口，不消费 `release-set.txt`。一次性隔离数据库在迁移与
 健康检查后会自动完成合成 AUTH authority enrollment，并用独立 session 核验 `ready=true`，
 然后才运行需要登录的 smoke；这不适用于正式数据库，正式切换仍必须执行本页前述
-`auth/cutover.py` 停流、排空、配对快照与显式 apply 流程。脚本会先确认 Compose
-引用和 PythonLab sandbox 镜像均已存在于本机，再停止旧的 `wangsh_sim` 栈并清理
+`auth/cutover.py` 停流、排空、配对快照与显式 apply 流程。脚本先解析生产 Compose，
+通过 `scripts/prepare-production-simulation.py` 生成权限为 `0600` 的临时隔离配置：
+移除固定容器名，PG/Redis 改用模拟专属 named volumes，所有卷均由 `wangsh_sim`
+项目拥有，移除外部网络，网关仅绑定 loopback；除 Docker socket 和本次 PythonLab
+目录外拒绝宿主挂载。生产的 `data/postgres`、`data/redis` 不会作为模拟数据源。
+生成和校验失败时在启动/停止容器前退出。脚本再确认 Compose 引用和 PythonLab
+sandbox 镜像均已存在于本机，随后停止旧的 `wangsh_sim` 栈并清理
 `data/pythonlab/simulations/run.*` 残留目录。模拟固定覆盖
 `COMPOSE_PROJECT_NAME=wangsh_sim`、版本、镜像、端口和
 `PYTHONLAB_CONTAINER_NAMESPACE=wangsh_sim` 等关键变量，不受父 shell 同名变量影响。
@@ -346,7 +369,8 @@ SIM_CLEANUP=false
 每次模拟使用独立的 `data/pythonlab/simulations/run.*` 工作区，不会读写或删除
 `data/pythonlab/workspaces`。运行失败时会自动清理模拟栈和本次工作区；
 `SIM_CLEANUP=true` 时成功后也会清理。显式保留成功栈时，本次隔离工作区会随栈保留，
-并在下一次 simulate 停止旧栈后作为残留清理。清理命令失败不会被忽略：原流程成功但
+并在下一次 simulate 停止旧栈后作为残留清理。临时隔离配置含合成凭据，随临时环境文件
+在退出时删除。清理命令失败不会被忽略：原流程成功但
 清理失败时，`deploy.sh` 返回非零。
 
 `SIM_RUN_PROD_SMOKE=true` 时，随机生成的临时管理员密码只在当前进程内传给
@@ -514,7 +538,7 @@ IT_GAME_MAX_UPLOAD_BYTES=524288000 # IT 游戏安装包上传上限（字节）
 |---|---|---|
 | `AI_PARTNER_LEADERBOARD_ROUND_ID` | `classroom` | 当前课堂轮次；新一课更换为新的 `round_id`，不复用已结束轮次 |
 | `AI_PARTNER_LEADERBOARD_DURATION_SECONDS` | `3600` | 正整数固定时长窗口，从首个有效榜单提交原子开启，不随评分或提交续期 |
-| `AI_PARTNER_SCORING_AGENT_ID` | 未设置（`None`） | 可选正整数，指定平台现有且启用的评分智能体；未设置时明确不可评分，`evaluate` 返回 `503` |
+| `AI_PARTNER_SCORING_AGENT_ID` | 未设置（`None`） | 可选正整数，指定平台现有且启用的评分智能体；空字符串或全空白按未设置处理，非空非法值仍报错；未设置时明确不可评分，`evaluate` 返回 `503` |
 
 **模型配置与凭据边界：**
 

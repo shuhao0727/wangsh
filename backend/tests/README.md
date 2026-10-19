@@ -4,6 +4,8 @@
 
 > 安全前置：本页测试选择和历史命令仅供已核验的隔离运行器使用。必须在导入 app 和 pytest collection 前禁用 dotenv、注入合成配置并限制网络；不得在普通 shell 直接运行全量或整个 auth 目录，使测试连接正常 `settings` 数据库。
 
+`core/test_config_optional_scoring_agent.py` 独立加载服务配置字段，验证评分智能体 ID 的空值、环境变量及正整数约束；不导入全局 Settings。运行仍应禁用正常 conftest、dotenv 和网络，避免 collection 环境带入业务配置。
+
 ## 风险收口专项的隔离要求（2026-09-09）
 
 - `xbk/test_xbk_import_cancellation_pg.py` 是专用 PostgreSQL/asyncpg opt-in：每例独立 schema，覆盖父行锁、INSERT/deferred COMMIT 在途取消、SQL 失败回滚、同 session 重试、真实 get_db 退出及重复取消边界。只通过清环境、禁 dotenv/secrets、禁 conftest/自动插件、限定网络和写入目录的隔离运行器执行；`TEST_DATABASE_URL` 必须显式指向含独立 test/testing/ci 段的专用库。真实 TCP 分支需额外设置本批分配的 `R5_XBK_HTTP_PORT`，不能借用正常服务端口。TCP 断连与显式服务端取消分别验收，不能由断连推断事务已撤销。实际结果与精确运行器见 [TEST_STATUS](../../docs/docker/testing/TEST_STATUS.md)。
@@ -151,6 +153,7 @@ pytest -q tests/assessment --deselect=tests/assessment/test_assessment_profile.p
 
 - `assessment/test_assessment_result_visibility_isolated.py`：真实学生 router、请求 schema、service、SQLite ORM，响应另经真实 schema 校验。覆盖未交卷拒绝、终态结果、存在性/归属、合法单题反馈；身份为合成适配器但角色守卫真实，后台画像仅记录，不运行 AI。
 - `assessment/test_assessment_profile_detail_isolated.py`：真实 JWT/角色守卫、学生和管理 router、schema、service、SQLite ORM。覆盖个人类型与本人归属双重校验、group/class 数字碰撞拒绝、管理端合法访问及缺失 ID 合同。
+- `assessment/test_assessment_scoring.py`：只读纯 Python 计分边界，覆盖自适应首次尝试去重、无知识点兼容、知识点得分率和分数区间；直接加载 `scoring.py`，不导入 app、dotenv、数据库或外部服务，可在 `--noconftest -p no:cacheprovider` 下运行。
 - 两组使用内存合成数据，不是 PostgreSQL 锁/时区、Redis、完整 app lifespan/middleware、真实浏览器或供应商验收。必须在导入 app 前禁 dotenv、注入合成环境并阻断外连，再以 `--noconftest` 运行，不能只依赖 fixture 的运行期禁网。外部 runner、红绿证据及扩展回归结果见 [TEST_STATUS](../../docs/docker/testing/TEST_STATUS.md)。
 
 ## 自适应首题与闭环反证回归

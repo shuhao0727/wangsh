@@ -3,7 +3,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import type { FlowNodeTemplate, PythonLabExperiment } from "./types";
+import type { FlowNodeTemplate } from "./types";
+import type { PythonLabExperiment } from "@/features/it-technology/python-lab/types";
 import { normalizeFlowImport, type FlowEdge, type FlowNode } from "./flow/model";
 import { calculateFitView, calculateFitViewCenter } from "./flow/viewUtils";
 import { pointAtT } from "./flow/geometry";

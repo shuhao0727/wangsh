@@ -16,8 +16,8 @@ import {
   isMindmapEditorRuntimeAvailable,
   MINDMAP_EDITOR_UNAVAILABLE_MESSAGE,
 } from "@/lib/mindmapRuntime";
-import MindMapViewer from "./Admin/ITTechnology/learning/MindMapViewer";
-import { markdownToMindMapData } from "./Admin/ITTechnology/learning/mindMapData";
+import MindMapViewer from "@/features/it-technology/learning/MindMapViewer";
+import { markdownToMindMapData } from "@/features/it-technology/learning/mindMapData";
 
 type MindmapItem = {
   id: number; title: string; content: { markdown?: string }; updated_at: string;

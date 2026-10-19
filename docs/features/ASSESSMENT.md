@@ -190,6 +190,7 @@ API 统一挂在 `backend/app/api/endpoints/assessment/` 下，完整路径前�
 
 - 批量出题：`backend/app/services/assessment/question_service.py`
 - 自适应实时出题与评分：`backend/app/services/assessment/session_service.py`
+- 统计计分纯函数：`backend/app/services/assessment/scoring.py`（首次尝试去重、知识点得分率聚合、分数分布）；该模块不导入 ORM、配置或外部服务。`session_service` 保留查询、事务和 `_calc_knowledge_rates` / `_calc_score_distribution` 兼容挂载点，现有调用方与测试可继续 patch 原路径。
 - 初级画像：`backend/app/services/assessment/basic_profile_service.py`
 - 个人、小组、群体高级画像：`backend/app/services/assessment/profile_service.py`
 
@@ -255,6 +256,7 @@ API 统一挂在 `backend/app/api/endpoints/assessment/` 下，完整路径前�
 - 文档与链接合同：`node scripts/check-markdown-contracts.mjs`
 - 文档合同测试：`node --test scripts/markdown-contracts.test.mjs`
 - 后端专项：`cd backend && pytest -q tests/assessment`；先确认专用数据库安全边界。
+- 纯计分边界：在 [后端测试说明](../../backend/tests/README.md) 要求的隔离 bootstrap 中，以 `--noconftest -p no:cacheprovider` 选择 `tests/assessment/test_assessment_scoring.py` 和 `tests/assessment/test_assessment_session.py`；前者直接加载 `scoring.py`，后者覆盖 session mock 统计与兼容挂载点。后者会导入 app，必须在 collection 前禁 dotenv、注入合成配置并阻断外连。
 - 开放时间窗隔离回归：`cd backend && pytest -q tests/assessment/test_assessment_availability_isolated.py`，使用真实学生 router/JWT/角色守卫/service/ORM 和合成 SQLite 内存库。覆盖窗内外、起止边界、等价 aware offset、会话续答与拒绝先于副作用；安全入口与扩展筛选见 [后端测试说明](../../backend/tests/README.md#测评开放时间窗隔离回归)。SQLite 配置加载适配不代替真实 PostgreSQL 时区转换或并发验收。
 - 真实 PostgreSQL 班级隔离回归优先读取 `TEST_DATABASE_URL`，且数据库名必须包含
   `test`、`testing` 或 `ci`；未显式提供且默认库不合规时跳过，显式提供不合规库名则拒绝执行，不接触业务库。

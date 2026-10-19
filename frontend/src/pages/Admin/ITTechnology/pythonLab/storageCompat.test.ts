@@ -4,7 +4,7 @@
 import { ensurePythonLabStorageCompatible } from "./storageCompat";
 import { pythonLabPipelineRecordsKey, pythonLabPipelineRecordsKeyV1 } from "./pipeline/records";
 import { pythonLabRuleSetBundleKey, pythonLabRuleSetBundleKeyV1, pythonLabRuleSetKey } from "./pipeline/rules";
-import { pythonLabStorageKey } from "./storage";
+import { pythonLabStorageKey } from "@/features/it-technology/python-lab/storage";
 
 test("ensurePythonLabStorageCompatible migrates legacy ruleset bundle to stable key", () => {
   localStorage.clear();

@@ -1,6 +1,6 @@
 import { loadPipelineRecords, savePipelineRecords, pythonLabPipelineRecordsKey, pythonLabPipelineRecordsKeyV1 } from "./pipeline/records";
 import { loadRuleSetBundleV1, saveRuleSetBundleV1, pythonLabRuleSetBundleKey, pythonLabRuleSetBundleKeyV1, pythonLabRuleSetKey, pythonLabRuleSetKeyV1 } from "./pipeline/rules";
-import { loadPythonLabExperiments, pythonLabStorageKey, savePythonLabExperiments } from "./storage";
+import { loadPythonLabExperiments, pythonLabStorageKey, savePythonLabExperiments } from "@/features/it-technology/python-lab/storage";
 
 export function ensurePythonLabStorageCompatible() {
   try {

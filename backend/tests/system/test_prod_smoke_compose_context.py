@@ -132,6 +132,7 @@ def test_child_environment_does_not_broadcast_unrelated_host_secrets():
             "HOME": "/tmp/home",
             "LANG": "C.UTF-8",
             "NO_PROXY": "127.0.0.1",
+            "ANALYSIS_AGENT_ID": "999999",
             "OPENROUTER_API_KEY": "personal-openrouter-secret",
             "GITHUB_TOKEN": "personal-github-secret",
         }
@@ -141,6 +142,7 @@ def test_child_environment_does_not_broadcast_unrelated_host_secrets():
     assert child_env["HOME"] == "/tmp/home"
     assert child_env["LANG"] == "C.UTF-8"
     assert child_env["NO_PROXY"] == "127.0.0.1"
+    assert child_env["ANALYSIS_AGENT_ID"] == "999999"
     assert "OPENROUTER_API_KEY" not in child_env
     assert "GITHUB_TOKEN" not in child_env
 

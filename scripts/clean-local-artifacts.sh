@@ -9,23 +9,29 @@
 set -euo pipefail
 
 apply=false
+include_browser_artifacts=false
 for arg in "$@"; do
   case "$arg" in
     --apply)
       apply=true
       ;;
+    --include-browser-artifacts)
+      include_browser_artifacts=true
+      ;;
     -h|--help)
       cat <<EOF
-用法: $0 [--apply]
+用法: $0 [--apply] [--include-browser-artifacts]
 
 默认只预览将删除的路径与占用空间，不做任何修改。
   --apply   实际执行删除
+  --include-browser-artifacts   同时纳入浏览器转储；使用前先保留验收证据
 
 清理范围（均为未跟踪、可重建产物）：
-  .playwright-mcp/  .playwright-cli/  output/playwright/
-  以及全仓 __pycache__/、.pytest_cache/、.ruff_cache/（排除 node_modules 与 .git）
+  根目录及 backend/ 的测试缓存、backend/.coverage
+  backend/app、tests、scripts、alembic 和根 scripts/ 内的 Python 缓存
+  浏览器转储默认保留；仅加 --include-browser-artifacts 时纳入
 
-不清理：.codex/（agent 交接与 UI 证据，需人工确认后再单独处理）
+不进入：工作树、.codex、data、uploads、依赖、虚拟环境和构建目录；不跟随符号链接
 EOF
       exit 0
       ;;
@@ -48,27 +54,38 @@ done
 
 # 固定清理目标（不在 find 覆盖范围内）
 static_targets=(
-  ".playwright-mcp"
-  ".playwright-cli"
-  "output/playwright"
+  ".pytest_cache"
+  ".ruff_cache"
+  "__pycache__"
+  "backend/.pytest_cache"
+  "backend/.ruff_cache"
+  "backend/__pycache__"
+  "backend/.coverage"
 )
+if $include_browser_artifacts; then
+  static_targets+=(".playwright-mcp" ".playwright-cli" "output/playwright")
+fi
+
+# 仅在明确的源码目录查找缓存；不从仓库根递归扫描。
+cache_scopes=("backend/app" "backend/tests" "backend/scripts" "backend/alembic" "scripts")
 
 # 安全校验：路径存在、被 git 忽略、且不含跟踪文件
 is_safe_to_delete() {
   local path="$1"
   [ -e "$path" ] || return 1
+  [ ! -L "$path" ] || return 1
   if ! git check-ignore -q "$path" 2>/dev/null; then
     echo "  跳过（未被 .gitignore 忽略）: $path" >&2
     return 1
   fi
-  if [ -n "$(git ls-files -- "$path" | head -1)" ]; then
+  if [ -n "$(git ls-files -- "$path")" ]; then
     echo "  跳过（含跟踪文件）: $path" >&2
     return 1
   fi
   return 0
 }
 
-# 收集全仓缓存目录，排除 node_modules 与 .git
+# 收集白名单源码目录内的缓存，不跨入依赖、数据或其他工作树。
 matched_count=0
 matched_kb=0
 
@@ -93,8 +110,14 @@ while IFS= read -r -d '' path; do
   matched_kb=$((matched_kb + size_kb))
 done < <(
   printf '%s\0' "${static_targets[@]}"
-  find . \( -name node_modules -o -name .git \) -prune -o \
-    -type d \( -name __pycache__ -o -name .pytest_cache -o -name .ruff_cache \) -print0
+  for scope in "${cache_scopes[@]}"; do
+    [ -d "$scope" ] && [ ! -L "$scope" ] || continue
+    find "$scope" \( -name node_modules -o -name .git -o -name .claude \
+      -o -name .codex -o -name venv -o -name .venv -o -name data \
+      -o -name uploads -o -name build -o -name dist -o -name coverage \) -prune -o \
+      -type d \( -name __pycache__ -o -name .pytest_cache -o -name .ruff_cache \) \
+      -print0 -prune
+  done
 )
 
 echo ""

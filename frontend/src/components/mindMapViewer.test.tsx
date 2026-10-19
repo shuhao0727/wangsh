@@ -2,7 +2,7 @@ import React from "react";
 import { render, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import MindMapViewer from "@/pages/Admin/ITTechnology/learning/MindMapViewer";
+import MindMapViewer from "@/features/it-technology/learning/MindMapViewer";
 
 const createMarkmap = vi.fn();
 const setData = vi.fn();

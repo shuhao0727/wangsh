@@ -186,6 +186,8 @@ CSS 变量 (index.css) → Tailwind 映射 (tailwind.config.js) → shadcn/ui �
 - 不要在 PythonLab 调试控制按钮上引入 Radix Tooltip 或同类依赖 portal、hover 状态机、pointer outside、focus restore 的复杂弹层，除非完成真实 Chrome channel 和 WebKit 验证。
 - 涉及 PythonLab tooltip、hover、pointer、focus、Radix 弹层或调试状态切换时，必须覆盖多断点连续 `Continue`、hover 状态真实 pointer click，不要只依赖 JS `button.click()` 或默认 Chromium smoke。
 - Docker Compose 开发和生产模式不同，不要混用配置或同时启动混淆的栈。
+- 镜像命名与清理遵循 [部署指南的镜像命名与整理](docs/docker/deploy/DEPLOY.md#镜像命名与整理)：开发镜像统一用 `:dev`，不要再新增含长日期或工作树名称的标签，也不要保留无实际引用的 `latest` 别名。
+- 最新版本按 [版本管理](docs/docker/deploy/DEPLOY.md#版本管理) 核对源码提交、版本配置、构建记录与 release-set；不要把旧验证镜像的较大版本号当作最新正式发布。
 - 当前 UI 为**永久浅色主题**；改动必须使用语义 token，避免硬编码黑色、白色或不存在
   的 CSS 变量。不做深色/暗色模式，无需为未来换肤预留兼容空间。
 - ECharts、SVG、Canvas 等场景使用 CSS 变量时要确认变量存在且在当前浅色主题可读。

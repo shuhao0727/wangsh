@@ -6,7 +6,7 @@
 services:
   # PostgreSQL 数据库服务
   postgres:
-    image: public.ecr.aws/docker/library/postgres:16-alpine
+    image: postgres:16-alpine
     container_name: wangsh-postgres
     restart: unless-stopped
     ports:
@@ -34,7 +34,7 @@ services:
 
   # Redis 服务（用于缓存和 Celery 代理）
   redis:
-    image: public.ecr.aws/docker/library/redis:7-alpine
+    image: redis:7-alpine
     container_name: wangsh-redis
     restart: unless-stopped
     ports:
@@ -65,7 +65,7 @@ services:
 
   # 后端服务 (Python FastAPI)
   backend:
-    image: wangsh-backend:latest
+    image: shuhao07/wangsh-backend:dev
     build:
       context: ./backend
       dockerfile: Dockerfile.dev
@@ -156,6 +156,7 @@ services:
 
   # Celery Worker 服务（Typst 异步任务处理）
   typst-worker:
+    image: shuhao07/wangsh-typst-worker:dev
     build:
       context: ./backend
       dockerfile: Dockerfile.dev
@@ -202,6 +203,7 @@ services:
 
   # 默认 celery 队列 Worker（PythonLab 沙箱任务 + 课堂结束后的 AI 分析）
   pythonlab-worker:
+    image: shuhao07/wangsh-pythonlab-worker:dev
     build:
       context: ./backend
       dockerfile: Dockerfile.dev

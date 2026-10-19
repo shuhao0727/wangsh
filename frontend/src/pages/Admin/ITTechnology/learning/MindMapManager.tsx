@@ -19,7 +19,7 @@ import {
   isMindmapEditorRuntimeAvailable,
   MINDMAP_EDITOR_UNAVAILABLE_MESSAGE,
 } from "@/lib/mindmapRuntime";
-import MindMapViewer from "./MindMapViewer";
+import MindMapViewer from "@/features/it-technology/learning/MindMapViewer";
 import MindMapEditorLib from "./MindMapEditorLib";
 
 type MindmapItem = {

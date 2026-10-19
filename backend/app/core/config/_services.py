@@ -3,7 +3,7 @@
 """
 
 from typing import Optional
-from pydantic import Field
+from pydantic import Field, field_validator
 
 
 class ServicesSettingsMixin:
@@ -32,6 +32,13 @@ class ServicesSettingsMixin:
     )
     AI_PARTNER_SCORING_AGENT_ID: Optional[int] = Field(default=None, gt=0)
     AI_PARTNER_LEADERBOARD_DURATION_SECONDS: int = Field(default=3600, ge=1)
+
+    @field_validator("AI_PARTNER_SCORING_AGENT_ID", mode="before")
+    @classmethod
+    def normalize_optional_scoring_agent_id(cls, value):
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
 
     # ==================== HTTPX 客户端配置 ====================
     HTTPX_MAX_CONNECTIONS: int = Field(default=100)

@@ -3,8 +3,8 @@
  */
 import React, { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import MindMapViewer from "./Admin/ITTechnology/learning/MindMapViewer";
-import { markdownToMindMapData } from "./Admin/ITTechnology/learning/mindMapData";
+import MindMapViewer from "@/features/it-technology/learning/MindMapViewer";
+import { markdownToMindMapData } from "@/features/it-technology/learning/mindMapData";
 import { Button } from "@/components/ui/button";
 import { showMessage } from "@/lib/toast";
 import {

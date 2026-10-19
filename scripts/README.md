@@ -6,13 +6,18 @@
 
 ## 当前结构
 
-- `prod-smoke/` - 生产环境全链路烟测入口
+- `prod-smoke/` - 生产环境全链路烟测入口；`log_redaction.py` 为纯脱敏模块，由 runner、日志过滤和命令执行 CLI 共用
 - `xbk/` - XBK 重建、导入样例、冒烟脚本
-- `deploy.sh` - 部署入口
+- `deploy.sh` - 部署入口；生产模拟启动前隔离资源，失败时先采集脱敏服务日志再清理
+- `prepare-production-simulation.py` - 将已解析的 Compose 配置转为隔离模拟配置；移除固定容器名和外部网络，使用专属数据卷，拒绝未知挂载
+- `prepare-production-simulation.test.mjs` - 用临时 JSON/目录验证隔离配置、挂载拒绝与端口边界，不启动 Docker
 - `rollback.sh` - 回滚入口
 - `migrate-db.sh` - 数据库迁移
 - `health-check-detailed.sh` - 细粒度健康检查
 - `clean-local-artifacts.sh` - 本地临时产物与缓存清理（默认只预览，`--apply` 才删除）
+- `clean-local-artifacts.test.mjs` - 清理范围、跟踪文件、证据与符号链接保护的临时仓库回归
+- `sync-ai-partner-catalog.mjs` - 以服务端目录为唯一维护源，检查或生成前端运行副本
+- `sync-ai-partner-catalog.test.mjs` - 目录漂移、只读检查和无效 JSON 保护合同
 - `check-version-consistency.mjs` - CI 版本一致性检查（完整版本号与镜像标签统一使用 SemVer 校验，权威源为 `frontend/package.json`）
 - `check-env-consistency.mjs` - 两栈环境一致性只读比对（`.env` 与 `.env.dev` 共享密钥指纹，绝不打印明文；缺文件时降级跳过）
 - `env-consistency.test.mjs` - 环境一致性检查器的契约测试（CI 使用临时 fixture，不依赖本地 env）
@@ -91,10 +96,31 @@ node --test scripts/markdown-contracts.test.mjs
 # 预览本地临时产物与测试缓存占用（默认不删除任何文件）
 bash scripts/clean-local-artifacts.sh
 
-# 实际回收 Playwright 转储、output/playwright 与 __pycache__/.pytest_cache/.ruff_cache；
-# 只删除被 .gitignore 忽略且不含跟踪文件的路径，不触碰 .codex/ 证据目录
+# 清理白名单源码目录内的 Python/测试缓存及 backend/.coverage；
+# 只删除被 .gitignore 忽略且不含跟踪文件的路径，默认保留浏览器证据
 bash scripts/clean-local-artifacts.sh --apply
+
+# 已保留验收证据后，显式纳入 .playwright-mcp、.playwright-cli 和 output/playwright
+bash scripts/clean-local-artifacts.sh --include-browser-artifacts
+
+# AI 伙伴目录：只编辑 backend/app/services/ai_partner_catalog.json，
+# 然后生成并提交 frontend/ai-partner/src/catalog.json；CI 拦截双端漂移
+node scripts/sync-ai-partner-catalog.mjs --write
+node scripts/sync-ai-partner-catalog.mjs --check
 ```
+
+需要验证小组对比分析时，可用 `ANALYSIS_AGENT_ID` 指定该环境内已配置的分析智能体，
+runner 会将此非敏感 ID 传给原烟测脚本，保留真实请求、落库和缓存断言。
+隔离环境可使用临时本地供应商桩；桩验证须单独注明，不能据此宣称真实模型能力通过。
+
+清理脚本只扫描明确的后端源码和脚本目录，不进入工作树、虚拟环境、业务数据、
+上传目录、依赖或构建输出，也不跟随符号链接。`.codex/` 始终保留。
+AI 伙伴双端 JSON 都随源码提交，前后端 Docker 上下文独立构建，运行时不跨目录读取。
+
+`prod-smoke/log_redaction.py` 只处理传入的文本和配置，不加载环境文件或执行命令。
+`run.py` 保留既有脱敏函数入口，`redact.py` 与 `redact_exec.py` 直接复用纯模块；
+修改脱敏行为时运行 workflow contracts 和后端生产 smoke 合同测试，并保留流式输出、
+退出码、信号和已知敏感值的覆盖。CLI 可独立于 smoke 编排导入，是发布失败日志的公共依赖。
 
 生产模拟隔离、release-set、日志脱敏、证据权限和失败清理合同由
 [`docs/docker/deploy/DEPLOY.md`](../docs/docker/deploy/DEPLOY.md)与

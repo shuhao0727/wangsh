@@ -7,7 +7,7 @@ import sys
 from collections import deque
 from pathlib import Path
 
-from run import collect_sensitive_values, redact_sensitive_output
+from log_redaction import collect_sensitive_values, redact_sensitive_output
 
 
 def _read_text(path: str, tail: int | None) -> str:

@@ -92,6 +92,12 @@ npm run test:scripts
 
 ## 维护规则
 
+- 依赖只在第一方源码、构建配置或维护脚本直接使用时声明为直接依赖。清理前核对
+  动态加载、Worker 和锁文件依赖链，再用 npm 同步 `package.json` 与
+  `package-lock.json`；不要顺带升级无关依赖。
+- 分块规则应跟随实际构建依赖。`remark-parse` 由 `react-markdown` 和 `remark-gfm`
+  传递引入，继续归入 `markdown-vendor`，无需重复声明直接依赖；Typst 采用后端编译
+  与 PDF 预览，不保留未接入的浏览器 Typst WASM 分块。
 - 未接入 `package.json`、CI 或 `prod-smoke` 的一次性脚本不再保留。
 - 截图采集、手工调试、临时验证脚本统一清理，不回流到本目录。
 - PythonLab 调试控制区一旦涉及 `tooltip / hover / pointer / focus` 相关改动，必须补跑真实 Chrome channel 与 WebKit。

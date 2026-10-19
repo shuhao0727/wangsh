@@ -4,6 +4,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -1058,6 +1059,37 @@ test("prod-smoke redactor removes credential formats and known environment value
   assert.match(result.stdout, /Basic <redacted>/);
   assert.match(result.stdout, /"password":"<redacted>"/);
   assert.match(result.stdout, /'api_key': '<redacted>'/);
+});
+
+test("prod-smoke redaction CLIs work without importing the orchestration runner", (t) => {
+  const directory = mkdtempSync(join(tmpdir(), "wangsh-redaction-module-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  for (const file of ["log_redaction.py", "redact.py", "redact_exec.py"]) {
+    writeFileSync(join(directory, file), read(`scripts/prod-smoke/${file}`));
+  }
+  writeFileSync(join(directory, "run.py"), 'raise AssertionError("runner must not load")\n');
+  const env = {
+    PATH: process.env.PATH,
+    PYTHONDONTWRITEBYTECODE: "1",
+    PYTHONLAB_SMOKE_PASSWORD: "module-only-secret",
+  };
+  const filtered = spawnSync("python3", [join(directory, "redact.py"), "-"], {
+    cwd: tmpdir(),
+    env,
+    input: "GET /ws?token=stdin-secret known=module-only-secret\n",
+    encoding: "utf8",
+  });
+  assert.equal(filtered.status, 0, filtered.stderr);
+  assert.doesNotMatch(filtered.stdout, /stdin-secret|module-only-secret/);
+  assert.match(filtered.stdout, /token=<redacted> known=<redacted>/);
+
+  const executed = spawnSync("python3", [
+    join(directory, "redact_exec.py"), "--", "python3", "-c",
+    "print('password=child-secret known=module-only-secret'); raise SystemExit(9)",
+  ], { cwd: tmpdir(), env, encoding: "utf8" });
+  assert.equal(executed.status, 9, executed.stderr);
+  assert.doesNotMatch(executed.stdout, /child-secret|module-only-secret/);
+  assert.match(executed.stdout, /password=<redacted> known=<redacted>/);
 });
 
 test("prod-smoke redactor accepts stdin for child-generated logs", () => {

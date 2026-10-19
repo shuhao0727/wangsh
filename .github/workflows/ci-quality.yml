@@ -33,6 +33,10 @@ jobs:
         # .env / .env.dev 本身是 gitignored，CI 里只跑契约测试（用临时 fixture），
         # 真正的两栈比对由 check-env-consistency.mjs 在本地/start-dev.sh 执行。
         run: node --test scripts/env-consistency.test.mjs
+      - name: local cleanup and catalog contracts
+        run: |
+          node --test scripts/clean-local-artifacts.test.mjs scripts/sync-ai-partner-catalog.test.mjs scripts/prepare-production-simulation.test.mjs
+          node scripts/sync-ai-partner-catalog.mjs --check
       - name: shell syntax
         run: |
           for script in \

@@ -1,6 +1,8 @@
 # 学习平台
 
-> 最后更新：2026-07-23
+> 状态：active
+> Owner：learning
+> 最近复核：2026-10-19
 
 ## 概述
 
@@ -227,15 +229,26 @@
 
 | 文件 | 说明 |
 |------|------|
-| `BookReader.tsx` | 通用书籍阅读器（Markdown 渲染 / 侧边栏目录 / 内容大纲 / 滚动跟踪 / KaTeX + Mermaid 支持） |
 | `EditorPage.tsx` | 章节编辑器页面 |
 | `TabEditorPage.tsx` | 多标签编辑器页面 |
 | `MindMapManager.tsx` | 思维导图管理器 |
 | `MindMapEditor.tsx` | 思维导图编辑器 |
 | `MindMapEditorLib.tsx` | 思维导图编辑器底层库 |
-| `MindMapViewer.tsx` | 思维导图查看器 |
-| `types.ts` | 类型定义 |
-| `helpers.ts` | 辅助函数 |
+
+### 共享学习能力
+
+**位置**：`frontend/src/features/it-technology/learning/`
+
+| 文件 | 说明 |
+|------|------|
+| `BookReader.tsx` / `BookReader.css` | 通用书籍阅读器及原有样式，供公开阅读与管理预览复用 |
+| `MindMapViewer.tsx` | 公开广场、预览与管理端共用的只读导图查看器 |
+| `mindMapData.ts` | Markdown 与导图数据转换 |
+| `types.ts` | 课程、书籍与学习进度的共享类型 |
+| `helpers.ts` | 学习内容请求、进度与筛选辅助函数 |
+
+公开页面从共享 feature 引入上述能力，不通过 Admin 页面目录间接引用。
+管理编辑器留在 Admin，使用相同 reader 和类型完成编辑预览。
 
 ### 用户端
 
@@ -247,13 +260,23 @@
 | `AIFullPage.tsx` / `AIPage.tsx` | 人工智能课程页面 |
 | `AgentsFullPage.tsx` / `AgentsPage.tsx` | AI 智能体课程页面 |
 
+三门课程的实现位于 `frontend/src/features/it-technology/courses/{ml,ai,agents}/`：
+
+- `LearningPage.tsx` 保留各课程原有页面结构，由公开路由入口分别加载。
+- `book.ts` 与 `chapters/` 保存内置书籍元数据和 Markdown 正文。
+- `content/` 按路线、知识、工具、资源、展示配置等职责组织数据；`content/index.ts`
+  保留本课程的数据导出合同，不汇总加载其他课程。
+- `content/experiments/` 按难度组织实验，保留原内容、代码、顺序与稳定标识。
+
+课程数据是正式离线 fallback。拆分文件不改变服务端 section 覆盖规则、课程内容或懒加载边界。
+
 ### 章节内容（Markdown 源文件）
 
 每个模块的章节以 `.md` 文件形式存放，由前端构建时导入：
 
-- `Admin/ITTechnology/ml/chapters/` — 机器学习章节（16 个）
-- `Admin/ITTechnology/ai/chapters/` — 人工智能章节（19 个）
-- `Admin/ITTechnology/agents/chapters/` — 智能体章节（16 个）
+- `features/it-technology/courses/ml/chapters/` — 机器学习章节（16 个）
+- `features/it-technology/courses/ai/chapters/` — 人工智能章节（19 个）
+- `features/it-technology/courses/agents/chapters/` — 智能体章节（16 个）
 
 ---
 

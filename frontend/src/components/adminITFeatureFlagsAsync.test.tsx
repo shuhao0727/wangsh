@@ -26,9 +26,6 @@ vi.mock("@/components/Admin", () => ({
 }));
 
 vi.mock("@/pages/Admin/ITTechnology/DianmingManager", () => ({ default: () => null }));
-vi.mock("@/pages/Admin/ITTechnology/ml", () => ({ default: () => null }));
-vi.mock("@/pages/Admin/ITTechnology/ai", () => ({ default: () => null }));
-vi.mock("@/pages/Admin/ITTechnology/agents", () => ({ default: () => null }));
 vi.mock("@/pages/Admin/ITTechnology/components/AgentConfigModal", () => ({ default: () => null }));
 vi.mock("@/pages/Admin/ITTechnology/learning/MindMapManager", () => ({ default: () => null }));
 

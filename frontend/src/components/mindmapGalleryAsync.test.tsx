@@ -19,7 +19,7 @@ vi.mock("@/lib/mindmapRuntime", () => ({
   MINDMAP_EDITOR_UNAVAILABLE_MESSAGE: "生产环境暂不提供旧版思维导图编辑器，已有导图仍可预览。",
 }));
 
-vi.mock("@/pages/Admin/ITTechnology/learning/MindMapViewer", () => ({
+vi.mock("@/features/it-technology/learning/MindMapViewer", () => ({
   default: ({ markdown }: { markdown: string }) => <div>{markdown}</div>,
 }));
 

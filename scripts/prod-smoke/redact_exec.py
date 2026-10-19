@@ -9,7 +9,7 @@ import subprocess
 import sys
 import time
 
-from run import collect_sensitive_values, redact_sensitive_output
+from log_redaction import collect_sensitive_values, redact_sensitive_output
 
 
 def _stream_redacted_output(

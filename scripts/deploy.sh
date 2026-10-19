@@ -596,7 +596,7 @@ case "${cmd}" in
   simulate)
     require_docker
     sim_web_port="${SIM_WEB_PORT:-16608}"
-    sim_version="${SIM_VERSION:-2.1.4}"
+    sim_version="${SIM_VERSION:-2.1.5}"
     sim_image_prefix="${SIM_IMAGE_REPOSITORY_PREFIX:-shuhao07}"
     sim_project="wangsh_sim"
     sim_namespace="wangsh_sim"
@@ -604,6 +604,7 @@ case "${cmd}" in
     sim_lock_dir="${TMPDIR:-/tmp}/wangsh-production-simulate.lock"
     sim_lock_acquired=false
     tmp_env=""
+    tmp_compose=""
     sim_workspace_dir=""
     simulation_started=false
 
@@ -677,6 +678,13 @@ case "${cmd}" in
 
       if [ "${simulation_started}" = "true" ] \
         && { [ "${SIM_CLEANUP:-false}" = "true" ] || [ "${rc}" -ne 0 ]; }; then
+        if [ "${rc}" -ne 0 ]; then
+          echo "simulation failed; collecting redacted service logs before cleanup" >&2
+          run_sim_compose logs --no-color --tail 120 2>&1 \
+            | SECRET_KEY="${secret_key}" POSTGRES_PASSWORD="${pg_password}" \
+              SUPER_ADMIN_PASSWORD="${admin_password}" AGENT_API_KEY_ENCRYPTION_KEY="${fernet}" \
+              python3 scripts/prod-smoke/redact.py - >&2
+        fi
         run_sim_deploy down-v
         command_rc=$?
         if [ "${command_rc}" -ne 0 ]; then
@@ -703,6 +711,14 @@ case "${cmd}" in
 
       if [ -n "${tmp_env}" ]; then
         rm -f "${tmp_env}"
+        command_rc=$?
+        if [ "${command_rc}" -ne 0 ] && [ "${cleanup_rc}" -eq 0 ]; then
+          cleanup_rc="${command_rc}"
+        fi
+      fi
+
+      if [ -n "${tmp_compose}" ]; then
+        rm -f "${tmp_compose}"
         command_rc=$?
         if [ "${command_rc}" -ne 0 ] && [ "${cleanup_rc}" -eq 0 ]; then
           cleanup_rc="${command_rc}"
@@ -785,6 +801,17 @@ REACT_APP_API_URL=/api/v1
 REACT_APP_ENV=production
 WEB_PORT=${sim_web_port}
 EOF
+
+    # Project names alone do not isolate explicit container names or bind mounts.
+    # Render once with the synthetic environment, then reject/replace host resources
+    # before any Compose down/up command. The normalized file contains credentials.
+    tmp_compose="$(mktemp -t wangsh_sim_compose_XXXXXX)"
+    chmod 600 "${tmp_compose}"
+    run_sim_compose config --format json \
+      | python3 scripts/prepare-production-simulation.py \
+          --workspace "${sim_workspace_dir}" --port "${sim_web_port}" \
+          > "${tmp_compose}"
+    compose_file="${tmp_compose}"
 
     run_sim_deploy verify-local-images
     run_sim_deploy down-v

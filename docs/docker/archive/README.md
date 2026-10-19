@@ -2,7 +2,7 @@
 
 > 状态：active
 > Owner：docs
-> 最近复核：2026-09-08
+> 最近复核：2026-10-19
 
 本目录是 WangSh 历史文档的唯一索引。归档内容用于追溯，不再指导当前开发、测试或
 部署；当前入口见 [docs/README.md](../../README.md)。
@@ -76,7 +76,7 @@
 - [plans/2026-07-project-consolidation-history.md](plans/2026-07-project-consolidation-history.md)
   将原变更批次清单、健康快照和发布收口长计划合并为一份短历史摘要，只保留冻结范围、
   跨批次依赖、真实提交映射、长期风险和停止条件。当前事实仍由测试状态、发布说明和
-  30/60/90 计划维护。
+  [当前项目整理台账](../plans/project-consolidation.md)维护。
 - [CODE_REVIEW_FIXES_2026-07-19.md](CODE_REVIEW_FIXES_2026-07-19.md)
   7 月代码审查批次的历史范围。原“全部完成”结论已在 2026-07-22 复核后撤回，
   当前行为与验证结果以代码、测试状态和发布 owner 文档为准。
@@ -124,7 +124,8 @@
   **注意**该报告 §二.1 的 `ix_conversations_is_archived` 是错值（已在该归档件头部标注）。
 - [ui-improvement-plan-2026-10-03-superseded.md](ui-improvement-plan-2026-10-03-superseded.md)
   2026-10 的 UI 提升计划（统一版），现由
-  [2026-10-03-ui-improvement-plan.md](2026-10-03-ui-improvement-plan.md) 取代。
+  [2026-10-03-ui-improvement-plan.md](2026-10-03-ui-improvement-plan.md) 取代的历史版本；
+  当前视觉规则以 [嵌入式规范](../frontend/EMBEDDED_UI_STYLE_GUIDE.md)为准。
   保留它是因它最早逐条核实并记录了一批报表失真（间距统一度宣称 95%、实测 4.6% 等），
   有溯源价值。
 
@@ -151,14 +152,31 @@
 
 ### 2026-10-16 项目瘦身归档
 
-以下计划/审查文档于 2026-10-16 项目瘦身时从 docs/docker/plans/ 移入本目录：均已 superseded（对应工作已完成或方案已废弃），仅作历史追溯。
+以下文档于 2026-10-16 从 `docs/docker/plans/` 移入本目录；2026-10-19 校正仍为 active 的
+头部状态与失效入口。归档只表示停止作为当前依据，不表示每条待办已在当前版本修复或重新验证。
+旧“唯一台账”和历史完成标记均按快照理解，当前未解决事项见
+[项目整理台账](../plans/project-consolidation.md#未解决与待复核事项)。
 
-- [2026-07-11-project-governance-30-60-90-execution-plan.md](2026-07-11-project-governance-30-60-90-execution-plan.md) - 30/60/90 治理执行计划（已结束）。
-- [2026-09-08-project-audit-findings.md](2026-09-08-project-audit-findings.md) - 全项目首轮问题台账（已被后续审计取代）。
-- [2026-09-08-project-comprehensive-audit-plan.md](2026-09-08-project-comprehensive-audit-plan.md) - 全项目审查计划（已执行完毕）。
-- [2026-10-03-ui-improvement-plan.md](2026-10-03-ui-improvement-plan.md) - UI 改进计划（B 系列已随 UI 回退作废）。
-- [2026-10-03-view-migration-and-pythonlab-type.md](2026-10-03-view-migration-and-pythonlab-type.md) - 视图迁移与 PythonLab 类型说明（已实施）。
-- [2026-10-09-comprehensive-review.md](2026-10-09-comprehensive-review.md) - 综合复核记录（已完成）。
-- [2026-10-09-six-round-audit-issue-list.md](2026-10-09-six-round-audit-issue-list.md)
-- [2026-10-15-project-audit.md](2026-10-15-project-audit.md) - 全项目核查报告（结论已于 2026-10-16 全部落地，见文首「结论落地情况」）。
- - 六轮审计问题清单（已被 2026-10-15 核查报告取代）。
+- [2026-07-11-project-governance-30-60-90-execution-plan.md](2026-07-11-project-governance-30-60-90-execution-plan.md) - 30/60/90 治理的历史任务和退出标准。
+- [2026-09-08-project-audit-findings.md](2026-09-08-project-audit-findings.md) - XBK 优先的首轮问题、反证与验证边界。
+- [2026-09-08-project-comprehensive-audit-plan.md](2026-09-08-project-comprehensive-audit-plan.md) - 当时全项目审查的范围、分工和数据保护策略。
+- [2026-10-03-ui-improvement-plan.md](2026-10-03-ui-improvement-plan.md) - UI 旧实测与计划，包含已废弃方向；不恢复为视觉标准。
+- [2026-10-03-view-migration-and-pythonlab-type.md](2026-10-03-view-migration-and-pythonlab-type.md) - 视图迁移与 PythonLab 控件的历史实施记录。
+- [2026-10-09-comprehensive-review.md](2026-10-09-comprehensive-review.md) - 当时工作区和前序报告的独立复核。
+- [2026-10-09-six-round-audit-issue-list.md](2026-10-09-six-round-audit-issue-list.md) - 多轮问题候选、修复方案和当时验收证据，停止作为当前唯一台账。
+- [2026-10-15-project-audit.md](2026-10-15-project-audit.md) - 历史核查报告；文首结论落地情况仅代表该次范围。
+
+### 2026-10-19 文档权威与历史边界整理
+
+以下九份原文保留历史分析与实施轨迹；可持续结论分别归入功能 owner 和当前整理台账。
+正文中的路径、容量估算、通过数量及完成声明不再直接指导当前操作。
+
+- [2026-10-01-ai-agents-analysis.md](2026-10-01-ai-agents-analysis.md) - 智能体板块历史全面分析；当前行为见 [AI_AGENTS.md](../../features/AI_AGENTS.md)。
+- [2026-10-01-agent-data-analysis.md](2026-10-01-agent-data-analysis.md) - 数据模型、访问与生命周期的历史分析；容量及性能收益待当前负载验证。
+- [2026-10-01-async-analysis-guide.md](2026-10-01-async-analysis-guide.md) - 异步任务旧指南；当前端点、权限和边界见 [深度分析异步任务](../../features/AI_AGENTS.md#深度分析异步任务)。
+- [2026-10-01-async-analysis-verification.md](2026-10-01-async-analysis-verification.md) - 异步任务历史验证声明，不代表当前模型/队列端到端通过。
+- [2026-10-01-gdpr-implementation-summary.md](2026-10-01-gdpr-implementation-summary.md) - 隐私实施历史总结；实际覆盖范围与同意管理边界见 [GDPR.md](../../compliance/GDPR.md)。
+- [2026-10-09-comprehensive-audit-final-report.md](2026-10-09-comprehensive-audit-final-report.md) - 仍含执行摘要占位段的审核报告，不作为完整终验。
+- [2026-10-09-comprehensive-remediation-plan.md](2026-10-09-comprehensive-remediation-plan.md) - 全面完善计划的历史安排和执行声明。
+- [2026-10-09-verification-report.md](2026-10-09-verification-report.md) - 六轮审计条目的当时复核与反证。
+- [2026-10-10-file-organization-findings.md](2026-10-10-file-organization-findings.md) - 旧文件扫描候选清单，68 条口径不等同当前已确认缺陷。
