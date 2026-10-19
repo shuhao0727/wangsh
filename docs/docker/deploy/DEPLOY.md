@@ -538,7 +538,7 @@ IT_GAME_MAX_UPLOAD_BYTES=524288000 # IT 游戏安装包上传上限（字节）
 |---|---|---|
 | `AI_PARTNER_LEADERBOARD_ROUND_ID` | `classroom` | 当前课堂轮次；新一课更换为新的 `round_id`，不复用已结束轮次 |
 | `AI_PARTNER_LEADERBOARD_DURATION_SECONDS` | `3600` | 正整数固定时长窗口，从首个有效榜单提交原子开启，不随评分或提交续期 |
-| `AI_PARTNER_SCORING_AGENT_ID` | 未设置（`None`） | 可选正整数，指定平台现有且启用的评分智能体；未设置时明确不可评分，`evaluate` 返回 `503` |
+| `AI_PARTNER_SCORING_AGENT_ID` | 未设置（`None`） | 可选正整数，指定平台现有且启用的评分智能体；空字符串或全空白按未设置处理，非空非法值仍报错；未设置时明确不可评分，`evaluate` 返回 `503` |
 
 **模型配置与凭据边界：**
 

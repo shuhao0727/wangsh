@@ -8,7 +8,7 @@
 
 - `prod-smoke/` - 生产环境全链路烟测入口；`log_redaction.py` 为纯脱敏模块，由 runner、日志过滤和命令执行 CLI 共用
 - `xbk/` - XBK 重建、导入样例、冒烟脚本
-- `deploy.sh` - 部署入口
+- `deploy.sh` - 部署入口；生产模拟启动前隔离资源，失败时先采集脱敏服务日志再清理
 - `prepare-production-simulation.py` - 将已解析的 Compose 配置转为隔离模拟配置；移除固定容器名和外部网络，使用专属数据卷，拒绝未知挂载
 - `prepare-production-simulation.test.mjs` - 用临时 JSON/目录验证隔离配置、挂载拒绝与端口边界，不启动 Docker
 - `rollback.sh` - 回滚入口

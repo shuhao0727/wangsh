@@ -678,6 +678,13 @@ case "${cmd}" in
 
       if [ "${simulation_started}" = "true" ] \
         && { [ "${SIM_CLEANUP:-false}" = "true" ] || [ "${rc}" -ne 0 ]; }; then
+        if [ "${rc}" -ne 0 ]; then
+          echo "simulation failed; collecting redacted service logs before cleanup" >&2
+          run_sim_compose logs --no-color --tail 120 2>&1 \
+            | SECRET_KEY="${secret_key}" POSTGRES_PASSWORD="${pg_password}" \
+              SUPER_ADMIN_PASSWORD="${admin_password}" AGENT_API_KEY_ENCRYPTION_KEY="${fernet}" \
+              python3 scripts/prod-smoke/redact.py - >&2
+        fi
         run_sim_deploy down-v
         command_rc=$?
         if [ "${command_rc}" -ne 0 ]; then

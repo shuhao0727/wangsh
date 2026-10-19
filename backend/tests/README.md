@@ -4,6 +4,8 @@
 
 > 安全前置：本页测试选择和历史命令仅供已核验的隔离运行器使用。必须在导入 app 和 pytest collection 前禁用 dotenv、注入合成配置并限制网络；不得在普通 shell 直接运行全量或整个 auth 目录，使测试连接正常 `settings` 数据库。
 
+`core/test_config_optional_scoring_agent.py` 独立加载服务配置字段，验证评分智能体 ID 的空值、环境变量及正整数约束；不导入全局 Settings。运行仍应禁用正常 conftest、dotenv 和网络，避免 collection 环境带入业务配置。
+
 ## 风险收口专项的隔离要求（2026-09-09）
 
 - `xbk/test_xbk_import_cancellation_pg.py` 是专用 PostgreSQL/asyncpg opt-in：每例独立 schema，覆盖父行锁、INSERT/deferred COMMIT 在途取消、SQL 失败回滚、同 session 重试、真实 get_db 退出及重复取消边界。只通过清环境、禁 dotenv/secrets、禁 conftest/自动插件、限定网络和写入目录的隔离运行器执行；`TEST_DATABASE_URL` 必须显式指向含独立 test/testing/ci 段的专用库。真实 TCP 分支需额外设置本批分配的 `R5_XBK_HTTP_PORT`，不能借用正常服务端口。TCP 断连与显式服务端取消分别验收，不能由断连推断事务已撤销。实际结果与精确运行器见 [TEST_STATUS](../../docs/docker/testing/TEST_STATUS.md)。
