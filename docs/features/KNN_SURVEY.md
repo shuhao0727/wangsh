@@ -119,6 +119,6 @@ JSON 不含学号、提交时间或重填记录。此功能准备课堂数据，
 - 模型/schema：`backend/app/models/it/knn.py`、`backend/app/schemas/it/knn.py`。
 - 路由与服务：`backend/app/api/endpoints/it/knn.py`、`backend/app/services/it/knn*.py`。
 - 学生界面：`frontend/src/pages/Games/Knn/`；请求与查询：`frontend/src/services/knn.ts`、`frontend/src/hooks/queries/useKnnQuery.ts`。
-- 接口字段、响应与错误码见 [API 契约](../development/API.md#knn-运动习惯采集itknn未发布)。
+- 接口字段、响应与错误码见 [API 契约](../development/API.md#knn-运动习惯采集itknn)。
 - 维护测试遵循 [后端测试说明](../../backend/tests/README.md)，当前执行结果只记录在
   [TEST_STATUS](../docker/testing/TEST_STATUS.md)。
