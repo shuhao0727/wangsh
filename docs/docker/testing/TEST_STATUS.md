@@ -2,9 +2,17 @@
 
 > 状态：active
 > Owner：testing
-> 当前版本：2.1.5 镜像已发布（本轮未部署服务器）
+> 当前版本：2.1.6 镜像已发布（服务器尚未部署；本机仍使用现有运行基础）
 > 最近更新：2026-10-20
 > 说明：本文件是当前测试事实的唯一汇总入口；阶段报告只引用本页，不复制新基线。
+
+## 2026-10-20 v2.1.6 镜像发布（已完成，服务器未部署）
+
+- **GitHub 与来源：** [PR #7](https://github.com/shuhao0727/wangsh/pull/7) 已通过六项检查并合并；正式镜像源码为 `542c0d8e20832c8e367bac43a81e4c365ce1c949`。[发布工作流 39381756718](https://github.com/shuhao0727/wangsh/actions/runs/39381756718) 全部成功，输入 `image_tag=2.1.6`、`push_latest=false`。[GitHub Release v2.1.6](https://github.com/shuhao0727/wangsh/releases/tag/v2.1.6) 已正式创建，tag 指向同一源码，附件 `release-set.txt` 已上传。
+- **镜像身份：** 六个 `shuhao07/` 仓库 `wangsh-backend`、`wangsh-frontend`、`wangsh-gateway`、`wangsh-typst-worker`、`wangsh-pythonlab-worker`、`pythonlab-sandbox` 的 `:2.1.6` 已推送。release-set 由正式 workflow 生成并下载到主目录 `.codex/releases/2.1.6/release-set.txt`；独立 registry digest/platform 核验结果见本轮外部证据，六镜像均匹配清单并包含 `linux/amd64`。发布前六标签均不存在，未更新 `latest`。
+- **CI 证据：** PR 通用质量门禁为后端 **3482 passed / 242 skipped / 14 warnings**，前端 **101 files / 743 tests passed**，另 **30 项脚本测试**。Python governance 为 **0 errors / 38 warnings**，前端 lint 为 **0 errors / 463 warnings**；保留弃用和大 chunk 警告。两项 PythonLab PR runtime 门禁、文档、repo-config 均通过；正式发布重跑内置质量门禁并全部成功，未额外重跑本地全量业务测试。
+- **本地发布检查：** 版本一致性、发布记录提交树 Markdown 检查（`141 files / 652 links / 0 missing`）、Markdown 合同 **10 项通过** 和 diff whitespace 通过；记录同步首轮因新增链接后的派生统计未更新而失败，修正后复验通过。保留原有四文件脏改动，未提交 npm 标记噪声或先前运维草稿。外部证据位于 `/Users/wsh/.codex/artifacts/wangsh-release-2.1.6-20261020/`。
+- **部署边界：** 本轮未访问或部署服务器，未迁移生产数据库、未改写学生答卷。后续部署须按部署指南备份并核对 Alembic `20261020_0001`；它新增三表，降级会删除 KNN 数据。此前开发库及浏览器验收为发布前证据，不能当作生产验收。
 
 ## 2026-10-20 IT 应用目录嵌入式紧凑化（未发布）
 
