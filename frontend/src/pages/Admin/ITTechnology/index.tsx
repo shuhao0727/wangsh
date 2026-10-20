@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { showMessage } from "@/lib/toast";
 import React, { useState, useEffect } from "react";
 
@@ -19,43 +19,51 @@ import {
   Gamepad2,
   Shuffle,
   LockKeyhole,
+  ClipboardList,
 } from "lucide-react";
 import { AdminPage } from "@/components/Admin";
 import DianmingManager from "./DianmingManager";
 import AgentConfigModal from "./components/AgentConfigModal";
 import MindMapManager from "./learning/MindMapManager";
+import KnnManager from "./KnnManager";
 import { featureFlagsApi } from "@/services/system/featureFlags";
 import { logger } from "@services/logger";
 import useAuth from "@hooks/useAuth";
 import { canManageITGameRepo } from "@components/Auth/ITGamesAccess";
-import { canManageFeatureFlags } from "@components/Auth/roleAccess";
+import { canAccessRoles, canManageFeatureFlags, IT_TECHNOLOGY_MANAGEMENT_ROLES } from "@components/Auth/roleAccess";
 
 type ViewState = 'dashboard' | 'dianming-manager' | 'ml-manager' | 'ai-manager' | 'agents-manager' | 'mindmap-manager';
 
 type AppConfig = {
   key: string;
   title: string;
-  description: string;
   icon: React.ReactNode;
   category: string;
   hasManager: boolean;
   managerLabel?: string;
+  hasFeatureFlag?: boolean;
+  actionHref?: string;
 };
 
 const appConfigs: AppConfig[] = [
-  { key: 'it_dianming', title: '随机点名', description: '班级名册与随机抽取', icon: <Shuffle className="h-4 w-4" />, category: '教学工具', hasManager: true },
-  { key: 'it_survey', title: '问卷调查', description: '问卷创建与数据收集', icon: <ClipboardEdit className="h-4 w-4" />, category: '教学工具', hasManager: false },
-  { key: 'it_mindmap', title: '思维导图', description: '导图编辑与知识梳理', icon: <GitMerge className="h-4 w-4" />, category: '教学工具', hasManager: true },
-  { key: 'it_python_lab', title: 'Python 实验室', description: '实验室智能体配置', icon: <Code className="h-4 w-4" />, category: '教学工具', hasManager: true, managerLabel: "智能体配置" },
-  { key: 'it_machine_learning', title: '机器学习', description: '模型训练与实验平台', icon: <Cpu className="h-4 w-4" />, category: 'AI 与编程', hasManager: true },
-  { key: 'it_ai_exploration', title: '人工智能探索', description: 'AI 能力体验与交互式学习', icon: <Sparkles className="h-4 w-4" />, category: 'AI 与编程', hasManager: true },
-  { key: 'it_agent_exploration', title: '智能体探索', description: '多智能体协作与对话实验', icon: <Bot className="h-4 w-4" />, category: 'AI 与编程', hasManager: true },
-  { key: 'it_game_lock_cracker', title: '密码锁破解', description: '密码池与教学游戏配置', icon: <LockKeyhole className="h-4 w-4" />, category: '小游戏', hasManager: true, managerLabel: "密码配置" },
-  { key: 'it_game_repo', title: '游戏资源库', description: '安装包、上下架与下载记录', icon: <Gamepad2 className="h-4 w-4" />, category: '小游戏', hasManager: true, managerLabel: "管理" },
+  { key: 'it_ai_partner', title: '召唤一名AI同学', icon: <Sparkles className="h-4 w-4" />, category: '公开课', hasManager: false, hasFeatureFlag: false, actionHref: '/games/ai-partner/index.html', managerLabel: '打开' },
+  { key: 'it_game_lock_cracker', title: '密码锁破解', icon: <LockKeyhole className="h-4 w-4" />, category: '公开课', hasManager: true, managerLabel: "密码配置" },
+  { key: 'it_knn', title: 'KNN 运动习惯采集', icon: <ClipboardList className="h-4 w-4" />, category: '公开课', hasManager: true, hasFeatureFlag: false },
+  { key: 'it_dianming', title: '随机点名', icon: <Shuffle className="h-4 w-4" />, category: '课堂工具', hasManager: true },
+  { key: 'it_survey', title: '问卷调查', icon: <ClipboardEdit className="h-4 w-4" />, category: '课堂工具', hasManager: false },
+  { key: 'it_mindmap', title: '思维导图', icon: <GitMerge className="h-4 w-4" />, category: '课堂工具', hasManager: true },
+  { key: 'it_python_lab', title: 'Python 实验室', icon: <Code className="h-4 w-4" />, category: 'AI 与编程', hasManager: true, managerLabel: "智能体配置" },
+  { key: 'it_machine_learning', title: '机器学习', icon: <Cpu className="h-4 w-4" />, category: 'AI 与编程', hasManager: true },
+  { key: 'it_ai_exploration', title: '人工智能探索', icon: <Sparkles className="h-4 w-4" />, category: 'AI 与编程', hasManager: true },
+  { key: 'it_agent_exploration', title: '智能体探索', icon: <Bot className="h-4 w-4" />, category: 'AI 与编程', hasManager: true },
+  { key: 'it_game_repo', title: '游戏资源库', icon: <Gamepad2 className="h-4 w-4" />, category: '游戏与资源', hasManager: true, managerLabel: "管理" },
 ];
+const appGroups = ['公开课', '课堂工具', 'AI 与编程', '游戏与资源'];
+const flaggedApps = appConfigs.filter(app => app.hasFeatureFlag !== false);
 
 const AdminITTechnology: React.FC = () => {
   const navigate = useNavigate();
+  const [params, setParams] = useSearchParams();
   const auth = useAuth();
   const [view, setView] = useState<ViewState>('dashboard');
   const [agentConfigVisible, setAgentConfigVisible] = useState(false);
@@ -63,8 +71,10 @@ const AdminITTechnology: React.FC = () => {
   const [flagLoadError, setFlagLoadError] = useState("");
   const [loading, setLoading] = useState<Record<string, boolean>>({});
   const canToggleFlags = canManageFeatureFlags(auth.user?.role_code);
+  const canManageApps = canAccessRoles(auth.user?.role_code, IT_TECHNOLOGY_MANAGEMENT_ROLES);
 
   useEffect(() => {
+    if (!canManageApps) return;
     let cancelled = false;
     const loadFlags = async () => {
       setFlagLoadError("");
@@ -78,7 +88,7 @@ const AdminITTechnology: React.FC = () => {
           });
         } else {
           const results = await Promise.allSettled(
-            appConfigs.map((app) =>
+            flaggedApps.map((app) =>
               featureFlagsApi.getPublic(`${app.key}_enabled`),
             ),
           );
@@ -90,7 +100,7 @@ const AdminITTechnology: React.FC = () => {
             } else {
               failedCount += 1;
               logger.error(
-                `Failed to fetch feature flag ${appConfigs[index].key}_enabled`,
+                `Failed to fetch feature flag ${flaggedApps[index].key}_enabled`,
                 result.reason,
               );
             }
@@ -115,7 +125,7 @@ const AdminITTechnology: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [canToggleFlags]);
+  }, [canManageApps, canToggleFlags]);
 
   const handleToggle = async (key: string, checked: boolean) => {
     if (!canToggleFlags) return;
@@ -133,6 +143,24 @@ const AdminITTechnology: React.FC = () => {
       setLoading(prev => ({ ...prev, [key]: false }));
     }
   };
+
+  if (params.get('view') === 'knn') {
+    return <AdminPage padding="var(--ws-panel-padding)" maxWidth={1320}>
+      <KnnManager backLabel={canManageApps ? "IT 应用" : "管理首页"} onBack={() => {
+        if (!canManageApps) {
+          void navigate("/admin/dashboard");
+          return;
+        }
+        setView('dashboard');
+        setParams(previous => {
+          const next = new URLSearchParams(previous);
+          next.delete('view');
+          next.delete('batch');
+          return next;
+        });
+      }} />
+    </AdminPage>;
+  }
 
   if (view === 'dianming-manager') {
     return (
@@ -216,6 +244,9 @@ const AdminITTechnology: React.FC = () => {
   }
 
   const openManager = (key: string) => {
+    if (key === "it_knn") setParams({ view: "knn" });
+    const app = appConfigs.find(item => item.key === key);
+    if (app?.actionHref) window.open(app.actionHref, "_blank", "noopener,noreferrer");
     if (key === "it_dianming") setView("dianming-manager");
     if (key === "it_python_lab") setAgentConfigVisible(true);
     if (key === "it_machine_learning") void navigate("/admin/it-technology/ml-book-editor");
@@ -238,25 +269,23 @@ const AdminITTechnology: React.FC = () => {
             {flagLoadError}
           </div>
         )}
-        <ul className="ws-it-catalog-grid" aria-label="信息技术应用">
-          {appConfigs.map(app => {
+        {appGroups.map((group, index) => <section key={group} aria-labelledby={`it-group-${index}`}>
+          <h2 id={`it-group-${index}`} className="mb-2 text-sm font-semibold text-text-secondary">{group}</h2>
+          <ul className="ws-it-catalog-grid" aria-label={group}>
+          {appConfigs.filter(app => app.category === group).map(app => {
             const flagKey = `${app.key}_enabled`;
             const stateKnown = Object.prototype.hasOwnProperty.call(flags, flagKey);
             const enabled = flags[flagKey] === true;
-            const showManagerAction = app.hasManager &&
+            const showManagerAction = (app.hasManager || !!app.actionHref) &&
               (app.key !== "it_game_repo" || canManageITGameRepo(auth.user?.role_code));
             return (
               <li key={app.key} className="ws-it-app-tile" aria-labelledby={`${app.key}-title`}>
                 <div className="ws-it-tile-content">
-                  <div className="ws-it-tile-topline">
-                    <span className="ws-it-tile-symbol" aria-hidden="true">{app.icon}</span>
-                    <span className="ws-it-tile-category">{app.category}</span>
-                  </div>
-                  <h2 id={`${app.key}-title`}>{app.title}</h2>
-                  <p>{app.description}</p>
+                  <span className="ws-it-tile-symbol" aria-hidden="true">{app.icon}</span>
+                  <h3 id={`${app.key}-title`}>{app.title}</h3>
                 </div>
                 <div className="ws-it-tile-footer">
-                  <div className="ws-it-tile-visibility">
+                  {app.hasFeatureFlag === false ? <span className="text-xs text-text-secondary">免登录</span> : <div className="ws-it-tile-visibility">
                     <span className="ws-it-tile-visibility-label">前台入口</span>
                     {canToggleFlags && (
                       <Switch
@@ -270,7 +299,7 @@ const AdminITTechnology: React.FC = () => {
                     <span className={stateKnown && canToggleFlags ? "sr-only" : "text-text-secondary"}>
                       {stateKnown ? (enabled ? "已启用" : "已禁用") : "未获取"}
                     </span>
-                  </div>
+                  </div>}
                   {showManagerAction && (
                     <Button variant="ghost" size="sm" className="ws-it-tile-action"
                       aria-label={`${app.title}${app.managerLabel || "管理"}`}
@@ -283,7 +312,8 @@ const AdminITTechnology: React.FC = () => {
               </li>
             );
           })}
-        </ul>
+          </ul>
+        </section>)}
         <AgentConfigModal visible={agentConfigVisible} onClose={() => setAgentConfigVisible(false)} />
       </div>
     </AdminPage>

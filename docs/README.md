@@ -50,6 +50,7 @@
 - [features/PYTHONLAB.md](features/PYTHONLAB.md) - Python 在线实验室（Docker 沙箱、DAP 调试）
 - [features/AUTO_REFRESH.md](features/AUTO_REFRESH.md) - SSE 实时推送机制
 - [features/IT_GAMES.md](features/IT_GAMES.md) - IT 游戏资源库（上传/下载/安全校验）
+- [features/KNN_SURVEY.md](features/KNN_SURVEY.md) - KNN 运动习惯采集（匿名填写、批次管理、重填与课堂数据冻结）
 - [features/LEARNING.md](features/LEARNING.md) - 学习平台（章节/内容/思维导图/进度）
 - [features/ML_BOOK.md](features/ML_BOOK.md) - ML/AI/Agents 学习书籍系统
 - [features/DIANMING.md](features/DIANMING.md) - XXJS 点名系统

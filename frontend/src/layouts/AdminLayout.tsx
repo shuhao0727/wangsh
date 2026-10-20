@@ -40,6 +40,7 @@ import { useBreakpoint } from "@hooks/useBreakpoint";
 import { PageTransitionShell } from "@/components/Common/PageTransitionShell";
 import {
   canAccessAdminProfile,
+  getAdminMenuTarget,
   getAdminMenuWhitelist,
 } from "@/components/Auth/roleAccess";
 
@@ -174,7 +175,7 @@ const AdminLayout: React.FC = () => {
         key={item.key}
         type="button"
         onClick={() => {
-          void navigate(item.key);
+          void navigate(getAdminMenuTarget(auth.user?.role_code, item.key, path === item.key ? location.search : ""));
           if (isMobile) setCollapsed(true);
         }}
         className={`appearance-none border-0 bg-transparent flex w-full items-center gap-2 rounded-sm px-3 py-2 text-left text-sm transition-colors focus-visible:ring-1 focus-visible:ring-primary ${

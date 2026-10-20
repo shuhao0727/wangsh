@@ -63,8 +63,10 @@ from .ml import MLBook, MLBookChapter  # noqa: F401
 
 # IT 游戏资源库模型 (it_ 前缀)
 from .it import GameResource, GameDownloadLog
+from .it.knn import KnnBatch, KnnRosterEntry, KnnSubmission
 
 __all__ = [
+    "KnnBatch", "KnnRosterEntry", "KnnSubmission",
     "Base",
     "User",
     "RefreshToken",

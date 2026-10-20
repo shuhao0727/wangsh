@@ -344,6 +344,7 @@ auth.isStudent();     // 仅 student
 
 - **AdminGuard.tsx**：使用 `isStaff()` 做路由准入（教师也可进 `/admin/*`）
 - **AdminLayout.tsx**：使用 `menuWhitelist` 按角色过滤侧边栏菜单
+- **ITTechnologyGuard.tsx**：仅 `/admin/it-technology?view=knn` 允许教师与管理员；教师侧栏直达该视图并保留所选 `batch`，应用目录和其他 IT 编辑器继续要求管理员，KNN 批次归属另由后端校验。功能合同见 [KNN 采集](KNN_SURVEY.md)。
 - **Login.tsx**：默认跳转 `/home`；保留安全站内 redirect 与后台教职工校验
 
 ---

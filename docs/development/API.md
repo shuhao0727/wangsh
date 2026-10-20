@@ -1,7 +1,137 @@
 # API 接口清单
 
 > 基础路径：`/api/v1`（认证接口需携带 `Authorization: Bearer <token>` 头）
-> 最后更新：2026-09-28（AI伙伴临时共享榜单，未发布）
+> 最后更新：2026-10-20（KNN 运动习惯采集，未发布）
+
+## KNN 运动习惯采集（/it/knn，未发布）
+
+本节记录当前源码合同，不表示已发布或已迁移目标数据库。功能流程、特征含义、三张数据表与迁移影响见
+[KNN 采集 owner](../features/KNN_SURVEY.md)。学生使用学号免登录填写，教师在信息技术应用管理内管理批次。
+成功响应直接返回 JSON，不额外包装 `data`；下述正常成功响应均设置 `Cache-Control: no-store`。
+JSON 请求对象禁止额外字段，非法字段、类型或范围返回 `422`。
+
+### 公开接口
+
+前缀为 `/api/v1/it/knn`，均不要求登录；不返回完整名单、其他学生身份或任何答案。
+
+| 方法与路径 | 用途与成功响应 |
+|---|---|
+| `GET /batches` | 批次数组；只列出持久状态为 `scheduled` 且尚未到截止时间的批次，包含未来待开始的批次 |
+| `GET /batches/{batch_id}` | 单个批次元信息；可按 ID 读取草稿或已关闭批次的元信息，但不能因此提交 |
+| `POST /batches/{batch_id}/check` | 请求 `{"student_no":"1"}`；返回该学号的提交资格，不返回答案 |
+| `POST /batches/{batch_id}/submissions` | 提交答案；成功 `201`，返回 `student_no`、`revision`、`submitted_at` |
+
+批次元信息为 `id`、`title`、`starts_at`、`ends_at`、`phase`。`phase` 允许 `draft`、
+`scheduled`、`open`、`ended`、`closed`，由持久状态和服务器当前时间计算。
+`check` 在元信息外增加 `student_no`、`current_revision`、`refill_allowed`、`can_submit`。
+学号有效、当前为 `open`，并且未提交或已获重填授权时，`can_submit=true`。
+
+提交示例：
+
+```json
+{
+  "student_no": "1",
+  "request_id": "e69ca9b8-39e3-491c-9469-c01dbe300c8d",
+  "expected_revision": 0,
+  "features": [1, 2, 1, 2, 4, 4, 1, 2, 2, 3, 6, 4],
+  "label": "耐力类",
+  "display_consent": false
+}
+```
+
+| 提交字段 | 合同 |
+|---|---|
+| `student_no` | 名单内学号；去除首尾空格，格式及等价规则见下文 |
+| `request_id` | UUID；客户端一次提交生成一次，网络重试保持不变 |
+| `expected_revision` | 严格整数，`>=0`；首次填写为 `0`，重填使用最近 `check` 返回的当前版本 |
+| `features` | 固定 12 个严格整数；按六类运动交替保存 `[天数, 喜欢程度, ...]`，偶数索引范围 `0..7`，奇数索引范围 `0..4` |
+| `label` | 只允许 `球类对抗`、`力量类`、`耐力类`、`技巧类` |
+| `display_consent` | 严格布尔，默认 `false`；只表示愿意作为匿名学生 A 展示，不影响其他匿名样本进入冻结数据 |
+
+六类运动的固定顺序为球类对抗、力量、耐力、技巧、团队配合、日常活动。喜欢程度 `0..4`
+依次为完全不喜欢、不太喜欢、一般、比较喜欢、非常喜欢。特征不接受布尔或数字字符串。
+
+新提交必须满足服务器时间 `starts_at <= now < ends_at`，且持久状态为 `scheduled`。
+同一批次、同一学号默认只允许一次；重填新增答案版本并自动消耗一次授权，不能覆盖旧答案。
+相同学号的同一 `request_id` 携带相同内容（含 `expected_revision`）重试，返回原成功回执，
+即使批次随后结束；不会重复创建答案或消耗后来授予的重填机会。相同凭证携带不同内容返回 `409`。
+
+### 教职工接口
+
+前缀为 `/api/v1/admin/it/knn`，全部使用 `require_staff` 认证。教师只能管理自己创建的批次；
+`admin`、`super_admin` 可管理全部批次。匿名为 `401`，非教职工或越权为 `403`。
+
+| 方法与路径 | 请求与用途 |
+|---|---|
+| `GET /batches` | 可管理批次的统计数组，不含名单行 |
+| `POST /batches` | 创建草稿，成功 `201`；请求为下述批次配置，返回批次详情 |
+| `GET /batches/{batch_id}` | 读取批次详情及所有名单行、当前答案 |
+| `PUT /batches/{batch_id}` | 全量更新批次配置；不能移除已提交学号 |
+| `DELETE /batches/{batch_id}` | 仅删除无提交的草稿；返回 `{"ok":true}` |
+| `POST /batches/{batch_id}/state` | `{"action":"start"}`、`{"action":"schedule"}` 或 `{"action":"close"}`；返回批次详情 |
+| `POST /batches/{batch_id}/refill` | `{"student_numbers":["1"],"allowed":true}`；批量授权或撤销重填，返回批次详情 |
+| `GET /batches/{batch_id}/history/{student_no}` | 读取学号的全部答案版本，按版本倒序 |
+| `GET /batches/{batch_id}/export.csv` | 下载含全部名单与当前答案的 CSV |
+| `POST /batches/{batch_id}/freeze` | `{"a_student_no":"1"}`；冻结一次课堂 JSON，也可传 `{}` 或 `{"a_student_no":null}` 自动选择匿名学生 A |
+| `GET /batches/{batch_id}/frozen` | 下载已冻结 JSON；未冻结时 `404` |
+
+创建与全量更新使用相同配置合同：
+
+| 字段 | 合同 |
+|---|---|
+| `title` | 长度 `1..120`；去除首尾空格后不能为空 |
+| `starts_at` / `ends_at` | 带时区的 datetime，截止时间必须晚于开始时间 |
+| `student_numbers` | `1..1000` 个学号；省略时使用字符串 `1..65` |
+
+学号长度 `1..24`，首位为 ASCII 字母或数字，后续可使用 ASCII 字母、数字、下划线、短横线。
+去除首尾空格后，纯数字忽略前导零，其他学号统一大写；`01` 等价于 `1`，`a01` 等价于 `A01`，
+但 `A01` 与 `A1` 不同。名单包含规范化后的重复学号时为 `422`。
+
+`start` 把开始时间改为服务器当前时间并开放，`schedule` 使用配置的时间窗；两者均要求截止时间
+尚未过去。`close` 立即停止新提交。`refill.allowed` 为严格布尔，默认 `true`；只能授权已提交学号，
+名单有任一学号不存在或未提交时整次操作失败。待重填期间旧答案仍有效并计为已交。
+
+批次统计包含元信息以及 `state`、`created_at`、`expected`、`submitted`、`missing`、
+`pending_refill`、`frozen_at`。`state` 为持久状态 `draft`、`scheduled`、`closed`。
+详情额外包含 `rows`，每行为：
+
+```json
+{
+  "student_no": "1",
+  "current_revision": 1,
+  "refill_allowed": false,
+  "answer": {
+    "revision": 1,
+    "features": [1, 2, 1, 2, 4, 4, 1, 2, 2, 3, 6, 4],
+    "label": "耐力类",
+    "display_consent": false,
+    "submitted_at": "2026-10-20T15:00:00Z"
+  }
+}
+```
+
+未提交时 `current_revision=0`、`answer=null`。历史响应为 `{"student_no":"1","answers":[...]}`，
+答案项字段同 `answer`。
+
+### 导出、冻结与错误
+
+CSV 使用 UTF-8 BOM，包含全部名单（含未交）、提交状态、当前版本、重填授权、12 维特征、运动意向、
+匿名展示选择与提交时间。公式危险学号加转义前缀。CSV 不包含历史版本；历史使用专用接口读取。
+
+冻结要求至少 4 份当前有效答案，且学生 A 已选择同意匿名展示。未指定学号时，按名单顺序选择
+首位同意者。返回 `{"version":1,"aId":"S01","students":[...]}`，每个学生只含 `id`、`label`、
+`features`，不含学号；ID 按当前有效答案的名单顺序生成。每批只能冻结一次，重复冻结 `409`；
+后续重填或配置变化不修改快照，可重复读取已冻结 JSON。
+
+| 状态码 | 情况 |
+|---|---|
+| `401` / `403` | 管理接口未认证 / 非教职工或管理他人批次 |
+| `404` | 批次不存在、学号不在名单或尚未生成冻结数据 |
+| `409` | 当前不开放、已提交未获授权、版本变化、凭证冲突、移除已提交学号、无效状态操作、未提交学号授权重填、冻结条件不足或重复冻结 |
+| `422` | 未知字段、时间缺少时区或顺序错误、学号非法或重复、特征/意向/布尔/版本类型或范围错误 |
+
+数据库写入在事务内锁定批次行，并由名单与答案唯一约束裁决并发。详细迁移和降级边界见功能 owner；
+本节不将源码合同或本地验证视为生产升级完成。
 
 ## AI伙伴临时共享榜单（未发布）
 

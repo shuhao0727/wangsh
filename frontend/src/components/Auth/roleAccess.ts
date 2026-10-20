@@ -17,6 +17,13 @@ export const canManageFeatureFlags = (role: string | undefined) =>
 export const canAccessAdminProfile = (role: string | undefined) =>
   canAccessRoles(role, ADMIN_ROLES);
 
+export function getAdminMenuTarget(role: string | undefined, path: string, currentSearch = ""): string {
+  if (role !== "teacher" || path !== "/admin/it-technology") return path;
+  const params = new URLSearchParams(currentSearch);
+  params.set("view", "knn");
+  return `${path}?${params.toString()}`;
+}
+
 export function getAdminMenuWhitelist(role: string | undefined): Set<string> | null {
   if (role === "super_admin") return null;
   if (role === "admin") {
@@ -40,6 +47,7 @@ export function getAdminMenuWhitelist(role: string | undefined): Set<string> | n
       "/admin/classroom-interaction",
       "/admin/classroom-plan",
       "/admin/informatics",
+      "/admin/it-technology",
     ]);
   }
   return new Set();

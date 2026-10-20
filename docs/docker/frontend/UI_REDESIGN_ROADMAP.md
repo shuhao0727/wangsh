@@ -2,7 +2,7 @@
 
 > 状态：active
 > Owner：frontend
-> 最近复核：2026-10-18
+> 最近复核：2026-10-20
 > 参考规范：[EMBEDDED_UI_STYLE_GUIDE.md](EMBEDDED_UI_STYLE_GUIDE.md)
 > 页面清单来源：[UI-PAGES.md](UI-PAGES.md) 与 `frontend/src/App.tsx`
 
@@ -40,7 +40,7 @@
 |---:|---|---|---|---|---|
 | 9 | `/admin/informatics` | `AdminInformaticsPage` | 内容列表 | **待用户确认** | 搜索、分类、管理动作、表格和分页整合进同一工作区 |
 | 10 | `/admin/informatics/editor/new\|:id` | `AdminTypstEditorPage` | 专用编辑器 | **待用户确认** | 压平侧栏与正文边界，侧栏独立滚动；窄屏退出分屏，保留 Typst 编译与编辑流程 |
-| 11 | `/admin/it-technology` | `AdminITTechnologyPage` | 内容管理 | **已完成** | 三列应用卡片、轻量分类与融入式底栏，按可用宽度减列；用户已认可卡片版并授权进入发布准备 |
+| 11 | `/admin/it-technology` | `AdminITTechnologyPage` | 内容管理 | **已完成** | 无外框、无分割底栏，图标名称与操作融入页面；公开课收拢 AI 同学、密码锁与 KNN；移除重复分类与说明，宽屏四列、按工作区宽度减列 |
 | 12 | `/admin/it-technology/games` | `AdminGamesManagerPage` | 资源管理 | **待用户确认** | 搜索与分类在空态和错误态仍可操作，保留上传、资源列表与分页工作流 |
 | 13 | `/admin/it-technology/ml-book-editor` | `AdminMLBookEditorPage` | 书籍编辑器 | **待用户确认** | 目录、正文与元数据改为连续三栏；分屏方向和编辑器填充高度已修正，当前仅隔离请求检查空态 |
 | 14 | `/admin/it-technology/learning/:moduleKey` | `AdminLearningEditorPage` | 学习内容编辑器 | **待用户确认** | 移除重复顶栏和预览目录；窄屏提供章节选择，编辑与预览显示当前未保存内容 |
