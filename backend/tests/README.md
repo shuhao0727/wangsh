@@ -1,10 +1,18 @@
 # 后端测试说明
 
-`backend/tests/` 只放 pytest 用例本体。专项 smoke/soak 脚本不放这里，统一收敛到 [`../scripts/README.md`](../scripts/README.md) 和 [`../../scripts/README.md`](../../scripts/README.md)。
+`backend/tests/` 只放测试用例本体。专项 smoke/soak 脚本不放这里，统一收敛到 [`../scripts/README.md`](../scripts/README.md) 和 [`../../scripts/README.md`](../../scripts/README.md)。
 
 > 安全前置：本页测试选择和历史命令仅供已核验的隔离运行器使用。必须在导入 app 和 pytest collection 前禁用 dotenv、注入合成配置并限制网络；不得在普通 shell 直接运行全量或整个 auth 目录，使测试连接正常 `settings` 数据库。
 
 `core/test_config_optional_scoring_agent.py` 独立加载服务配置字段，验证评分智能体 ID 的空值、环境变量及正整数约束；不导入全局 Settings。运行仍应禁用正常 conftest、dotenv 和网络，避免 collection 环境带入业务配置。
+
+## KNN 采集隔离回归
+
+`it/test_knn_collection_isolated.py` 使用 unittest、真实 PostgreSQL 事务和 HTTPX ASGITransport，覆盖学号规范化、严格字段与时间窗、并发防重和幂等、重填授权及历史版本、取消回滚、名单变更原子性、CSV 和冻结匿名数据。功能与迁移合同见 [KNN_SURVEY](../../docs/features/KNN_SURVEY.md)。
+
+仅由已审查的外部 bootstrap 执行：导入 app 前清空继承环境，禁用 dotenv/secrets 和正常 conftest，注入合成配置；运行环境必须是本批专用 PostgreSQL 的 `network=none` 隔离命名空间，无正常业务数据卷、宿主端口或 Docker socket。测试仅允许连接 `127.0.0.1:5432/knn_collection_test`，逐例创建并清理独立 schema。`KNN_ISOLATED_TEST=1` 和连接目标校验只是附加守卫，不构成独立隔离；不要在普通 shell 或正常开发容器中直接运行本文件。
+
+本专项直接执行增量 migration 的 upgrade/downgrade/upgrade，前置仅合成 `sys_users`，不加载正常 Alembic `env.py`；权限用例使用合成身份和真实 staff/归属守卫，不能代替完整历史迁移链、真实 JWT 登录、浏览器或部署验收。当前外部运行器、结果与证据位置只维护在 [TEST_STATUS](../../docs/docker/testing/TEST_STATUS.md)。
 
 ## 风险收口专项的隔离要求（2026-09-09）
 
@@ -59,7 +67,7 @@ tests/
 ├── core/              # 核心依赖、限流、缓存、会话守卫
 ├── group_discussion/  # 小组讨论访问控制、成员切换、消息流
 ├── informatics/       # Typst 笔记与 PDF 渲染
-├── it/                # IT 游戏资源上传、下载和安全校验
+├── it/                # IT 游戏资源、KNN 采集及隔离合同
 ├── pythonlab/         # 沙箱、WebSocket、流程图、DAP 和资源限制
 ├── system/            # feature flags、metrics、迁移、bootstrap、生产 smoke 和治理合同
 ├── users/             # 用户 CRUD 与导入

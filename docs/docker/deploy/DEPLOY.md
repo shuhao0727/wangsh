@@ -154,7 +154,7 @@ first visible answer、terminal/error、上游取消和 cleanup latency。
 - **域名**: wangsh.cn
 - **SSH 端口**: 6607
 - **用户**: shuhao
-- **当前镜像版本**: 2.1.5（Docker 镜像标签 `2.1.5`；本轮未部署服务器，实际运行版本须在部署前核对）
+- **当前发布目标**: 2.1.6（Docker 镜像标签 `2.1.6`；镜像发布完成以 release-set 为准，本轮不部署服务器，实际运行版本须在部署前核对）
 
 ### 快速连接
 ```bash
@@ -242,13 +242,13 @@ bash scripts/deploy.sh deploy
 `scripts/check-version-consistency.mjs` 阻止版本漂移：
 
 ```bash
-APP_VERSION=2.1.5
-IMAGE_TAG=2.1.5
-REACT_APP_VERSION=2.1.5
+APP_VERSION=2.1.6
+IMAGE_TAG=2.1.6
+REACT_APP_VERSION=2.1.6
 IMAGE_REPOSITORY_PREFIX=shuhao07
 ```
 
-`frontend/package.json` 的 `version` 是完整 SemVer（如 `2.1.5`）的权威源；
+`frontend/package.json` 的 `version` 是完整 SemVer（如 `2.1.6`）的权威源；
 `IMAGE_TAG`、release-set、`APP_VERSION`、`VERSION`（如配置）和 `REACT_APP_VERSION`
 必须使用同一个完整版本号。`check-version-consistency.mjs` 与 `verify-release-set` 均按完全一致
 校验，避免补丁版本复用旧镜像标签或同标签镜像漂移。
@@ -270,6 +270,10 @@ IMAGE_REPOSITORY_PREFIX=shuhao07
 - 清理既有长标签、工作树名称或多余 `latest` 时，先核对容器实际 Image ID、有效 Compose 和 PythonLab 按需创建的镜像引用，再迁移配置、校验新标签指向，最后移除旧别名。不能只按名称或创建日期删除镜像实体。
 - 基础依赖沿用官方仓库名及上游有效标签，例如 `postgres:16-alpine`、`redis:7-alpine`、`node:20-alpine`、`adminer:4.8.1`。依赖版本独立于应用版本，不统一改成应用的发布 tag，也不为本机架构追加临时 tag 后缀。架构通过 manifest 和 `platform` 选择；异构验证结束后，确认无容器或有效配置引用再清理不再需要的副本。官方依赖按其仓库拉取，不作为 WangSh 自建镜像重复推送。
 - 旧验证镜像保留其真实版本号；是否属于正式发布由源码、构建记录和 release-set 判断，不按标签数字大小推断。历史验证标签不能冒充最新正式版本。
+
+### KNN 采集版本迁移
+
+`2.1.6` 包含 Alembic `20261020_0001`，在 `f1a2b3c4d5e6` 之后新增采集批次、名单与答案版本三张表，不回填既有业务数据。后续服务器部署前按本指南备份并核对迁移状态；应用启动的 `upgrade head` 会创建三表。降级会删除 KNN 数据，回滚有新答卷时应使用配对备份恢复，不能视为无损降级。功能与权限见 [KNN 采集](../../features/KNN_SURVEY.md)。
 
 ### 如何确认当前最新内容
 
@@ -320,12 +324,12 @@ DEBIAN_SECURITY_MIRROR=http://deb.debian.org/debian-security
 ```
 
 构建的镜像列表：
-- `shuhao07/wangsh-backend:2.1.5` - 后端 FastAPI 服务
-- `shuhao07/wangsh-frontend:2.1.5` - 前端静态文件
-- `shuhao07/wangsh-gateway:2.1.5` - Caddy 网关
-- `shuhao07/wangsh-typst-worker:2.1.5` - Typst PDF 编译 worker
-- `shuhao07/wangsh-pythonlab-worker:2.1.5` - PythonLab 调试 worker
-- `shuhao07/pythonlab-sandbox:2.1.5` - PythonLab 沙箱镜像
+- `shuhao07/wangsh-backend:2.1.6` - 后端 FastAPI 服务
+- `shuhao07/wangsh-frontend:2.1.6` - 前端静态文件
+- `shuhao07/wangsh-gateway:2.1.6` - Caddy 网关
+- `shuhao07/wangsh-typst-worker:2.1.6` - Typst PDF 编译 worker
+- `shuhao07/wangsh-pythonlab-worker:2.1.6` - PythonLab 调试 worker
+- `shuhao07/pythonlab-sandbox:2.1.6` - PythonLab 沙箱镜像
 
 ### 2. 本地生产模拟验证
 
@@ -343,7 +347,7 @@ SIM_RUN_PROD_SMOKE=true SIM_CLEANUP=true bash scripts/deploy.sh simulate
 默认模拟参数：
 
 ```bash
-SIM_VERSION=2.1.5
+SIM_VERSION=2.1.6
 SIM_IMAGE_REPOSITORY_PREFIX=shuhao07
 SIM_WEB_PORT=16608
 SIM_RUN_PROD_SMOKE=false
@@ -411,9 +415,9 @@ bash scripts/deploy.sh push
 
 ```bash
 # 确认 .env 使用生产配置
-APP_VERSION=2.1.5
-IMAGE_TAG=2.1.5
-REACT_APP_VERSION=2.1.5
+APP_VERSION=2.1.6
+IMAGE_TAG=2.1.6
+REACT_APP_VERSION=2.1.6
 IMAGE_REPOSITORY_PREFIX=shuhao07
 
 # 将发布 workflow 生成的 release-set.txt 放到仓库根目录。
@@ -507,9 +511,9 @@ docker compose -f docker-compose.dev.yml down
 
 ### 版本配置
 ```bash
-APP_VERSION=2.1.5          # 应用版本号
-IMAGE_TAG=2.1.5             # Docker 镜像标签（完整 SemVer，与 package.json 完全一致）
-REACT_APP_VERSION=2.1.5     # 前端版本号
+APP_VERSION=2.1.6          # 应用版本号
+IMAGE_TAG=2.1.6             # Docker 镜像标签（完整 SemVer，与 package.json 完全一致）
+REACT_APP_VERSION=2.1.6     # 前端版本号
 IMAGE_REPOSITORY_PREFIX=shuhao07  # Docker Hub 镜像命名空间
 ```
 

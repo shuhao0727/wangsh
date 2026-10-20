@@ -42,7 +42,7 @@ super_admin（超级管理员）
 | 课堂互动 | ✅ | ✅ | ✅ |
 | 课堂计划 | ✅ | ✅ | ✅ |
 | 信息学竞赛 | ✅ | ✅ | ✅ |
-| 信息技术管理 | ✅ | ✅ | ❌ |
+| 信息技术（教师直达 KNN 采集） | ✅ | ✅ | ✅（仅 KNN） |
 | 个人程序 | ✅ | ❌ | ❌ |
 | 文章管理 | ✅ | ❌ | ❌ |
 | 系统设置 | ✅ | ❌ | ❌ |
@@ -59,6 +59,11 @@ super_admin（超级管理员）
 | 自适应测评管理 | ✅ | ❌ |
 | 信息学内容 | ✅ | ✅ |
 | IT 内容与资源管理 | ✅ | ❌ |
+| KNN 采集批次与答案 | ✅（全部） | ✅（仅本人批次） |
+
+教师的信息技术菜单指向 `/admin/it-technology?view=knn`，保留已选择的 `batch` 参数。
+仅此视图允许教师访问；无 `view=knn` 的应用目录和 ML 等编辑器继续要求管理员权限，
+应用开关管理继续仅允许 `super_admin`。学生不可进入 KNN 管理视图，填写页免登录。
 
 ### 前端权限
 
@@ -66,6 +71,7 @@ super_admin（超级管理员）
 |------|------|
 | `hooks/useAuth.ts` | `isSuperAdmin()`, `isAdmin()`, `isTeacher()`, `isStaff()`, `isStudent()` |
 | `components/Auth/AdminGuard.tsx` | 路由守卫：`isStaff()` 准入 `/admin/*` |
+| `components/Auth/ITTechnologyGuard.tsx` | IT 根路由按视图区分：KNN 为教职工，应用目录为管理员 |
 | `layouts/AdminLayout.tsx` | 侧边栏白名单：`menuWhitelist` 按角色过滤 |
 | `components/Auth/UserMenu.tsx` | 右上角角色标签 + 后端管理入口 |
 | `pages/Auth/Login.tsx` | 登录成功后按角色跳转 |

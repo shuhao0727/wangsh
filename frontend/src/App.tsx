@@ -8,6 +8,7 @@ import AdminEditorLayout from "@layouts/AdminEditorLayout";
 import AdminGuard from "@components/Auth/AdminGuard";
 import AuthenticatedGuard from "@components/Auth/AuthenticatedGuard";
 import RoleGuard from "@components/Auth/RoleGuard";
+import ITTechnologyGuard from "@components/Auth/ITTechnologyGuard";
 import { IT_GAMES_ADMIN_ROLES } from "@components/Auth/ITGamesAccess";
 import {
   ADMIN_ROLES,
@@ -61,6 +62,7 @@ const TaskAnalysisNewPage = lazy(() => import("./pages/Admin/AgentData/TaskAnaly
 const TaskAnalysisComparePage = lazy(() => import("./pages/Admin/AgentData/TaskAnalysisComparePage"));
 const LockCrackerPage = lazy(() => import("./pages/Games/LockCracker"));
 const GamesPage = lazy(() => import("./pages/Games"));
+const KnnPage = lazy(() => import("./pages/Games/Knn"));
 const GameConfigPage = lazy(() => import("./pages/Games/GameConfig"));
 const GamesRepoPage = lazy(() => import("./pages/ITTechnology/GamesRepo"));
 const AdminGroupDiscussionPage = lazy(() => import("./pages/Admin/GroupDiscussion"));
@@ -144,6 +146,8 @@ function App() {
             <Route path="/task-analysis/chains/:analysisId" element={guarded(ADMIN_ROLES, <PageErrorBoundary pageName="chain-analysis"><ChainAnalysisResultPage /></PageErrorBoundary>)} />
             <Route path="/games/lock-cracker" element={<PageErrorBoundary pageName="lock-cracker"><LockCrackerPage /></PageErrorBoundary>} />
             <Route path="/games" element={<PageErrorBoundary pageName="games"><GamesPage /></PageErrorBoundary>} />
+            <Route path="/games/knn" element={<PageErrorBoundary pageName="knn"><KnnPage /></PageErrorBoundary>} />
+            <Route path="/games/knn/:batchId" element={<PageErrorBoundary pageName="knn"><KnnPage /></PageErrorBoundary>} />
             <Route path="/admin/games/config" element={guarded(ADMIN_ROLES, <PageErrorBoundary pageName="game-config"><GameConfigPage /></PageErrorBoundary>)} />
             <Route path="/mindmaps" element={<PageErrorBoundary pageName="mindmap-gallery"><MindmapGalleryPage /></PageErrorBoundary>} />
             <Route path="/mindmap-preview" element={<PageErrorBoundary pageName="mindmap-preview"><MindmapPreviewPage /></PageErrorBoundary>} />
@@ -177,7 +181,7 @@ function App() {
               <Route path="/admin/agent-data" element={guarded(ADMIN_ROLES, <PageErrorBoundary pageName="admin-agent-data"><AdminAgentDataPage /></PageErrorBoundary>)} />
               <Route path="/admin/group-discussion" element={<PageErrorBoundary pageName="admin-group-discussion"><AdminGroupDiscussionPage /></PageErrorBoundary>} />
               <Route path="/admin/informatics" element={guarded(STAFF_ROLES, <PageErrorBoundary pageName="admin-informatics"><AdminInformaticsPage /></PageErrorBoundary>)} />
-              <Route path="/admin/it-technology" element={guarded(IT_TECHNOLOGY_MANAGEMENT_ROLES, <PageErrorBoundary pageName="admin-it-technology"><AdminITTechnologyPage /></PageErrorBoundary>)} />
+              <Route path="/admin/it-technology" element={<ITTechnologyGuard><PageErrorBoundary pageName="admin-it-technology"><AdminITTechnologyPage /></PageErrorBoundary></ITTechnologyGuard>} />
               <Route
                 path="/admin/it-technology/games"
                 element={

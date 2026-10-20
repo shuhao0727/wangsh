@@ -5,6 +5,13 @@
  * structure is consistent and refactors are safe.
  */
 export const queryKeys = {
+  knn: {
+    all: ["knn"] as const,
+    publicList: () => ["knn", "public"] as const,
+    publicBatch: (id: string) => ["knn", "public", id] as const,
+    staff: (userId: number | undefined) => ["knn", "staff", userId] as const,
+    detail: (userId: number | undefined, id: string) => ["knn", "staff", userId, id] as const,
+  },
   // ── Agent Data (UsageRecordPanel + DetailModal) ──
   agentData: {
     all: ["agent-data"] as const,

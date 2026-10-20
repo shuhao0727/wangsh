@@ -24,6 +24,7 @@ from app.api.endpoints.admin_stream import router as admin_stream_router
 from app.api.endpoints.learning import router as learning_router
 from app.api.endpoints.ml import router as ml_router
 from app.api.endpoints.it import router as it_games_router, admin_router as it_games_admin_router
+from app.api.endpoints.it.knn import router as knn_router, admin_router as knn_admin_router
 
 api_router = APIRouter()
 
@@ -50,5 +51,7 @@ api_router.include_router(learning_router, tags=["learning"])
 api_router.include_router(ml_router, tags=["ml-book"])
 api_router.include_router(it_games_router, tags=["it-games"])
 api_router.include_router(it_games_admin_router, tags=["admin-it-games"])
+api_router.include_router(knn_router, tags=["knn"])
+api_router.include_router(knn_admin_router, tags=["admin-knn"])
 
 api_router.include_router(ai_partner_router, tags=["ai-partner"], prefix="/ai-partner")
