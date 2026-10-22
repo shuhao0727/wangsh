@@ -5,7 +5,7 @@
 服务器使用独立发布目录保留原仓库和生产配置差异。当前目录见 `TEST_STATUS.md`；运维前先核对容器的 Compose working_dir/config_files 标签和实际 Image ID。后续操作从当前发布目录执行：
 
 ```bash
-cd /home/shuhao/wangsh-releases/2.1.7/source
+cd /home/shuhao/wangsh-releases/2.1.8/source
 docker compose --env-file .env -p wangsh -f docker-compose.production.yml ps
 COMPOSE_PROJECT_NAME=wangsh ENV_FILE=.env COMPOSE_FILE=docker-compose.production.yml bash scripts/health-check-detailed.sh
 ```
