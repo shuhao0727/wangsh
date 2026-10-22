@@ -74,6 +74,35 @@ def apply_common_filters(
     return stmt
 
 
+async def _active_parents(
+    db: AsyncSession, model, field: str, keys: list, *, lock: bool,
+) -> tuple[set, Dict[tuple[str, str, str], str]]:
+    """返回有效的父实体自然键集合；课程额外返回开设年级映射。"""
+    active: set = set()
+    grades: Dict[tuple[str, str, str], str] = {}
+    if lock:
+        parents = await lock_key_rows(db, model, ("year", "term", field), keys, shared=True)
+        for row in parents:
+            if row.is_deleted:
+                continue
+            active.add((row.year, row.term, getattr(row, field)))
+            if model is XbkCourse and row.grade:
+                grades[(row.year, row.term, row.course_code)] = row.grade
+        return active, grades
+    for offset in range(0, len(keys), 500):
+        columns = (model.year, model.term, getattr(model, field))
+        select_columns = (*columns, model.grade) if model is XbkCourse else columns
+        result = await db.execute(select(*select_columns).where(
+            model.is_deleted.is_(False),
+            tuple_(*columns).in_(keys[offset:offset + 500]),
+        ))
+        for record in result.all():
+            active.add((record[0], record[1], record[2]))
+            if model is XbkCourse and len(record) > 3 and record[3]:
+                grades[(record[0], record[1], record[2])] = record[3]
+    return active, grades
+
+
 async def selection_reference_errors(
     db: AsyncSession, rows: List[Dict[str, Any]], *, lock: bool = False,
 ) -> List[List[str]]:
@@ -96,33 +125,23 @@ async def selection_reference_errors(
             (row["year"], row["term"], row[field]) for row in rows
             if field != "course_code" or row[field] not in UNSELECTED_COURSE_CODES
         ))
-        active = set()
-        if lock:
-            parents = await lock_key_rows(db, model, ("year", "term", field), keys, shared=True)
-            active.update((row.year, row.term, getattr(row, field))
-                          for row in parents if not row.is_deleted)
-            if model is XbkCourse:
-                course_grades.update({
-                    (row.year, row.term, row.course_code): row.grade
-                    for row in parents if not row.is_deleted and row.grade
-                })
-        else:
-            for offset in range(0, len(keys), 500):
-                columns = (model.year, model.term, getattr(model, field))
-                select_columns = (*columns, model.grade) if model is XbkCourse else columns
-                result = await db.execute(select(*select_columns).where(
-                    model.is_deleted.is_(False),
-                    tuple_(*columns).in_(keys[offset:offset + 500]),
-                ))
-                for record in result.all():
-                    active.add((record[0], record[1], record[2]))
-                    if model is XbkCourse and len(record) > 3 and record[3]:
-                        course_grades[(record[0], record[1], record[2])] = record[3]
+        active, grades = await _active_parents(db, model, field, keys, lock=lock)
+        course_grades.update(grades)
         for index, row in enumerate(rows):
             if field == "course_code" and row[field] in UNSELECTED_COURSE_CODES:
                 continue
             if (row["year"], row["term"], row[field]) not in active:
                 errors[index].append(f"{label}不存在（{advice}；须为同学年、同学期且未删除）")
+    _append_grade_scope_errors(rows, course_grades, errors)
+    return errors
+
+
+def _append_grade_scope_errors(
+    rows: List[Dict[str, Any]],
+    course_grades: Dict[tuple[str, str, str], str],
+    errors: List[List[str]],
+) -> None:
+    """课程只面向开设年级；与执行阶段共用同一文案。"""
     for index, row in enumerate(rows):
         if row.get("course_code") in UNSELECTED_COURSE_CODES:
             continue
@@ -133,4 +152,3 @@ async def selection_reference_errors(
                 f"课程 {row['course_code']} 仅面向 {scope} 开设，"
                 f"不能分配给 {student_grade} 的学生"
             )
-    return errors
