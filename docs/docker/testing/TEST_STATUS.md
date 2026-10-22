@@ -2,17 +2,21 @@
 
 > 状态：active
 > Owner：testing
-> 当前版本：2.1.8 修复候选；生产当前 2.1.7，发布结果见本页后续记录
+> 当前版本：生产正式 2.1.8；源码、镜像与运行身份见本页发布记录
 > 最近更新：2026-10-23
 > 说明：本文件是当前测试事实的唯一汇总入口；阶段报告只引用本页，不复制新基线。
 
-## 2026-10-23 KNN HTTP UUID 兼容修复（2.1.8 候选）
+## 2026-10-23 KNN HTTP UUID 修复与生产部署 2.1.8（已完成）
 
 - **问题与范围：** 学生在普通 HTTP 域名点击“核对内容”时，`crypto.randomUUID` 不存在而抛错。仅调整前端请求 UUID 生成与可恢复错误处理，并同步发布版本；后端接口、数据库字段和 Alembic 均未改变。
 - **回归：** UUID 原生分支、HTTP 随机字节分支、随机源缺失、HTTP 确认与网络重试、草稿/学号/批次结束等针对性测试共 **8 项通过**；TypeScript 检查、改动文件 ESLint、生产构建与版本一致性通过。首轮新增重试用例预期原始异常文案，与已有统一错误提示不符；修正测试期望后复验通过。
 - **Chrome 普通 HTTP：** 在回环监听的隔离页面通过 `http://0.0.0.0` 访问，实测 `isSecureContext=false`、`randomUUID=undefined`、`getRandomValues=function`。以真实 pointer 点击可见选项，完整验证填写、核对、模拟首次提交 503、重试成功；两次请求对象完全相同，UUID v4 合法，六项答案含 0/7 边界值且不变，pageerror 为 0。全部 API 被隔离模拟，没有写真实学生答卷；首轮驱动点击隐藏 input 被 label 遮挡，改为点击真实可见选项后通过。截图与执行记录在仓库外 `wangsh-knn-http-uuid-20261023` 证据目录。
-- **文档门禁：** 当前派生摘要 `141 files / 663 links / 0 missing`；原版本的派生数字保留为历史快照。
-- **发布边界：** 当前尚未推送修复镜像或切换服务器，后续发布清单和上线结果完成后补入本节。
+- **文档门禁：** 当前派生摘要 `141 files / 665 links / 0 missing`；收尾首轮因新增链接使派生统计过期，更新后复验通过，原版本数字保留为历史快照。
+- **源码与镜像：** 修复提交 `b2d97a7ca2df2e7b65c4e851b2b45f4fad7a53c4` 已由 [PR #12](https://github.com/shuhao0727/wangsh/pull/12) 合并，GitHub 六项检查全部通过（含完整前后端质量与两项 PythonLab runtime）。frontend 按上一版固定 Node/Caddy 基础 digest 重新构建，正式镜像本体也通过上述 Chrome HTTP 流程；其余五组件源码树未变，明确固定复用 2.1.7 digest，并以 `--prefer-index=false` 建立同内容的 2.1.8 标签，没有冒称重新构建。六镜像 `linux/amd64`、manifest、服务器 RepoDigest 与实际容器 Image ID 均与清单一致，标准 GitHub 镜像 workflow 未在本轮执行。
+- **备份与恢复：** 两次核对任务、队列与学生沙箱为空后停流，最终 PostgreSQL 自定义备份 **20,417,072 bytes** 且目录可读；七份数据/SQL 备份均有大小和 SHA-256。无网络专用 PostgreSQL 恢复后，**54 张表和 49 个序列**一致；新版 backend 启动后、开放网关前再次比对一致。无新增 migration，生产仍为 `20261020_0001`。离机七文件校验全部一致，归档 SHA-256 为 `1cd2f93068c06e51eaae233537e9c0e1e444e8c38f68dccdeed0682961f5cdee`。
+- **上线验收：** **2026-10-23 07:42:53（Asia/Shanghai）**完成切换，API 与详细健康为 healthy，公网版本为 `2.1.8`。六业务容器 RestartCount=0，启动日志未见 ERROR/CRITICAL/Traceback/HTTP 5xx；PostgreSQL/Redis 容器 ID、四个 named volumes、网络/端口、生产配置差异及 workspace/ownership 均保留，UID1000 可打开原锁，未修改锁 inode 或权限。
+- **公网浏览器复验：** 在真实 `http://wangsh.cn:6608` 静态页面上隔离模拟 API，再次通过完整填写、核对、模拟 503 与重试成功；原生 `randomUUID` 仍为 undefined、pageerror 为 0，证明已经发布的静态代码在普通 HTTP 下可用。所有模拟 POST 均被浏览器拦截，没有新增真实学生答卷；真实业务 API 写入不在该浏览器复验范围。
+- **发布与回滚：** 当前目录 `/home/shuhao/wangsh-releases/2.1.8/source`，使用 `.env`、`docker-compose.production.yml`、project `wangsh`。旧 2.1.7 目录/镜像保留，服务器证据 `/home/shuhao/wangsh-deploy-evidence/2.1.8-20261023`，本机证据 `/Users/wsh/.codex/artifacts/wangsh-knn-http-uuid-20261023`，离机备份 `/Users/wsh/.local/share/wangsh-production-backups/2.1.8-20261023`。发布清单和来源记录随 [GitHub Release v2.1.8](https://github.com/shuhao0727/wangsh/releases/tag/v2.1.8) 附上。
 
 ## 2026-10-22 生产部署 2.1.7（已完成）
 
