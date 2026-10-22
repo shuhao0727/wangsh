@@ -1,5 +1,22 @@
 # 部署指南
 
+## 生产发布目录与运行身份
+
+服务器使用独立发布目录保留原仓库和生产配置差异。当前目录见 `TEST_STATUS.md`；运维前先核对容器的 Compose working_dir/config_files 标签和实际 Image ID。后续操作从当前发布目录执行：
+
+```bash
+cd /home/shuhao/wangsh-releases/2.1.6/source
+docker compose --env-file .env -p wangsh -f docker-compose.production.yml ps
+COMPOSE_PROJECT_NAME=wangsh ENV_FILE=.env COMPOSE_FILE=docker-compose.production.yml bash scripts/health-check-detailed.sh
+```
+
+生产适配 Compose 显式引用原有四个 external named volumes、原网络和绝对 PythonLab workspace；不得用仓库默认 bind 数据目录替代。基础设施继续使用原容器，更新应用时在完成镜像/迁移准入后，按服务使用 `up -d --no-deps --no-build --pull never`，并依次等待后端、worker、网关健康。旧 `/home/shuhao/wangsh` 的 `.env`/Compose 保留，不是本次当前启动配置；既有定时脚本仅 `compose restart`，不会重建或降版镜像。
+
+backend 与 PythonLab worker 使用同一 `1000:1000` 身份，并保留 socket 补充组。已有 root 属主工作区须先停写、配对备份与逐对象元数据盘点，再按必要清单原位调整；不得递归修改整个 data、删除业务锁、重写 journal 或扩大私有模式。
+
+此发布目录的 `scripts/deploy.sh` 相比归档源只增加显式 `REGISTRY_INSPECT_PREFIX`，用于 manifest 查询前缀；生产入口设置 `REGISTRY_INSPECT_PREFIX=docker.1ms.run`。它不改变 release-set/Compose 镜像名，registry 与本地 digest 仍须逐一严格匹配；不自动 fallback，不据镜像已缓存跳过核验。该现场适配尚未作为源码改动提交到 Git。
+
+
 ## Redis 连接工厂基础（未发布）
 
 缓存客户端通过 redis-py 原生证书参数构造 TLS，不传 `ssl_context`。
@@ -277,6 +294,14 @@ IMAGE_REPOSITORY_PREFIX=shuhao07
 - 清理既有长标签、工作树名称或多余 `latest` 时，先核对容器实际 Image ID、有效 Compose 和 PythonLab 按需创建的镜像引用，再迁移配置、校验新标签指向，最后移除旧别名。不能只按名称或创建日期删除镜像实体。
 - 基础依赖沿用官方仓库名及上游有效标签，例如 `postgres:16-alpine`、`redis:7-alpine`、`node:20-alpine`、`adminer:4.8.1`。依赖版本独立于应用版本，不统一改成应用的发布 tag，也不为本机架构追加临时 tag 后缀。架构通过 manifest 和 `platform` 选择；异构验证结束后，确认无容器或有效配置引用再清理不再需要的副本。官方依赖按其仓库拉取，不作为 WangSh 自建镜像重复推送。
 - 旧验证镜像保留其真实版本号；是否属于正式发布由源码、构建记录和 release-set 判断，不按标签数字大小推断。历史验证标签不能冒充最新正式版本。
+
+### 本地只保留最新正式镜像
+
+- 先按目标 release-set 拉齐整组业务镜像并核验 digest，再盘点所有容器的实际 Image ID，以及 PythonLab 按需创建沙箱的镜像配置。必要的官方基础镜像与业务数据不属于项目旧版镜像。
+- 退役历史验证栈前保存有效配置与数据库备份，确认没有待处理任务；容器和专用网络可以移除，数据卷与绑定业务目录按确认的范围保留。
+- 运行中的开发服务若需更换镜像，应保留源码挂载、数据路径、启动命令、用户及业务环境配置，逐项比较后使用 `up --no-deps --no-build --pull never` 只替换目标服务。使用正式镜像作为运行基础的源码挂载环境仍是开发环境，不能作为正式发布部署的验收证据。
+- 本地覆盖配置应记录其路径和完整启动方式，后续复用这些容器时沿用同一配置。标准开发入口仍可按需重新构建新的 `:dev`，不能据此把已删除的历史镜像视为仍在使用。
+- 通过 HTTP readiness、worker 响应及相关基础执行检查后，再按精确标签删除无容器引用的旧镜像；不使用强制删除或全局 prune 代替范围核对。操作结果写入 `TEST_STATUS.md`，完整快照与备份保存在受限权限的仓库外目录。
 
 ### KNN 采集版本迁移
 

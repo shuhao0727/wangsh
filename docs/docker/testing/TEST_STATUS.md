@@ -2,9 +2,21 @@
 
 > 状态：active
 > Owner：testing
-> 当前版本：2.1.6 镜像已发布（服务器尚未部署；本机仍使用现有运行基础）
-> 最近更新：2026-10-20
+> 当前版本：GitHub 主线与 Docker Hub 2.1.7；生产运行 2.1.6（待本次升级）
+> 最近更新：2026-10-22
 > 说明：本文件是当前测试事实的唯一汇总入口；阶段报告只引用本页，不复制新基线。
+
+## 2026-10-20 生产部署 2.1.6（已完成）
+
+- **文档收尾：** 当前工作树 Markdown 合同为 `135 files / 511 links / 0 missing`，历史发布前检查数字保留。
+
+- **环境与镜像：** 生产主机 `wangsh-server`，对外入口 `http://wangsh.cn:6608`；正式源码 `542c0d8e20832c8e367bac43a81e4c365ce1c949`，发布 workflow `39381756718`。六个 `:2.1.6` 镜像的 registry manifest、拉取后 RepoDigest、实际容器 Image ID 与 release-set 一致，平台为 `linux/amd64`。服务器使用 `9b69ec3831fd4eac74f049fbf4b7a5848a9935a7` 文档收尾树的源码归档；业务镜像来源仍为前述构建提交。
+- **维护与备份：** 任务 active/reserved/scheduled、两个队列和运行中的学生沙箱均为空后停止 gateway/backend/两个 worker；最终 PostgreSQL 自定义备份为 **20,092,728 bytes**，目录可读。Redis SAVE 后停止，备份其卷、上传、Typst PDF、PythonLab workspace/ownership、原配置、角色与旧 release-set。七份数据/SQL 备份均有大小和 SHA-256；本机离机归档的逐项校验全部一致。原服务器 `.env`、Compose 和已暂存差异完整保留。
+- **恢复与迁移：** 在本次专用、无发布端口且 `network none` 的 PostgreSQL 中恢复最终备份，49 张原表内容摘要和 45 个序列一致；执行五步升级及 bootstrap 后，按原列再次比较一致。随后完整恢复旧备份并再次比较一致，仅清理该演练容器和卷。生产同样通过预检、initial-only、五步升级及 bootstrap，目标为 `20261020_0001`，KNN 三表齐全；原表/序列内容核对通过。迁移实际连接已核验 5 秒锁超时、120 秒语句超时，未用降级删除业务数据。
+- **配置与 PythonLab：** 保留四个 named volumes、现有网络/端口、Redis alias、PG max_connections、Typst 768 MiB、worker 并发和无 Beat 策略。两个 ownership writer 统一 UID/GID 1000；备份后只对清单中 1,089 个必要目录/运行文件/锁/journal 原位调整属主，inode、mode 和 journal 内容摘要不变。服务器实际文件系统完成两个镜像双向同 inode flock 排他/释放重获，并验证 UID 1000 的 Docker socket 访问；合成探针已清理，业务锁未删除。
+- **上线验收：** 2026-10-20 16:17（Asia/Shanghai）详细健康状态为 healthy，七个受检服务全部 healthy；六个业务容器 RestartCount 均为 0，PostgreSQL/Redis 容器 ID 未变。API 报告生产 `2.1.6`；本机经公网访问版本、`/games`、`/games/knn` 均成功，服务端 KNN 列表 API 为 HTTP 200。六服务启动日志未发现 ERROR/CRITICAL/Traceback/HTTP 5xx。
+- **证据与启动入口：** 服务器当前发布目录 `/home/shuhao/wangsh-releases/2.1.6/source`，使用其 `.env`、`docker-compose.production.yml`、project `wangsh`；旧仓库保留为原配置与 Git 状态，后续升级不得误用旧 `.env`。服务器受限证据 `/home/shuhao/wangsh-deploy-evidence/2.1.6-20261020`；离机备份 `/Users/wsh/.local/share/wangsh-production-backups/2.1.6-20261020`，归档 SHA-256 `cc577fc6eced03046ff42fbcf6cd6b78e966ecfaf1ac331a86491ca1a4c0645b`。
+- **边界与重试：** 本轮未调用真实模型、提交学生答卷或重跑全量 CI。首次隔离升级因 localhost 被应用设置改写为 Docker 服务名而失败，修正为专用容器回环地址后完整通过；失败日志保留。IAB 公网页面导航超时，浏览器渲染/完整登录后的操作未在本轮复验；公网 HTTP、实际静态镜像与此前发布前浏览器验收分别记录。
 
 ## 2026-10-21 XBK 导入导出、年级语义与前端交互修复（未发布）
 
@@ -132,6 +144,33 @@
 - **文档检查：** Markdown 派生摘要为 `137 files / 534 links / 0 missing`；文档和配置 diff 无空白错误。
 - **边界：** 本节记录依赖整理前的状态；后续 Docker Hub 发布核对和依赖标签整理以本页顶部的最新条目为准。
 
+
+## 2026-10-19 本机退役 2.1.4 并切换正式镜像 2.1.5（已完成）
+
+- **正式镜像核验：** 从 Docker Hub 按发布清单逐个拉取六个 `shuhao07/*:2.1.5` 镜像；远端 tag、拉取后的 RepoDigest 均与 `.codex/releases/2.1.5/release-set.txt` 一致，平台为 `linux/amd64`。发布源码为 `d078fec19cc6500d39e08ac55ddbf4ab8c079003`；本地同版本候选标签已替换为清单指定的正式镜像，未推送或覆盖远端标签。
+- **服务切换：** 仅重建 backend、typst-worker、pythonlab-worker，使用正式 `2.1.5` 作为源码挂载开发环境的运行基础；后端和 PythonLab worker 的按需沙箱引用同步为 `shuhao07/pythonlab-sandbox:2.1.5`。配置比对确认只有镜像、`APP_VERSION`、`PYTHONLAB_SANDBOX_IMAGE` 改变，命令、用户、工作目录、挂载及其他业务环境配置保持。PostgreSQL、Redis、前端与 Adminer 四个容器 ID 未变，全部六个数据卷和原有网络保留。
+- **精确删除：** 上轮已移除旧前端/网关；本轮进一步删除剩余四个 `2.1.4` 镜像及六个被正式镜像替代的本地候选镜像。本机仅余六个正式 `2.1.5` 业务镜像与四个官方依赖，`2.1.4` 和 dangling 镜像均为零；未使用强制删除或全局 prune，共享 BuildKit 缓存保留。
+- **备份与数据：** 开发库已完成 `pg_dump -Fc`，文件非空且 `pg_restore --list` 可读取目录；未执行恢复演练。切换前后 51 张表的逐表记录数一致，合计 65 行，结构摘要与 Alembic revision `f1a2b3c4d5e6` 均不变，未执行数据库迁移。切换前两个 worker 的 active/reserved/scheduled 均为零。
+- **运行验证：** 七个容器全部运行且重启计数为零，四个有健康检查的服务均 healthy；首页、直接与前端代理的健康接口均 HTTP 200，API 显示 `2.1.5`。两个 Celery worker 均响应 `pong`，分别监听 `celery` / `typst`；Typst 实际生成有效 PDF，`linux/amd64` 沙箱在无网络、只读根文件系统和非 root 用户下执行 Python 并导入 debugpy。新应用容器启动后的日志未发现 ERROR / CRITICAL / Traceback 或 HTTP 5xx。
+- **证据与复用：** 备份、配置前后快照、digest 核验、删除日志和验证结果位于 `/Users/wsh/.codex/artifacts/wangsh-retire-2.1.4-20261019/`。当前覆盖文件仍为 `.codex/docker-release-only-2026-10-18/compose.release-images.yml`，内容已更新为 `2.1.5`；完整复用命令与接力摘要见 `.codex/docker-release-only-2026-10-19/HANDOFF.md`。原有源码及未提交改动保留。
+- **边界：** 本轮只操作本机，没有删除 Docker Hub 历史标签、部署服务器、提交/推送代码或验证真实模型与完整浏览器业务链路；前端仍由原开发容器提供，不将基础检查视为正式前端镜像部署或视觉验收。
+
+## 2026-10-19 本机 Docker 精确清理（已完成）
+
+- **删除范围：** 仅删除确认无容器引用、也未被当前 Compose/覆盖配置使用的 `shuhao07/wangsh-frontend:2.1.4`、`shuhao07/wangsh-gateway:2.1.4`，以及本轮检查临时拉取的 `alpine:3.20`。均为精确 `docker image rm --no-prune`，没有使用全局 prune 或强制删除。
+- **保留范围：** 运行中的 `2.1.4` 后端、Typst worker、PythonLab worker 及其按需沙箱 `shuhao07/pythonlab-sandbox:2.1.4` 保留；本地 `2.1.5` 六个镜像候选保留但未视作已核实正式发布；`postgres:16-alpine`、`redis:7-alpine`、`node:20-alpine`、`adminer:4.8.1`、6 个卷、活动网络和共享 BuildKit 缓存均保留。
+- **运行验证：** 7 个原容器 ID 未变且全部运行，后端、PostgreSQL、Redis 和前端健康状态正常；首页、前端代理健康接口、后端健康接口均返回 HTTP 200，接口版本为 `2.1.4`；PythonLab 与 Typst Celery worker 均返回 `pong`，两个节点在线。
+- **现场事件：** 清理后的并行复核期间观察到现有 7 个容器均已停止，原因未确认；未重建或替换容器，按原容器 ID 依次启动后完成上述检查，当前重启计数均为 0。该事件不改变镜像删除范围。
+- **当前余量：** 业务旧版中仍被运行配置引用的 4 个 `2.1.4` 镜像继续保留；未发现 dangling 镜像。BuildKit 约 4.8 GB 为共享 builder 缓存，未做全局清理。
+
+## 2026-10-18 本地仅保留正式版 2.1.4（已执行）
+
+- **镜像整理：** 六个 `shuhao07/*:2.1.4` 均与归档 release-set 的 digest 一致；精确删除三个旧 `:dev` 和六个历史验证 `:2.2.0` 镜像，无强制删除。当前项目镜像仅六个正式版，另保留必要的官方基础镜像。
+- **运行栈：** 退役 `wangsh-remediation-v9` 的七个容器及专用网络；开发后端与两个 worker 改用正式镜像作运行基础，源码挂载、数据目录、命令、用户及业务环境配置保留，仅调整版本与沙箱镜像。PostgreSQL、Redis、前端和 Adminer 容器未重建，全部六个原有数据卷保留。
+- **已验证：** 本地首页、后台页面 HTML、直接与前端代理的健康接口均 HTTP 200；后端 readiness 为 healthy，两个 Celery worker 分别响应并监听 `celery` / `typst` 队列，三个替换容器重启次数均为零。Typst 实际生成 PDF，沙箱在无网络、只读根文件系统下完成基础 Python 执行；切换后的三个服务日志未发现 ERROR / CRITICAL / Traceback 或 5xx。
+- **数据核对：** 开发库 51 张表的逐表记录数不变，合计 64 行；归一化 schema 摘要及 Alembic revision `f1a2b3c4d5e6` 不变。两套数据库已分别完成自定义格式备份、非空与目录读取校验，未做恢复演练。
+- **证据与启动：** 受限权限证据、备份及切换前配置位于 `/Users/wsh/.codex/artifacts/wangsh-release-only-20261018/continuation-220056/`；本地启动覆盖文件及完整复用命令见 `.codex/docker-release-only-2026-10-18/HANDOFF.md`。覆盖文件显式保留活动工作树的 PythonLab 工作目录及当前跨域配置。
+- **边界：** 本节记录 Docker Hub 发布核对前的本机镜像整理与基础运行验证；后续发布状态以本页顶部条目为准。服务器仍未部署，未运行数据库迁移、未验证真实模型请求或完整业务/浏览器调试链路。前端仍由原开发容器提供源码页面，不把本轮 HTTP 检查描述为正式前端镜像或视觉验收。
 
 ## 2026-10-18 v2.1.4 检查与镜像推送（完成，服务器未部署）
 
