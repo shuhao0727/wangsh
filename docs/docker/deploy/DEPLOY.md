@@ -5,7 +5,7 @@
 服务器使用独立发布目录保留原仓库和生产配置差异。当前目录见 `TEST_STATUS.md`；运维前先核对容器的 Compose working_dir/config_files 标签和实际 Image ID。后续操作从当前发布目录执行：
 
 ```bash
-cd /home/shuhao/wangsh-releases/2.1.6/source
+cd /home/shuhao/wangsh-releases/2.1.7/source
 docker compose --env-file .env -p wangsh -f docker-compose.production.yml ps
 COMPOSE_PROJECT_NAME=wangsh ENV_FILE=.env COMPOSE_FILE=docker-compose.production.yml bash scripts/health-check-detailed.sh
 ```
@@ -302,6 +302,10 @@ IMAGE_REPOSITORY_PREFIX=shuhao07
 - 运行中的开发服务若需更换镜像，应保留源码挂载、数据路径、启动命令、用户及业务环境配置，逐项比较后使用 `up --no-deps --no-build --pull never` 只替换目标服务。使用正式镜像作为运行基础的源码挂载环境仍是开发环境，不能作为正式发布部署的验收证据。
 - 本地覆盖配置应记录其路径和完整启动方式，后续复用这些容器时沿用同一配置。标准开发入口仍可按需重新构建新的 `:dev`，不能据此把已删除的历史镜像视为仍在使用。
 - 通过 HTTP readiness、worker 响应及相关基础执行检查后，再按精确标签删除无容器引用的旧镜像；不使用强制删除或全局 prune 代替范围核对。操作结果写入 `TEST_STATUS.md`，完整快照与备份保存在受限权限的仓库外目录。
+
+### 已推送候选镜像的发布核对
+
+既有手工构建/推送的候选不能仅凭版本 tag 或健康接口进入生产。应独立核对镜像中的打包源码；前端须按相同构建参数重新构建并逐项比较静态文件哈希。确认源码、平台与 registry digest 后生成完整 release-set，再通过正常的清单、本地 RepoDigest、生产配置、配对备份与恢复验证门禁。发布记录必须标明实际构建路径，不得将未执行的标准 workflow 记为构建来源。
 
 ### KNN 采集版本迁移
 

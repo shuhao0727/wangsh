@@ -2,9 +2,21 @@
 
 > 状态：active
 > Owner：testing
-> 当前版本：GitHub 主线与 Docker Hub 2.1.7；生产运行 2.1.6（待本次升级）
+> 当前版本：生产正式 2.1.7；源码、镜像与运行身份见本页发布记录
 > 最近更新：2026-10-22
 > 说明：本文件是当前测试事实的唯一汇总入口；阶段报告只引用本页，不复制新基线。
+
+## 2026-10-22 生产部署 2.1.7（已完成）
+
+- **文档收尾：** 当前 Markdown 合同为 `141 files / 662 links / 0 missing`，十项合同测试与 diff whitespace 复验通过；首轮因派生统计未更新而失败，更新后复验，不将首轮失败记为通过。
+- **源码与发布身份：** 业务源码为 `7b91a7d55cf2a7c69d21fd52bff58b9cf181ab0e`（PR #9）；部署源码归档为 `15e23ee597de57ff995fbca1747aa5fc581796f7`，它只补充此前生产部署与本地镜像记录，已由 [PR #10](https://github.com/shuhao0727/wangsh/pull/10) 合入主线。保留主目录原有十个未提交文件，没有把旧工作区的 UI 草稿覆盖到新版主线。
+- **镜像与源码核对：** 六个 `shuhao07/*:2.1.7` 镜像来自既有本地构建推送，本轮没有重跑标准 `dockerhub-amd64` workflow。发布前验证 Docker Hub manifest、`linux/amd64`、服务器拉取后的 RepoDigest 与实际容器 Image ID 均对应本次清单；backend 的 421 个打包源码文件、两个 worker 各 413 个源码文件与主线相同。从当前源码重新 Docker 构建 frontend 后，289 个静态文件逐一哈希相同，252 个 Vite manifest 条目一致。清单随 [GitHub Release v2.1.7](https://github.com/shuhao0727/wangsh/releases/tag/v2.1.7) 发布。
+- **检查与配置：** 本地 Markdown 合同、十项合同测试、版本一致性、前端类型检查与生产构建通过；PR #10 的 Markdown 检查通过。正式业务源码此前主线的 ci-quality 已通过，本轮未额外重跑全量业务测试。生产 Compose 对照确认仅版本与六镜像变化，四个 external named volumes、网络、端口、Redis alias、PG max_connections、Typst 内存、worker 并发、UID/GID 1000 与绝对 PythonLab workspace 保持。
+- **停流与备份：** 维护前和 gateway/backend 停止后均核对两个 worker 的 active/reserved/scheduled、两个队列及学生沙箱为空，再停止 worker 与 Redis。PostgreSQL 自定义备份为 **20,416,974 bytes**，`pg_restore --list` 可读；Redis、上传、PDF、workspace/ownership、数据库及角色共七份备份均记录大小和 SHA-256，原生产配置与旧 release-set 完整保存。没有修改 workspace 属主、模式、journal 或锁 inode。
+- **恢复与数据：** 在无发布端口且 `network none` 的专用 PostgreSQL 中恢复最终备份，**54 张表与 49 个序列**的内容/状态逐项一致；仅清理该演练容器与专用卷。2.1.7 无新增 migration，生产继续为 `20261020_0001`。新 backend 启动后、重新开放 gateway 前，再次验证所有表内容与序列不变。
+- **上线验收：** **2026-10-22 22:29:34（Asia/Shanghai）**完成切换，详细健康为 healthy。六业务容器的实际 Image ID 与清单匹配，RestartCount 均为 0；PostgreSQL/Redis 容器 ID 未变。公网首页、games、KNN、health、version 与 KNN 列表 API 均 HTTP 200，API 报告生产 `2.1.7`。真实浏览器访客首页可见 `v 2.1.7`，公开课目录显示三个入口。六服务本次启动日志未发现 ERROR、CRITICAL、Traceback 或 HTTP 5xx。
+- **证据与回滚：** 当前发布目录 `/home/shuhao/wangsh-releases/2.1.7/source`，沿用 `.env`、`docker-compose.production.yml`、project `wangsh`；旧 2.1.6 发布目录与镜像保留。服务器受限证据 `/home/shuhao/wangsh-deploy-evidence/2.1.7-20261022`，本机证据 `/Users/wsh/.codex/artifacts/wangsh-deploy-2.1.7-20261022`。离机备份 `/Users/wsh/.local/share/wangsh-production-backups/2.1.7-20261022`，七文件大小/哈希均一致，归档 SHA-256 为 `d187f00fea19976f17f250d697593a369f79bb1ec8fc18f2e3b5ed89303932f0`。
+- **边界与重试：** 未调用真实模型、填写真实学生答卷或进行完整管理员业务回归。首次服务器镜像拉取在 25 秒边界被中断，续传后成功并严格核验 digest；GitHub 连接器缺少写权限，改用已登录的本机 gh 完成普通 PR 操作。标准发布 workflow 不作为本批镜像构建证据。
 
 ## 2026-10-20 生产部署 2.1.6（已完成）
 
@@ -20,7 +32,7 @@
 
 ## 2026-10-21 XBK 导入导出、年级语义与前端交互修复（未发布）
 
-- **范围：** 修复课程导入 quota 静默为 0、选课表导出忽略筛选、导入年级静默覆盖、批量删除年级范围不一致、公开开关权限过宽；统一 `xbk_courses.grade` 语义（空表示全年级可选），补充 `student_grade`、容量分桶口径 `capacity_basis` 与前端年级/学年/导出交互。无新增数据库迁移。行为变更见 [RELEASE_NOTES](../RELEASE_NOTES.md#未发布修复xbk-导入导出与年级语义一致2026-10-21)。
+- **范围：** 修复课程导入 quota 静默为 0、选课表导出忽略筛选、导入年级静默覆盖、批量删除年级范围不一致、公开开关权限过宽；统一 `xbk_courses.grade` 语义（空表示全年级可选），补充 `student_grade`、容量分桶口径 `capacity_basis` 与前端年级/学年/导出交互。无新增数据库迁移。行为变更见 [RELEASE_NOTES](../RELEASE_NOTES.md#xbk-导入导出与年级语义一致)。
 - **后端：** `tests/xbk` 为 **1415 passed / 104 skipped**，跳过项不计为通过。
 - **前端：** `frontend/src/pages/Xbk` 测试 **109 项通过**；`npm run type-check`（`tsc`）通过，XBK 相关 ESLint 为 **0 error**。
 - **真实环境端到端：** 使用真实 PostgreSQL 与真实 API 验证年级规则：跨年级选课由 200 变为 409，正确匹配仍为 200，无年级课程仍可正常选择。
