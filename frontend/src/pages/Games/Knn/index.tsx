@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, CheckCircle2, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { createUuid } from "@/lib/uuid";
 import { usePublicKnnBatch, usePublicKnnBatches } from "@/hooks/queries/useKnnQuery";
 import { knnApi, knnError, LABELS, PHASE_LABELS, timeText, type Receipt, type StudentStatus, type Submission } from "@/services/knn";
 import { AnswerSummary, emptyDraft, SurveyFields, type Draft } from "./SurveyFields";
@@ -48,9 +49,13 @@ function Collection({ id }: { id: string }) {
   };
   const review = () => {
     if (draft.features.some(v => v === null) || !draft.label || !status) { setError("请完成六项运动习惯和运动意向。"); return; }
-    setRequest({ student_no: status.student_no, expected_revision: status.current_revision,
-      request_id: crypto.randomUUID(), features: draft.features.map(v => v ?? 0), label: draft.label, display_consent: false });
-    setError(""); setStep(2);
+    try {
+      setRequest({ student_no: status.student_no, expected_revision: status.current_revision,
+        request_id: createUuid(), features: draft.features.map(v => v ?? 0), label: draft.label, display_consent: false });
+      setError(""); setStep(2);
+    } catch {
+      setError("当前浏览器暂不支持提交，请使用较新版浏览器重试；本页填写内容已保留。");
+    }
   };
   const submit = async () => {
     if (!request) return;

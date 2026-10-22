@@ -71,10 +71,50 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.unstubAllGlobals();
   vi.clearAllMocks();
 });
 
 describe("KNN 学生填写页", () => {
+  it("HTTP 缺少 randomUUID 时可以确认，并在网络失败重试时沿用提交凭证", async () => {
+    const source = globalThis.crypto;
+    vi.stubGlobal("crypto", { getRandomValues: source.getRandomValues.bind(source) });
+    vi.mocked(knnApi.submit).mockRejectedValueOnce(new Error("网络不稳定"));
+    renderPage();
+    await screen.findByRole("button", { name: "开始填写" });
+    fireEvent.change(screen.getByLabelText("学号"), { target: { value: "11" } });
+    fireEvent.click(screen.getByRole("button", { name: "开始填写" }));
+    await screen.findByText("核对内容");
+    fillAllFields();
+    fireEvent.click(screen.getByRole("button", { name: "核对内容" }));
+    await screen.findByRole("button", { name: "确认提交" });
+    expect(knnApi.submit).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "确认提交" }));
+    await screen.findByText("请求失败，请稍后重试；已填写的内容会保留。");
+    const first = vi.mocked(knnApi.submit).mock.calls[0][1];
+    expect(first.request_id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    fireEvent.click(screen.getByRole("button", { name: "确认提交" }));
+    await screen.findByText("提交成功");
+    expect(knnApi.submit).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(knnApi.submit).mock.calls[1][1]).toEqual(first);
+  });
+
+  it("安全随机源缺失时提示错误并保留填写内容", async () => {
+    vi.stubGlobal("crypto", undefined);
+    renderPage();
+    await screen.findByRole("button", { name: "开始填写" });
+    fireEvent.change(screen.getByLabelText("学号"), { target: { value: "11" } });
+    fireEvent.click(screen.getByRole("button", { name: "开始填写" }));
+    await screen.findByText("核对内容");
+    fillAllFields();
+    fireEvent.click(screen.getByRole("button", { name: "核对内容" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("本页填写内容已保留");
+    expect(screen.queryByRole("button", { name: "确认提交" })).not.toBeInTheDocument();
+    expect(screen.getByLabelText("球类对抗参与天数").querySelectorAll("input")[2]).toBeChecked();
+    expect(knnApi.submit).not.toHaveBeenCalled();
+  });
+
   it("修改学号不会清空已填写的答案", async () => {
     renderPage();
     await screen.findByRole("button", { name: "开始填写" });
