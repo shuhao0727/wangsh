@@ -14,7 +14,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from starlette.concurrency import run_in_threadpool
 
-from app.api.endpoints.xbk.import_snapshots import validate_import_parent_snapshots
+from app.api.endpoints.xbk.import_snapshots import (
+    prepare_import_row, require_xlsx_format, validate_import_parent_snapshots,
+)
 from app.api.endpoints.xbk._common import (UNSELECTED_COURSE_CODES, apply_common_filters,
                                            apply_search_filter, selection_reference_errors)
 from app.services.xbk.locking import lock_key_rows
@@ -246,18 +248,16 @@ def _import_spec(scope: str) -> Tuple[Any, Dict[str, List[str]], List[str], Dict
 async def _filter_selection_references(db, valid, row_numbers, errors, *, lock=False):
     """Keep file row attribution while excluding invalid natural-key parents."""
     reference_errors = await selection_reference_errors(db, [values for values, _ in valid], lock=lock)
-    accepted = []
-    accepted_rows = []
-    accepted_indexes = []
+    accepted, accepted_rows, accepted_kept = [], [], []
     for index, (item, row_number, messages) in enumerate(zip(valid, row_numbers, reference_errors)):
         if messages:
             errors.append(_row_errors(row_number, messages))
         else:
             accepted.append(item)
             accepted_rows.append(row_number)
-            accepted_indexes.append(index)
+            accepted_kept.append(index)
     errors.sort(key=lambda error: error["row"])
-    return accepted, accepted_rows, accepted_indexes
+    return accepted, accepted_rows, accepted_kept
 
 
 def _validate_import_values(scope, values, fields):
@@ -274,49 +274,6 @@ def _validate_import_values(scope, values, fields):
             label = labels.get(error["loc"][0], str(error["loc"][0]))
             messages.append(f"{label}: {error['msg']}")
     return values, messages
-
-
-def _prepare_import_row(row, scope, defaults, fields, required):
-    """Normalize one physical row without deciding whole-file or parent validity."""
-    year, term, grade = defaults
-    messages = []
-    preview = {k: _normalize_str(row.get(k)) for k in row.index}
-    values = {}
-    period = None
-    quota_missing = False
-    try:
-        values["year"], values["term"] = _get_year_term(row, year, term)
-        preview["学年"], preview["学期"] = str(values["year"]), values["term"]
-        period = (values["year"], values["term"])
-    except HTTPException as exc:
-        messages.append(str(exc.detail))
-    values["grade"] = _normalize_str(row.get("年级")) or _normalize_str(grade)
-    # 记录年级是否真的来自文件：仅文件显式给出的年级才参与“与库中快照比对”，
-    # 页面筛选默认值不得把已有记录判成年级冲突。
-    grade_from_file = _normalize_str(row.get("年级")) is not None
-    if values["grade"] is not None:
-        preview["年级"] = values["grade"]
-    for label, field in fields.items():
-        value = _normalize_str(row.get(label))
-        if scope == "selections" and label == "课程代码":
-            value = _normalize_selection_course_code(value)
-            preview[label] = value
-        if label in required and value is None:
-            messages.append(f"{label}不能为空")
-        values[field] = value
-    if scope == "courses":
-        # 缺列或空单元格都记为“未提供”，交给整文件上下文区分新增与更新；
-        # 不能再把它静默折成 0，否则新课限额为 0 且没有任何提示。
-        quota_text = _normalize_str(row.get("各班限报人数"))
-        quota_missing = quota_text is None
-        if quota_text is not None:
-            values["quota"] = quota_text
-    if not messages:
-        values, messages = _validate_import_values(scope, values, fields)
-        if scope == "courses" and quota_missing:
-            # 更新时保留库中原 value；是否允许缺省由后续预检按“新增/已存在”裁决。
-            values.pop("quota", None)
-    return values, preview, messages, period, quota_missing, grade_from_file
 
 
 def _record_import_identity(scope, values, key_fields, row_number, seen_keys):
@@ -360,11 +317,12 @@ async def _prepare_import(
     valid = []
     seen_keys = {}
     valid_row_numbers = []
-    valid_grade_flags = []
     periods = set()
+    grade_flags = []
     for index, row in df.iterrows():
         row_number = int(index) + 2
-        values, preview, messages, period, _quota_missing, grade_from_file = _prepare_import_row(
+        grade_flags.append(_normalize_str(row.get("年级")) is not None)
+        values, preview, messages, period, _quota_missing = prepare_import_row(
             row, scope, (year, term, grade), fields, required,
         )
         if period is not None:
@@ -375,19 +333,18 @@ async def _prepare_import(
         else:
             valid.append((values, preview))
             valid_row_numbers.append(row_number)
-            valid_grade_flags.append(grade_from_file)
     if len(periods) > 1:
         raise HTTPException(status_code=422, detail=(
             f"文件包含{len(periods)}个不同的学年/学期组合，已阻止整份文件导入。"
             "请检查学年列是否被 Excel 自动递增，并按同一学期拆分文件。"
         ))
     if scope == "selections" and valid:
-        valid, valid_row_numbers, kept_indexes = await _filter_selection_references(
+        valid, valid_row_numbers, kept = await _filter_selection_references(
             db, valid, valid_row_numbers, errors, lock=lock_references,
         )
-        valid_grade_flags = [valid_grade_flags[index] for index in kept_indexes]
+        grade_flags = [grade_flags[index] for index in kept]
     await validate_import_parent_snapshots(
-        scope, valid, valid_row_numbers, db, valid_grade_flags,
+        scope, valid, valid_row_numbers, db, grade_flags,
         selected_grade=_normalize_str(grade),
     )
     return int(df.shape[0]), list(df.columns), valid, errors
@@ -457,8 +414,7 @@ async def _guard_import_parent(db, scope, current, values):
     if current is None:
         return
     if scope == "courses" and "quota" not in values:
-        # 文件未提供限额时保留原值；守卫必须按库中原限额比较，
-        # 不能把“未提供”当成 0 而误判为限额下调。
+        # 未提供限额时保留原值，守卫按库中原限额比较，不能当成 0 误判下调。
         values = {**values, "quota": current.quota}
     guard = guard_student_change if scope == "students" else guard_course_change
     await guard(db, current, values)
@@ -564,14 +520,7 @@ async def export_data(
     db: AsyncSession = Depends(get_db),
     _: Dict[str, Any] = Depends(require_admin),
 ) -> StreamingResponse:
-    # 导出统一使用 xlsx（openpyxl 生成的是 OOXML 字节）。旧参数 format=xls
-    # 过去只改扩展名、不改字节，Excel 会提示“文件格式与扩展名不符”，
-    # 因此这里明确拒绝，而不是静默返回伪装成 .xls 的 xlsx。
-    if format != "xlsx":
-        raise HTTPException(
-            status_code=400,
-            detail="不支持 .xls 导出，请使用 xlsx",
-        )
+    require_xlsx_format(format)
     diagnostics_df = None
     if scope == "students":
         stmt = select(XbkStudent).where(XbkStudent.is_deleted.is_(False))
