@@ -17,6 +17,7 @@ from app.schemas.articles import (
 )
 from app.services.articles.category import CategoryService
 from app.core.config import settings
+from app.core.pubsub import publish
 from app.utils.errors import safe_error_detail
 
 router = APIRouter()
@@ -67,7 +68,10 @@ async def create_category(
             db=db,
             category_data=category_data
         )
-        
+
+        await publish("admin_global", {
+            "type": "category_changed", "action": "create", "id": category.id,
+        })
         return category
         
     except ValueError as e:
@@ -190,7 +194,10 @@ async def update_category(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"分类ID {category_id} 不存在"
             )
-        
+
+        await publish("admin_global", {
+            "type": "category_changed", "action": "update", "id": category_id,
+        })
         return category
         
     except ValueError as e:
@@ -217,12 +224,16 @@ async def delete_category(
     权限：超级管理员
     """
     success = await CategoryService.delete_category(db=db, category_id=category_id)
-    
+
     if not success:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"分类ID {category_id} 不存在"
         )
+
+    await publish("admin_global", {
+        "type": "category_changed", "action": "delete", "id": category_id,
+    })
 
 
 @router.post("/get-or-create", response_model=CategoryResponse)

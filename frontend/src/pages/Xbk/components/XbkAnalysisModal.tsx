@@ -28,6 +28,7 @@ import type {
 } from "@services";
 import { cn } from "@/lib/utils";
 import { formatXbkClassName } from "../className";
+import type { XbkGrade } from "../grades";
 
 interface XbkAnalysisModalProps {
   open: boolean;
@@ -35,7 +36,7 @@ interface XbkAnalysisModalProps {
   filters: {
     year?: string;
     term?: "上学期" | "下学期";
-    grade?: "高一" | "高二";
+    grade?: XbkGrade;
     class_name?: string;
   };
 }

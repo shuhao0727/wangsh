@@ -10,8 +10,8 @@ import { AnswerSummary, emptyDraft, SurveyFields, type Draft } from "./SurveyFie
 function readDraft(id: string): Draft {
   try {
     const saved = JSON.parse(sessionStorage.getItem(`knn-draft:${id}`) ?? "null");
-    if (saved && typeof saved.number === "string" && Array.isArray(saved.features) && saved.features.length === 12 &&
-      saved.features.every((v: unknown, i: number) => v === null || (typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= (i % 2 ? 4 : 7))) &&
+    if (saved && typeof saved.number === "string" && Array.isArray(saved.features) && saved.features.length === 6 &&
+      saved.features.every((v: unknown) => v === null || (typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= 7)) &&
       (saved.label === "" || LABELS.includes(saved.label)) && typeof saved.consent === "boolean") return saved;
   } catch { /* Storage may be unavailable on a shared device. */ }
   return emptyDraft();
@@ -19,31 +19,37 @@ function readDraft(id: string): Draft {
 
 function Collection({ id }: { id: string }) {
   const query = usePublicKnnBatch(id);
-  const [draft, setDraft] = useState(() => readDraft(id));
+  const [initialDraft] = useState(() => readDraft(id));
+  const [draft, setDraft] = useState<Draft>(initialDraft);
+  // 学号与答案分开保存：改学号不应清空已填的 12 项答案。
+  // 共用机房设备时不预填上一位同学的学号，由学生自己核对输入。
+  const [number, setNumber] = useState("");
   const [step, setStep] = useState(0);
   const [status, setStatus] = useState<StudentStatus | null>(null);
   const [request, setRequest] = useState<Submission | null>(null);
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  // 记录草稿原属的学号，用于共用设备时提示下一位同学。
+  const [draftOwner, setDraftOwner] = useState(initialDraft.number);
   useEffect(() => {
-    try { sessionStorage.setItem(`knn-draft:${id}`, JSON.stringify(draft)); } catch { /* Optional draft only. */ }
-  }, [id, draft]);
-  const reset = () => { setDraft(emptyDraft()); setStep(0); setStatus(null); setReceipt(null); setRequest(null); setError(""); };
+    try { sessionStorage.setItem(`knn-draft:${id}`, JSON.stringify({ ...draft, number })); } catch { /* Optional draft only. */ }
+  }, [id, draft, number]);
+  const reset = () => { setDraft(emptyDraft()); setNumber(""); setDraftOwner(""); setStep(0); setStatus(null); setReceipt(null); setRequest(null); setError(""); };
   const check = async () => {
     setBusy(true); setError("");
     try {
-      const result = await knnApi.check(id, draft.number);
+      const result = await knnApi.check(id, number);
       setStatus(result);
       if (!result.can_submit) {
         setError(result.phase !== "open" ? `当前${PHASE_LABELS[result.phase]}，请向老师确认时间。` : "该学号已提交；如需修改，请联系老师允许重填。");
-      } else { setDraft({ ...draft, number: result.student_no }); setStep(1); }
+      } else { setNumber(result.student_no); setDraftOwner(result.student_no); setStep(1); }
     } catch (e) { setError(knnError(e)); } finally { setBusy(false); }
   };
   const review = () => {
     if (draft.features.some(v => v === null) || !draft.label || !status) { setError("请完成六项运动习惯和运动意向。"); return; }
     setRequest({ student_no: status.student_no, expected_revision: status.current_revision,
-      request_id: crypto.randomUUID(), features: draft.features.map(v => v ?? 0), label: draft.label, display_consent: draft.consent });
+      request_id: crypto.randomUUID(), features: draft.features.map(v => v ?? 0), label: draft.label, display_consent: false });
     setError(""); setStep(2);
   };
   const submit = async () => {
@@ -51,13 +57,15 @@ function Collection({ id }: { id: string }) {
     setBusy(true); setError("");
     try {
       const result = await knnApi.submit(id, request);
-      setReceipt(result); setDraft(emptyDraft()); setStep(3);
+      setReceipt(result); setDraft(emptyDraft()); setNumber(""); setDraftOwner(""); setStep(3);
       try { sessionStorage.removeItem(`knn-draft:${id}`); } catch { /* Optional draft only. */ }
     } catch (e) { setError(knnError(e)); } finally { setBusy(false); }
   };
   const batch = query.data;
   if (query.isPending) return <p role="status">正在加载采集批次…</p>;
   if (!batch) return <div role="alert" className="space-y-3 text-sm"><p>{knnError(query.error)}</p><Button variant="outline" onClick={() => void query.refetch()}>重试</Button></div>;
+  // 批次结束或尚未开始后不再允许继续填写，避免学生填完 12 项才在提交时被拒绝。
+  const closed = batch.phase !== "open";
   return <>
     <header className="mb-5 border-b border-border-secondary pb-4">
       <div className="flex items-center justify-between gap-3"><h1 className="text-xl font-semibold">{batch.title}</h1><span className="shrink-0 text-sm text-primary">{PHASE_LABELS[batch.phase]}</span></div>
@@ -68,20 +76,26 @@ function Collection({ id }: { id: string }) {
     </ol>}
     {error && <p role="alert" className="mb-4 rounded-sm border border-destructive/20 px-3 py-2 text-sm text-destructive">{error}</p>}
     {step === 0 && <form onSubmit={e => { e.preventDefault(); void check(); }} className="max-w-sm space-y-4">
-      <label className="block space-y-2 text-sm font-medium"><span>学号</span><Input aria-label="学号" autoComplete="off" inputMode="text" maxLength={24} required disabled={busy} placeholder="填写老师分配的学号" value={draft.number} onChange={e => setDraft({ ...emptyDraft(), number: e.target.value })} /></label>
-      {draft.features.some(v => v !== null) && <p className="text-xs text-text-secondary">本设备保留了该学号的草稿，核对后可继续填写。</p>}
-      <div className="flex gap-2"><Button type="submit" disabled={busy || batch.phase !== "open"}>{busy ? "核对中…" : "开始填写"}</Button><Button variant="ghost" disabled={busy} onClick={reset}>清除草稿</Button></div>
-      {batch.phase !== "open" && <p className="text-sm text-text-secondary">当前{PHASE_LABELS[batch.phase]}，请按老师安排的时间填写。</p>}
+      <label className="block space-y-2 text-sm font-medium"><span>学号</span><Input aria-label="学号" autoComplete="off" inputMode="text" maxLength={24} required disabled={busy} placeholder="填写老师分配的学号" value={number} onChange={e => setNumber(e.target.value)} /></label>
+      {draft.features.some(v => v !== null) && <p className="text-xs text-text-secondary">
+        本设备保存过一次未提交的填写记录{draftOwner ? `（学号 ${draftOwner}）` : ""}。如需继续，请核对学号后点“开始填写”；不是你的记录请点“清除草稿”。
+      </p>}
+      <div className="flex gap-2"><Button type="submit" disabled={busy || closed}>{busy ? "核对中…" : "开始填写"}</Button><Button variant="ghost" disabled={busy} onClick={reset}>清除草稿</Button></div>
+      {closed && <p className="text-sm text-text-secondary">当前{PHASE_LABELS[batch.phase]}，请按老师安排的时间填写。</p>}
     </form>}
-    {step === 1 && <>
+    {step === 1 && (closed ? <div className="space-y-3 py-6 text-sm">
+      <p className="font-medium">当前{PHASE_LABELS[batch.phase]}，已停止填写。</p>
+      <p className="text-text-secondary">本次填写内容未提交。如需补交，请联系老师重新开放或允许重填。</p>
+      <Button variant="outline" onClick={() => { setStep(0); setError(""); }}>返回</Button>
+    </div> : <>
       <p className="mb-4 text-sm text-text-secondary">学号 <strong className="text-text-base">{status?.student_no}</strong>{status?.refill_allowed ? " · 本次为重填" : ""}</p>
       <SurveyFields draft={draft} change={setDraft} />
       <div className="mt-6 flex justify-between border-t border-border-secondary pt-4"><Button variant="ghost" onClick={() => { setStep(0); setError(""); }}>返回</Button><Button onClick={review}>核对内容<ChevronRight className="ml-1 h-4 w-4" /></Button></div>
-    </>}
+    </>)}
     {step === 2 && <>
       <h2 className="mb-2 text-base font-semibold">确认学号：{status?.student_no}</h2>
       <AnswerSummary features={draft.features} label={draft.label} />
-      <p className="mt-3 text-xs text-text-secondary">{draft.consent ? "已同意作为匿名学生 A 展示。" : "未选择作为匿名学生 A 展示。"} 提交后如需修改，请联系老师允许重填。</p>
+      <p className="mt-3 text-xs text-text-secondary">提交后如需修改，请联系老师允许重填。</p>
       <div className="mt-6 flex justify-between border-t border-border-secondary pt-4"><Button variant="ghost" disabled={busy} onClick={() => { setStep(1); setRequest(null); setError(""); }}>返回修改</Button><Button disabled={busy} onClick={() => void submit()}>{busy ? "提交中…" : "确认提交"}</Button></div>
       {error && <Button className="mt-3" variant="link" disabled={busy} onClick={() => { setStep(0); setError(""); }}>重新核对学号</Button>}
     </>}

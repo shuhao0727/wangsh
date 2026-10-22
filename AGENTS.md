@@ -89,7 +89,7 @@ CSS 变量 (index.css) → Tailwind 映射 (tailwind.config.js) → shadcn/ui �
 | Token | 值 | 用途 |
 |-------|-----|------|
 | `--ws-color-primary` | `#0D9488` (Teal) | 按钮、链接、主色 |
-| `--ws-color-accent` | `#0D9488` (Teal) | 强调、焦点环、选中左条（与 primary 一致） |
+| `--ws-color-accent` | `#7C3AED` (Violet) | 强调、焦点环、选中左条 |
 | `--ws-color-secondary` | `#7C3AED` (Violet) | 仅品牌装饰/插画，不参与主交互 |
 | `--ws-color-bg` | `#F0FDFA` (Mint) | 页面背景 |
 | `--ws-color-primary-muted` | `#CCFBF1` | 柔色背景 |

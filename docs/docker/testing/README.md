@@ -25,7 +25,7 @@ WangSh 项目采用多层次测试策略：
 
 ### 前端测试
 - **单元/组件测试**：Vitest + React Testing Library
-- **E2E 测试**：Playwright
+- **浏览器验证**：Playwright（用于 `frontend/scripts/` 下的生产烟测与 UI 审计；仓库未配置独立 `playwright.config.*` E2E 测试套件）
 - **当前结果**：见 [TEST_STATUS.md](TEST_STATUS.md)，本页不复制动态基线
 - 详见 [frontend/docs/TESTING_SETUP.md](../../../frontend/docs/TESTING_SETUP.md)
 
@@ -52,7 +52,7 @@ WangSh 项目采用多层次测试策略：
 
 | # | 功能域 | 用户能力与主要入口 | 后端、Worker 或基础设施 | 主要验证入口 |
 |---|---|---|---|---|
-| 1 | 系统与开发栈 | 首页、管理仪表盘、系统设置 | health、overview、metrics、feature flags、PostgreSQL、Redis、Adminer | `/health`、`/docs`、Compose health、`test_health.py`、`test_metrics.py` |
+| 1 | 系统与开发栈 | 首页、管理仪表盘、系统设置 | health、overview、metrics、feature flags、PostgreSQL、Redis、Adminer | `/health`、`/docs`、Compose health、`test_health.py`、`tests/system/test_metrics.py` |
 | 2 | 认证、会话与用户 | 登录、刷新、退出、单会话轮换、用户列表/导入、角色守卫 | `/auth`、`/users`、refresh token、session guard | `tests/auth/`、`tests/users/`、真实角色边界和替换登录 smoke |
 | 3 | 文章与分类 | 文章列表/详情、管理、编辑、分类、Markdown 样式 | `/articles`、`/categories`、缓存隔离 | `tests/articles/`、`smoke_full_deploy.py`、`smoke_feature_suite.py` |
 | 4 | AI 智能体 | 智能体管理、对话、SSE、会话详情、使用统计、模型发现 | `/ai-agents`、`/model-discovery`、外部提供商降级 | `tests/ai_agents/`、OpenAPI sweep；默认不调用真实外部 AI |

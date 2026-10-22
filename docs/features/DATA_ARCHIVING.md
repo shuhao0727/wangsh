@@ -1,5 +1,8 @@
 # 数据归档功能
 
+> 最后复核：2026-10-20（以下行为已对照 `backend/app/tasks/data_archiving.py`、
+> `backend/app/api/endpoints/system/archiving.py`、`backend/app/core/celery_app.py` 核对）
+
 ## 概述
 
 WangSh 项目实现了自动和手动数据归档功能，用于定期归档旧的对话记录和分析记录，保持数据库性能和数据可管理性。
@@ -10,8 +13,11 @@ WangSh 项目实现了自动和手动数据归档功能，用于定期归档旧�
 
 通过 Celery Beat 实现的定时任务：
 
-- **对话记录归档**：每周日凌晨 2 点自动归档 90 天前的对话记录
-- **分析记录归档**：每月 1 号凌晨 3 点自动归档 180 天前的分析记录
+- **对话记录归档**：每周日凌晨 2 点自动归档 90 天前的对话记录（`crontab(day_of_week="sunday", hour=2, minute=0)`，`args=(90,)`）
+- **分析记录归档**：每月 1 号凌晨 3 点自动归档 180 天前的分析记录（`crontab(day_of_month="1", hour=3, minute=0)`，`args=(180,)`）
+
+> 时区注意：`celery_app.conf` 设置 `timezone="Asia/Shanghai"` 且 `enable_utc=True`，
+> beat 的 `crontab` 按 Asia/Shanghai 解释，因此“凌晨 2/3 点”指北京时间。
 
 ### 2. 手动触发归档
 
@@ -37,29 +43,31 @@ backend/app/
    - 更新 `znt_conversations` 表
    - 设置 `is_archived = TRUE`
    - 记录 `archived_at` 时间戳
+   - 条件为 `created_at < :cutoff AND is_archived = FALSE`，任务返回 `{"archived_count", "cutoff_days"}`
 
 2. **分析记录归档** (`archive_old_analyses`)
-   - 批量更新以下表：
+   - 同一事务内依次更新以下表，并累计各表 `rowcount`：
      - `task_analyses`
      - `hot_question_analyses`
      - `student_chain_analyses`
    - 设置 `is_archived = TRUE`
    - 记录 `archived_at` 时间戳
+   - 返回 `{"archived_count": 合计, "cutoff_days": days}`
 
 ### 任务配置
 
-- **重试机制**：最多重试 2 次
-- **重试策略**：指数退避，最大 60 秒
-- **超时控制**：
-  - 软超时：5 分钟
-  - 硬超时：10 分钟
+- **重试机制**：最多重试 2 次（两个任务均为 `autoretry_for=(Exception,)`、`max_retries=2`）
+- **重试策略**：指数退避，最大 60 秒（`retry_backoff=True`、`retry_backoff_max=60`）
+- **超时控制**（全局 `celery_app.conf`，非归档任务单独设置）：
+  - 软超时：5 分钟（`task_soft_time_limit=300`）
+  - 硬超时：10 分钟（`task_time_limit=600`）
 
 ## API 接口
 
 ### 手动归档对话记录
 
 ```http
-POST /api/system/archiving/conversations
+POST /api/v1/system/archiving/conversations
 Authorization: Bearer <admin_token>
 Content-Type: application/json
 
@@ -67,6 +75,10 @@ Content-Type: application/json
   "days": 90
 }
 ```
+
+> 路由前缀：`archiving_router` 挂载为 `/system/archiving`，再叠加全局 `API_V1_STR`
+> （默认 `/api/v1`，见 `backend/app/api/endpoints/system/__init__.py:29`、
+> `backend/main.py:223`、`backend/app/core/config/_base.py:21`）。
 
 **响应：**
 ```json
@@ -79,7 +91,7 @@ Content-Type: application/json
 ### 手动归档分析记录
 
 ```http
-POST /api/system/archiving/analyses
+POST /api/v1/system/archiving/analyses
 Authorization: Bearer <admin_token>
 Content-Type: application/json
 
@@ -162,13 +174,17 @@ def archive_old_conversations(self, days: int = 90) -> dict:  # 修改默认值
 
 1. **数据安全**：归档操作会修改数据库记录，建议先在测试环境验证
 2. **性能影响**：大量数据归档可能需要较长时间，建议在低峰时段执行
-3. **回滚方案**：如需恢复归档数据，执行以下 SQL：
+3. **回滚方案**：如需恢复归档数据，执行以下 SQL（示例仅覆盖对话记录；三张分析表需按同样
+   条件分别处理，`archived_at` 为归档时刻而非原始创建时间，按时间范围恢复前先只读核对）：
    ```sql
    UPDATE znt_conversations
    SET is_archived = FALSE, archived_at = NULL
    WHERE archived_at > '2026-01-01';
    ```
-4. **数据库索引**：确保 `created_at` 和 `is_archived` 字段有索引以提升性能
+4. **数据库索引**：`znt_conversations` 已有部分索引 `ix_conversations_archived_time
+   (is_archived, created_at) WHERE is_archived = false`（迁移
+   `backend/alembic/versions/4a85c94b5c4c_add_archive_fields_to_conversations_and_.py:29-33`）；
+   三张分析表目前只有归档字段、没有对应的归档部分索引，大批量归档前应按实际查询计划补索引。
 
 ## 测试
 
@@ -186,7 +202,7 @@ def archive_old_conversations(self, days: int = 90) -> dict:  # 修改默认值
 
 2. 手动触发测试：
    ```bash
-   curl -X POST http://localhost:8000/api/system/archiving/conversations \
+   curl -X POST http://localhost:8000/api/v1/system/archiving/conversations \
      -H "Authorization: Bearer <admin_token>" \
      -H "Content-Type: application/json" \
      -d '{"days": 90}'

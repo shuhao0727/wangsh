@@ -29,13 +29,25 @@ from app.api.endpoints.xbk.import_export import (
 class _SelectionParentsDb:
     """Read-only fake parent projection; no schema/endpoint validation is mocked."""
 
-    def __init__(self, students=()):
+    def __init__(self, students=(), selections=()):
         # Synthetic (year, term, student_no, is_deleted) parent records.
         self.students = students
+        # Synthetic (year, term, student_no, grade) 既有选课快照，用于 P0-3 年级一致性检查。
+        self.selections = selections
         self.queries = []
 
     async def execute(self, statement):
-        assert statement.get_final_froms()[0].name == "xbk_students"
+        table = statement.get_final_froms()[0].name
+        if table == "xbk_selections":
+            # P0-3 新增：导入前读取既有选课年级快照（含软删除，按自然键唯一）。
+            assert tuple(column.key for column in statement.selected_columns) == (
+                "year", "term", "student_no", "grade",
+            )
+            keys = next(iter(statement.compile().params.values()))
+            self.queries.append(("selections", keys))
+            rows = [row for row in self.selections if row[:3] in keys]
+            return SimpleNamespace(all=lambda: rows)
+        assert table == "xbk_students"
         assert tuple(column.key for column in statement.selected_columns) == ("year", "term", "student_no")
         assert "xbk_students.is_deleted IS false" in str(statement)
         keys = next(iter(statement.compile().params.values()))
@@ -189,7 +201,7 @@ def test_preview_import_selections_blank_course_code_maps_to_unselected() -> Non
     assert result["invalid_rows"] == 0
     assert result["preview"][0]["课程代码"] == "未选"
     assert result["errors"] == []
-    assert db.queries == [[("2026-2027", "上学期", "20260021")]]
+    assert [q for q in db.queries if isinstance(q, list)] == [[("2026-2027", "上学期", "20260021")]]
 
 
 def test_remap_courses_alias_columns() -> None:
@@ -283,4 +295,4 @@ def test_preview_unselected_rejects_missing_or_inactive_period_student(students)
         "row": 2,
         "errors": ["学生不存在（请先维护学生名单；须为同学年、同学期且未删除）"],
     }]
-    assert db.queries == [[("2026-2027", "上学期", "20260021")]]
+    assert [q for q in db.queries if isinstance(q, list)] == [[("2026-2027", "上学期", "20260021")]]

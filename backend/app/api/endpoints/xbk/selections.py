@@ -27,6 +27,39 @@ from ._common import apply_common_filters, apply_search_filter, require_xbk_acce
 router = APIRouter()
 
 
+async def _student_grade_for(db: AsyncSession, row: XbkSelection) -> Optional[str]:
+    """读取学生当前年级（不是选课写入时的快照）。"""
+    result = await db.execute(
+        select(XbkStudent.grade)
+        .where(
+            XbkStudent.is_deleted.is_(False),
+            XbkStudent.year == row.year,
+            XbkStudent.term == row.term,
+            XbkStudent.student_no == row.student_no,
+        )
+        .limit(1)
+    )
+    return result.scalars().first()
+
+
+_UNSET = object()
+
+
+async def _selection_out(
+    db: AsyncSession,
+    row: XbkSelection,
+    student_grade: Any = _UNSET,
+) -> Dict[str, Any]:
+    """序列化选课行；grade 保留快照，student_grade 为学生当前年级。"""
+    out = XbkSelectionOut.model_validate(row)
+    out.student_grade = (
+        student_grade
+        if student_grade is not _UNSET
+        else await _student_grade_for(db, row)
+    )
+    return out.model_dump()
+
+
 # ---------------------------------------------------------------------------
 # CRUD 端点
 # ---------------------------------------------------------------------------
@@ -55,7 +88,12 @@ async def create_selection(
         raise
     row = result.rows[0]
     await db.refresh(row)
-    return XbkSelectionOut.model_validate(row).model_dump()
+    # 复用事务内已锁定的学生年级，避免额外查询；grade 仍是选课快照。
+    return await _selection_out(
+        db,
+        row,
+        result.student_grades.get((row.year, row.term, row.student_no)),
+    )
 
 
 @router.put("/selections/{selection_id}", response_model=XbkSelectionOut)
@@ -83,7 +121,12 @@ async def update_selection(
         raise
     row = result.rows[0]
     await db.refresh(row)
-    return XbkSelectionOut.model_validate(row).model_dump()
+    # 复用事务内已锁定的学生年级，避免额外查询；grade 仍是选课快照。
+    return await _selection_out(
+        db,
+        row,
+        result.student_grades.get((row.year, row.term, row.student_no)),
+    )
 
 
 @router.delete("/selections/{selection_id}", status_code=204)
@@ -168,6 +211,8 @@ async def list_selections(
     for student, selection in rows:
         if selection:
             item = XbkSelectionOut.model_validate(selection).model_dump()
+            # grade 保留写入时的选课快照，student_grade 始终反映学生当前年级。
+            item["student_grade"] = student.grade
             if not item["course_code"]:
                 item["course_code"] = "未选"
             items.append(item)
@@ -178,6 +223,7 @@ async def list_selections(
                 "year": student.year,
                 "term": student.term,
                 "grade": student.grade,
+                "student_grade": student.grade,
                 "student_no": student.student_no,
                 "name": student.name,
                 "course_code": "休学或其他",

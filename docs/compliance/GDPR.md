@@ -21,6 +21,10 @@
 | GET | `/api/v1/users/privacy/me/data-summary` | 返回上述两类消息的数量 |
 | DELETE | `/api/v1/users/privacy/me/data` | 校验确认文本后，硬删除本人上述两类消息 |
 
+> 挂载前缀核对：`backend/app/api/endpoints/management/users/__init__.py:13-14` 将
+> `privacy_router` 以 `/privacy` 挂到 users router，`backend/app/api/__init__.py:36`
+> 再以 `/users` 前缀注册，故完整路径为 `/api/v1/users/privacy/...`。
+
 API 总入口与认证合同见 [API.md](../development/API.md) 和 [AUTH.md](../features/AUTH.md)。
 实现位于 `backend/app/api/endpoints/management/users/privacy.py`。
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field as dataclass_field
 from datetime import datetime, timezone
 from typing import Any, Iterable, Mapping, Optional, Sequence
 
@@ -46,6 +46,9 @@ class SelectionApplyResult:
     rows: Sequence[XbkSelection]
     inserted: int
     updated: int
+    # 学生当前年级（按 (year, term, student_no) 索引），用于 API 输出
+    # student_grade；选课行上的 grade 仍是写入时的快照。
+    student_grades: Mapping[tuple[str, str, str], Optional[str]] = dataclass_field(default_factory=dict)
 
 
 def _student_key(values: Mapping[str, Any]) -> tuple[str, str, str]:
@@ -58,6 +61,14 @@ def _course_key(values: Mapping[str, Any]) -> tuple[str, str, str]:
 
 def _same_nullable(column, value):
     return column.is_(None) if value is None else column == value
+
+
+def _normalize_grade(value: object) -> Optional[str]:
+    """年级比较前的规范化：去首尾空白，空值视为未设置。"""
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
 
 
 async def _flush(db: AsyncSession) -> None:
@@ -498,6 +509,33 @@ async def _capacity_used(
     return int(used or 0)
 
 
+async def _validate_course_grade_scope(
+    affected: Iterable[tuple[str, str, str, Optional[str], str]],
+    courses: Mapping[tuple[str, str, str], XbkCourse],
+) -> None:
+    """课程只面向其所属年级开设。
+
+    `XbkCourse.grade` 为空表示全年级可选；非空时只有同年级学生可选。
+    此前该字段只参与列表筛选，容量校验从不读取它，导致高一学生能选上
+    “仅面向高二”的课程，随后又无法在按年级筛选时查到。这里在执行写入前
+    统一拒绝，使字段语义与筛选口径一致。
+    """
+    for year, term, code, student_grade, class_name in affected:
+        course_grade = courses.get((year, term, code))
+        if course_grade is None:
+            continue
+        scope = _normalize_grade(course_grade.grade)
+        if scope is None or _normalize_grade(student_grade) == scope:
+            continue
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"课程 {code} 仅面向 {scope} 开设，"
+                f"{student_grade or '未分年级'} {class_name} 的学生不能选择"
+            ),
+        )
+
+
 async def _validate_capacities(
     db: AsyncSession,
     affected: Iterable[tuple[str, str, str, Optional[str], str]],
@@ -526,11 +564,15 @@ async def apply_selection_mutations(
     )
     await _flush(db)
     _validate_final_student_positions(context.locked_selections, changed_rows)
+    await _validate_course_grade_scope(affected, context.courses)
     await _validate_capacities(db, affected, context.courses)
     return SelectionApplyResult(
         rows=tuple(changed_rows),
         inserted=inserted,
         updated=updated,
+        student_grades={
+            key: student.grade for key, student in context.locked_students.items()
+        },
     )
 
 
@@ -631,6 +673,18 @@ async def _validate_student_destination_capacity(
             raise HTTPException(
                 status_code=409,
                 detail="学生存在失效课程关联，不能直接变更班级或年级",
+            )
+        # 转年级后已有选课必须仍符合课程开设年级，否则会留下跨年级历史选课。
+        scope = _normalize_grade(course.grade)
+        target_grade = _normalize_grade(values.get("grade"))
+        if scope is not None and scope != target_grade:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"该学生已选课程 {selection.course_code}，"
+                    f"该课程仅面向 {scope} 开设，不能把学生改到 "
+                    f"{values.get('grade') or '未分年级'}"
+                ),
             )
         used = await _destination_course_used(
             db, row, values, selection.course_code

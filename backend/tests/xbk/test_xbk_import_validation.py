@@ -20,7 +20,8 @@ from app.core.exception_handlers import generic_exception_handler
 
 ROWS = {
     "students": {"年份": "2026", "学期": "上学期", "班级": "高一(1)班", "学号": "0012", "姓名": "学生甲"},
-    "courses": {"年份": "2026", "学期": "上学期", "课程代码": "0012", "课程名称": "课程甲"},
+    # 新课导入必须显式提供“各班限报人数”，缺省会被 422 拒绝（见 P0-1 回归）。
+    "courses": {"年份": "2026", "学期": "上学期", "课程代码": "0012", "课程名称": "课程甲", "各班限报人数": "20"},
     "selections": {"年份": "2026", "学期": "上学期", "学号": "0012", "课程代码": "C01"},
 }
 
@@ -40,6 +41,8 @@ class FakeDb:
         self.existing = list(existing)
         self.parents = parents or {}
         self.parent_queries = []
+        # P0-1/P0-3：导入预检新增的既有课程/选课年级快照查询。
+        self.snapshot_queries = []
         self.fail_write = fail_write
         self.fail_commit = fail_commit
         self.queries = []
@@ -84,6 +87,30 @@ class FakeDb:
                     return SimpleNamespace(all=lambda: [])
                 return SimpleNamespace(scalar_one=lambda: 0)
             table = next(iter(statement.selected_columns)).table.name
+            # 父实体存在性查询带 is_deleted 过滤，必须先于快照分支判断；
+            # 快照预检刻意包含软删除记录，因此不带该过滤。
+            is_parent_scope_query = (
+                table in ("xbk_students", "xbk_courses")
+                and "is_deleted is false" in sql.lower()
+                and len(statement.selected_columns) in (3, 4)
+            )
+            if (not is_parent_scope_query
+                    and (table in ("xbk_courses", "xbk_selections")
+                         and tuple(column.key for column in statement.selected_columns)
+                         == ("year", "term", "course_code", "grade")
+                         or table == "xbk_selections"
+                         and tuple(column.key for column in statement.selected_columns)
+                         == ("year", "term", "student_no", "grade"))):
+                # P0-3 年级快照预检：含软删除记录，仅按自然键返回。
+                self.snapshot_queries.append(statement)
+                keys = next(iter(statement.compile().params.values()))
+                if table == "xbk_selections":
+                    source = [row for row in self.existing if len(row) >= 4]
+                else:
+                    # 已存在课程自然键来自 existing（含软删除），年级固定为“高一”。
+                    source = [(*row[:3], "高一") for row in self.existing]
+                rows = [row for row in source if row[:3] in keys]
+                return SimpleNamespace(all=lambda: [row[:3] + (row[3] or "高一",) for row in rows])
             table_column_count = len(statement.get_final_froms()[0].columns)
             if (len(statement.selected_columns) == 1 or statement._for_update_arg is not None
                     or len(statement.selected_columns) == table_column_count):
@@ -103,14 +130,25 @@ class FakeDb:
                     if table == "xbk_selections":
                         self.selection_rows = records
                 return SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: rows))
-            if table in ("xbk_students", "xbk_courses") and "is_deleted IS false" in sql:
+            if is_parent_scope_query:
                 # Parent records are separate from the imported table's existing
                 # keys. Honor both requested period/key and soft-delete state.
-                assert len(statement.selected_columns) == 3
+                # 课程查询额外带 grade 列用于年级范围校验（方案 D），学生仍为 3 列。
+                expected_columns = 4 if table == "xbk_courses" else 3
+                assert len(statement.selected_columns) == expected_columns
                 self.parent_queries.append(statement)
-                keys = next(iter(statement.compile().params.values()))
+                # `tuple_(...).in_()` 可能被编译成元组列表参数，也可能展开为
+                # 多个独立命名参数；两种形状都要还原成键集合。
+                raw_keys = list(statement.compile().params.values())
+                if len(raw_keys) == 1 and isinstance(raw_keys[0], (list, tuple, set)):
+                    keys = set(raw_keys[0])
+                else:
+                    keys = {tuple(raw_keys)}
                 rows = [row[:3] for row in self.parents.get(table, ())
                         if row[3] is False and row[:3] in keys]
+                if table == "xbk_courses":
+                    # 与 FakeDb._orm_records 保持一致：课程开设年级固定为“高一”。
+                    rows = [(*row, "高一") for row in rows]
                 return SimpleNamespace(all=lambda: rows)
             if len(statement.selected_columns) == 5:
                 return SimpleNamespace(all=lambda: [row if len(row) == 5 else (*row, "学生甲", None) for row in self.existing])
@@ -377,7 +415,7 @@ def test_strict_validation_does_not_write_earlier_valid_rows(scope):
     assert db.writes == [] and db.commits == 0
     assert db.rollbacks == (1 if scope == "selections" else 0)
     # Parent preflight reads are now required; no target-key reads or writes.
-    assert db.queries == db.parent_queries
+    assert db.queries == db.parent_queries + db.snapshot_queries
     assert len(db.parent_queries) == (2 if scope == "selections" else 0)
 
 
@@ -512,7 +550,7 @@ def test_selection_unknown_student_rejected_without_writes():
     assert "学生不存在" in str(exc.value.detail)
     assert "同学年、同学期且未删除" in str(exc.value.detail)
     assert db.writes == [] and db.commits == 0 and db.rollbacks == 1
-    assert db.queries == db.parent_queries and len(db.parent_queries) == 1
+    assert db.queries == db.parent_queries + db.snapshot_queries and len(db.parent_queries) == 1
     assert "xbk_students" in str(db.parent_queries[0])
 
 
@@ -597,7 +635,8 @@ def test_invalid_row_still_participates_in_file_wide_guards(scope, endpoint, ski
         ))
     assert exc.value.status_code == 422
     assert ("第3行与第2行" if kind == "duplicate" else "2个不同") in str(exc.value.detail)
-    assert db.queries == db.writes == []
+    assert db.writes == []
+    assert db.queries == db.snapshot_queries
     assert db.commits == 0
     assert db.rollbacks == (1 if endpoint == "import_data" and scope == "selections" else 0)
 
@@ -617,5 +656,130 @@ def test_blank_rows_keep_physical_error_order_through_parent_validation():
     assert result["invalid"] == result["skipped"] == 2
     assert result["processed"] == result["inserted"] == len(db.writes) == 1
     assert db.writes[0].compile().params["student_no"] == good["学号"]
+
+
+def _upsert_set_columns(statement) -> set[str]:
+    """Return the ON CONFLICT DO UPDATE SET column names (not INSERT values)."""
+    clause = getattr(statement, "_post_values_clause", None)
+    values_to_set = getattr(clause, "update_values_to_set", None) or {}
+    columns = set()
+    for key in values_to_set:
+        columns.add(key[0] if isinstance(key, tuple) else getattr(key, "key", str(key)))
+    return columns
+
+
+# --- P0-1：课程导入缺“各班限报人数”时必须报错，不得静默写 0 -------------------
+@pytest.mark.parametrize("field", ["missing", "blank"])
+@pytest.mark.parametrize("endpoint", ["preview_import", "import_data"])
+def test_new_course_without_quota_is_rejected_with_row_and_field(field, endpoint):
+    row = {**ROWS["courses"]}
+    if field == "missing":
+        row.pop("各班限报人数")
+    else:
+        row["各班限报人数"] = ""
+    db = FakeDb()
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(getattr(imports, endpoint)(
+            scope="courses", year=None, term=None, grade=None,
+            file=upload([row]), db=db, _={}, **({"skip_invalid": True} if endpoint == "import_data" else {}),
+        ))
+    assert exc.value.status_code == 422
+    detail = str(exc.value.detail)
+    assert "第2行" in detail and "各班限报人数" in detail
+    assert db.writes == [] and db.commits == 0
+
+
+def test_existing_course_without_quota_keeps_stored_value():
+    """更新已存在课程时缺列只保留原值，upsert 的 set_ 不含 quota。"""
+    # 既有关键（父记录查询使用）与既有课程自然键（快照年级查询使用）。
+    db = FakeDb(existing=[("2026-2027", "上学期", "0012")], parents=selection_parents())
+    row = {**ROWS["courses"]}
+    row.pop("各班限报人数")
+    result = execute(scope="courses", rows=[row], db=db)
+    assert result["updated"] == 1 and result["invalid"] == 0
+    set_columns = _upsert_set_columns(db.writes[0])
+    assert "quota" not in set_columns
+    assert "course_name" in set_columns
+
+
+def test_course_grade_conflict_blocks_preview_and_import():
+    # 库中课程 0012 的年级为“高一”，文件写“高二”。
+    db = FakeDb(existing=[("2026-2027", "上学期", "0012")], parents=selection_parents())
+    row = {**ROWS["courses"], "年级": "高二"}
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(imports.preview_import(scope="courses", file=upload([row]), db=db, _={}))
+    assert exc.value.status_code == 422
+    assert "0012" in str(exc.value.detail) and "年级" in str(exc.value.detail)
+    with pytest.raises(HTTPException, match="年级"):
+        execute(scope="courses", rows=[row], db=db)
+    assert db.writes == [] and db.commits == 0
+
+
+def test_course_grade_preserved_when_file_omits_grade():
+    db = FakeDb(existing=[("2026-2027", "上学期", "0012")], parents=selection_parents())
+    result = execute(scope="courses", rows=[{**ROWS["courses"]}], db=db)
+    assert result["updated"] == 1
+    # 文件未提供年级时，upsert 不得把库中年级覆盖为 NULL。
+    assert "grade" not in _upsert_set_columns(db.writes[0])
+
+
+def test_student_template_style_grade_default_does_not_conflict_with_stored_snapshot():
+    """含“年级”列但单元格为空、回退到页面筛选默认值时，不应判成年级冲突。"""
+    db = FakeDb(existing=[("2026-2027", "上学期", "0012")], parents=selection_parents())
+    row = {**ROWS["courses"], "年级": ""}
+    result = execute(scope="courses", rows=[row], db=db, year=2026, term="上学期", grade="高一")
+    assert result["updated"] == 1 and result["invalid"] == 0
+    # 文件未提供年级：不写入 grade，保留库中原值。
+    assert "grade" not in _upsert_set_columns(db.writes[0])
+
+
+def test_selection_grade_conflict_with_existing_snapshot_is_rejected():
+    db = FakeDb(
+        existing=[("2026-2027", "上学期", "0012", "高一")],
+        parents=selection_parents(),
+    )
+    row = {**ROWS["selections"], "年级": "高二"}
+    # 课程开设年级为高一，文件写高二：年级范围校验先于快照冲突给出行级错误。
+    preview_result = asyncio.run(
+        imports.preview_import(scope="selections", file=upload([row]), db=db, _={})
+    )
+    assert preview_result["valid_rows"] == 0
+    assert "仅面向 高一 开设" in str(preview_result["errors"])
+    # 执行阶段严格模式整份拒绝，且不写入任何数据。
+    with pytest.raises(HTTPException) as exec_exc:
+        execute(scope="selections", rows=[row], db=db, skip_invalid=False)
+    assert exec_exc.value.status_code == 422
+    assert "仅面向 高一 开设" in str(exec_exc.value.detail)
+    assert db.writes == [] and db.commits == 0
+
+
+def test_selection_snapshot_conflict_rejected_when_grade_scope_matches():
+    """课程年级与文件一致时，仍按原有快照冲突规则拒绝。"""
+    db = FakeDb(
+        existing=[("2026-2027", "上学期", "0012", "高一")],
+        parents=selection_parents(),
+    )
+    row = {**ROWS["selections"], "年级": "高一"}
+    db.existing = [("2026-2027", "上学期", "0012", "高二")]
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(imports.preview_import(scope="selections", file=upload([row]), db=db, _={}))
+    assert exc.value.status_code == 422
+    assert "0012" in str(exc.value.detail) and "选课快照" in str(exc.value.detail)
+
+
+def test_selection_grade_snapshot_is_kept_when_file_omits_grade():
+    db = FakeDb(
+        existing=[("2026-2027", "上学期", "0012", "高一")],
+        parents=selection_parents(),
+    )
+    row = {key: value for key, value in ROWS["selections"].items() if key != "年级"}
+    result = execute(scope="selections", rows=[row], db=db, skip_invalid=False)
+    assert result["processed"] == 1
+    # 未提供年级时不写入 grade，避免静默清空历史快照。
+    total, _, valid, errors = asyncio.run(imports._prepare_import(
+        "selections", None, None, None, upload([row]), db,
+    ))
+    assert errors == [] and total == 1
+    assert "grade" not in valid[0][0]
     assert len(db.parent_queries) >= 4
     assert db.commits == 1 and db.rollbacks == 0

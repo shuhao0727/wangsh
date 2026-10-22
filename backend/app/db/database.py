@@ -4,6 +4,7 @@ SQLAlchemy 异步引擎和会话管理
 """
 
 from typing import AsyncGenerator
+from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
@@ -51,8 +52,21 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """
     获取数据库会话的依赖函数
     在 FastAPI 依赖注入中使用
+
+    请求结束时回滚任何未提交事务。认证守卫等只读查询会隐式开启事务，
+    而 SSE 长连接会持续数分钟到数小时，若不收尾会长期停留在
+    `idle in transaction`，占用连接池并阻止 vacuum 回收。
+    写端点均已显式 commit，此处 rollback 对已提交事务是空操作。
     """
     async with AsyncSessionLocal() as session:
-        yield session
+        try:
+            yield session
+        finally:
+            if session.in_transaction():
+                try:
+                    await session.rollback()
+                except Exception:
+                    # 连接已失效时关闭异常不应覆盖请求本身的错误。
+                    logger.debug("请求结束回滚未提交事务失败，交由连接池丢弃连接")
 
 

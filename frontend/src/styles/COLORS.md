@@ -43,13 +43,18 @@
 | **primary** | `--ws-color-primary` | `#0D9488` (Teal 600) | 主按钮、链接、选中 |
 | **primary-hover** | `--ws-color-primary-hover` | `#14B8A6` | primary 元素 hover 态 |
 | **primary-muted** | `--ws-color-primary-muted` | `#CCFBF1` (Teal 100) | 大面积浅色背景、tag bg |
-| **secondary** | `--ws-color-secondary` | `#7C3AED` (Violet 600) | 焦点环、装饰强调 |
+| **secondary** | `--ws-color-secondary` | `#7C3AED` (Violet 600) | 品牌装饰与 ML 模块识别；焦点环实际由独立 token `--ws-color-focus-ring` 提供 |
 | **accent** | `--ws-color-accent` | `#7C3AED` | CTA、强调边框、点缀条 |
 | **success** | `--ws-color-success` | `#059669` (Emerald) | 完成、通过、正向指标 |
 | **warning** | `--ws-color-warning` | `#D97706` (Amber) | 警告、待处理 |
 | **error** | `--ws-color-error` | `#DC2626` (Red) | 错误、删除、危险操作 |
 | **info** | `--ws-color-info` | `#0EA5E9` (Sky 500) | 信息提示、帮助文本 |
 | **purple** | `--ws-color-purple` | `#C026D3` | 课堂互动模块识别色 |
+
+> 注意：Tailwind 的 `accent` 语义类（`bg-accent`、`text-accent`）映射到
+> `--ws-color-hover-bg`（`tailwind.config.js` 的 `theme.extend.colors.accent`），
+> 与上表的 `--ws-color-accent`（`#7C3AED`）不是同一变量。需要紫色强调时直接写
+> `var(--ws-color-accent)`，不要用 `bg-accent` 代替。
 
 ## 模块识别色
 
@@ -90,8 +95,12 @@
 - 大文本（18pt 或 14pt bold）≥ 3:1
 - 交互元素边框 ≥ 3:1
 
-`#0284C7` 对白底为 4.58:1 ✅（AA 达标）。
-`#0EA5E9` 对白底为 2.51:1 ❌（不满足 AA，只能作为 hover 态、非文本装饰）。
+`#0284C7` 对白底为 4.10:1 ❌（未达正常文本 4.5:1；仅可用于大文本、图标或 ≥3:1 的非文本元素）。
+`#0EA5E9` 对白底为 2.77:1 ❌（不满足 AA，只能作为 hover 态、非文本装饰）。
+
+> 计算方式：WCAG 2.x 相对亮度公式（sRGB 线性化后取 0.2126R + 0.7152G + 0.0722B）。
+> 小字号正文请使用 `--ws-color-primary`（`#0D9488`，对白底 3.74:1 亦不达标）等更深色值，
+> 或搭配 `--ws-color-text-*` 中性文本色；不要用 `#0284C7` / `#0EA5E9` 承载正文。
 
 ## 扩展流程
 

@@ -21,25 +21,55 @@ import {
 } from "@/components/ui/select";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { formatXbkClassName } from "../className";
+import type { XbkGrade } from "../grades";
 
 interface XbkExportModalProps {
   open: boolean;
+  /** 由点击的导出按钮决定，弹窗内不再提供切换 */
+  exportType: XbkExportType;
   onCancel: () => void;
   filters: {
     year?: string;
     term?: "上学期" | "下学期";
-    grade?: "高一" | "高二";
+    grade?: XbkGrade;
     class_name?: string;
   };
 }
 
+/** 每种导出类型的标题、说明与内容要点 */
+const EXPORT_META: Record<
+  XbkExportType,
+  { label: string; description: string; points: string[] }
+> = {
+  "course-selection": {
+    label: "学生选课表",
+    description:
+      "按班级分工作表，学生可在表中填写课程代码；用于下发、回收后整册回导。",
+    points: [
+      "年级/班级筛选生效时只导出匹配班级；用于整册回导前请清除年级和班级筛选。",
+      "课程目录工作表包含全部有效课程及其限报人数。",
+    ],
+  },
+  distribution: {
+    label: "各班分发表",
+    description: "按班级汇总每门课程的选课学生名单，用于班级层面张贴或分发。",
+    points: ["支持年级、班级筛选；未筛选时导出全部班级。"],
+  },
+  "teacher-distribution": {
+    label: "教师分发表",
+    description:
+      "按课程汇总选修学生名单，并附点名签名栏，用于任课教师课堂点名。",
+    points: ["每个课程一个工作表，按课程代码排序。"],
+  },
+};
+
 export const XbkExportModal: React.FC<XbkExportModalProps> = ({
   open,
+  exportType,
   onCancel,
   filters,
 }) => {
-  const [exportType, setExportType] =
-    useState<XbkExportType>("course-selection");
+  const meta = EXPORT_META[exportType];
   const [exporting, setExporting] = useState(false);
 
   const exportLock = useRef(false);
@@ -138,10 +168,8 @@ export const XbkExportModal: React.FC<XbkExportModalProps> = ({
     <Dialog open={open} onOpenChange={(next) => !next && handleCancel()}>
       <DialogContent className="sm:max-w-[480px]">
         <DialogHeader>
-          <DialogTitle>导出数据</DialogTitle>
-          <DialogDescription className="sr-only">
-            选择导出类型，生成当前学年、学期和班级筛选条件下的 XBK 导出文件。
-          </DialogDescription>
+          <DialogTitle>导出{meta.label}</DialogTitle>
+          <DialogDescription>{meta.description}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
@@ -154,26 +182,6 @@ export const XbkExportModal: React.FC<XbkExportModalProps> = ({
             </Alert>
           ) : null}
 
-          <div>
-            <div className="ws-modal-label">导出类型</div>
-            <Select
-              disabled={exporting}
-              value={exportType}
-              onValueChange={(value) => {
-                if (!exportLock.current) setExportType(value as XbkExportType);
-              }}
-            >
-              <SelectTrigger className="h-8 w-full text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="course-selection">学生选课表</SelectItem>
-                <SelectItem value="teacher-distribution">教师分发表</SelectItem>
-                <SelectItem value="distribution">各班分发表</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
           <div className="ws-modal-hint">
             <p>
               • 将按当前筛选导出：{filters.year || "未选择学年"} ·{" "}
@@ -183,6 +191,9 @@ export const XbkExportModal: React.FC<XbkExportModalProps> = ({
                 : ""}
             </p>
             <p>• 学年与学期同时作为数据筛选条件和导出标题，不再重复填写。</p>
+            {meta.points.map((point) => (
+              <p key={point}>• {point}</p>
+            ))}
           </div>
         </div>
 

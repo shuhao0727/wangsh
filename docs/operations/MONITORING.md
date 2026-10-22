@@ -13,9 +13,18 @@
 
 ### 1. AI 智能体专用指标（JSON 格式）
 
-**端点**: `GET /api/system/ai-agents-metrics`
+**端点**: `GET /api/v1/system/ai-agents-metrics`
 
 **权限**: 超级管理员
+
+> 指标来源核对（2026-10-20）：该端点从 Redis 读取固定键名，见
+> `backend/app/utils/metrics.py:242-261`。当前仓库内只有
+> `ai_agents:conversations:dur_ms`（`conversations.py:47-48`）与
+> `analysis:cache:hit` / `analysis:cache:miss`（`analysis.py:182,189` 等）有写入方；
+> `ai_agents:conversations:cache_hit|cache_miss`、`ai_agents:analysis:total|dur_ms`、
+> `ai_agents:dify:active_leases|lease_limit` 未检索到写入代码，实际会停留在默认值
+> （0 / 0 / 0 / 20）。Dify 并发租约的真实键为 `wangsh:dify:concurrency:{resource}`
+> （`backend/app/services/agents/dify_concurrency.py:217`），不在此端点暴露范围内。
 
 **返回示例**:
 ```json
@@ -51,7 +60,7 @@
 
 ### 2. Prometheus 格式指标
 
-**端点**: `GET /api/system/metrics`
+**端点**: `GET /api/v1/system/metrics`
 
 **权限**: 超级管理员
 
@@ -78,6 +87,12 @@
 - **说明**: 热点分析、学生问题链等分析任务的响应时间
 
 ### 缓存指标
+
+> 现状说明（源码：`backend/app/api/endpoints/agents/ai_agents/conversations.py:26-38`，
+> 2026-10-15）：会话列表 Redis 缓存已移除，端点直接查库；当前仓库内也没有写入
+> `ai_agents:conversations:cache_hit` / `cache_miss` 的代码。因此下列缓存类指标会稳定为
+> `0` / `0.0`，**不能**再用作会话列表性能告警依据，本节保留待复核。会话列表目前只有
+> `ai_agents:conversations:dur_ms` 响应时间样本仍在写入（同文件第 47-48 行）。
 
 #### 缓存命中率
 - **指标名**: `ai_agents_conversations_cache_hit_rate`
@@ -127,18 +142,18 @@
 2. 检查缓存命中率
    ```bash
    curl -H "Authorization: Bearer <token>" \
-     https://api.example.com/api/system/ai-agents-metrics | jq '.conversations.cache_hit_rate'
+     https://api.example.com/api/v1/system/ai-agents-metrics | jq '.conversations.cache_hit_rate'
    ```
 3. 如果命中率 < 60%，检查：
    - Redis 内存是否充足
-   - TTL 配置是否合理（当前 60 秒）
+   - 会话列表缓存已于 2026-10-15 移除，命中率恒为 0，本步当前不适用
    - 是否有大量冷启动请求
 4. 检查数据库索引：
    ```sql
    EXPLAIN ANALYZE
-   SELECT * FROM conversations
+   SELECT * FROM znt_conversations
    WHERE user_id = ? AND agent_id = ?
-   ORDER BY updated_at DESC LIMIT 20;
+   ORDER BY created_at DESC LIMIT 20;
    ```
 
 ### 2. 缓存命中率过低告警
@@ -152,6 +167,8 @@
 **处理步骤**:
 1. 检查 Redis 可用性和内存
 2. 检查 TTL 配置（`backend/app/api/endpoints/agents/ai_agents/conversations.py`）
+   —— 注意：该文件中的会话列表缓存已于 2026-10-15 移除（同文件第 26-38 行），
+   此步骤仅在缓存重新引入后才适用，当前命中率恒为 0 属预期。
 3. 分析请求模式，是否有大量不同参数组合
 4. 考虑调整缓存策略或增加 TTL
 
@@ -167,7 +184,7 @@
 1. 立即检查当前租约状态
    ```bash
    curl -H "Authorization: Bearer <token>" \
-     https://api.example.com/api/system/ai-agents-metrics | jq '.dify'
+     https://api.example.com/api/v1/system/ai-agents-metrics | jq '.dify'
    ```
 2. 检查是否有租约泄露（长时间未释放）
 3. 短期方案：启用请求限流
@@ -194,24 +211,29 @@
 
 ### 对话记录数量监控
 
-虽然当前监控端点未直接暴露对话记录总数，但可以通过数据库查询获取：
+虽然当前监控端点未直接暴露对话记录总数，但可以通过数据库查询获取
+（表名见 `backend/app/models/agents/ai_agent.py:56`）：
 
 ```sql
-SELECT COUNT(*) FROM conversations;
-SELECT COUNT(*) FROM conversation_messages;
+SELECT COUNT(*) FROM znt_conversations;
 ```
 
+对话按 `message_type`（`question` / `answer`）逐行存放于同一张表，没有独立的
+`conversation_messages` 表；如需分别统计问答条数，按该列分组即可。
+
 **告警阈值**:
-- 对话记录数 > 500,000 条：触发归档任务
-- 消息记录数 > 5,000,000 条：考虑分片或归档
+- `znt_conversations` 对话记录数 > 500,000 条：触发归档任务
+- 单表总行数 > 5,000,000 条：考虑分片或归档（原“消息表 5,000,000 条”对应的是并不存在的独立消息表）
 
 **归档操作**:
 ```bash
-# 手动触发归档（仅管理员）
+# 手动触发归档（仅管理员）；接口接收“归档 N 天前”的天数
 curl -X POST -H "Authorization: Bearer <token>" \
-  https://api.example.com/api/system/archiving/conversations \
-  -d '{"before_date": "2024-01-01", "dry_run": false}'
+  https://api.example.com/api/v1/system/archiving/conversations \
+  -d '{"days": 90}'
 ```
+契约见 `backend/app/api/endpoints/system/archiving.py:11-16`（`days` 为 `1..3650` 的整数，无
+`before_date` / `dry_run` 字段）。
 
 ### Redis 内存监控
 
@@ -295,7 +317,7 @@ panels:
 1. **确认症状**
    ```bash
    curl -w "@curl-format.txt" -H "Authorization: Bearer <token>" \
-     "https://api.example.com/api/agents/conversations?limit=20"
+     "https://api.example.com/api/v1/ai-agents/conversations?limit=20"
    ```
 
 2. **检查缓存**
@@ -319,7 +341,7 @@ panels:
    ```bash
    # 检查活跃租约数
    curl -H "Authorization: Bearer <token>" \
-     https://api.example.com/api/system/ai-agents-metrics | jq '.dify.active_leases'
+     https://api.example.com/api/v1/system/ai-agents-metrics | jq '.dify.active_leases'
    ```
 
 2. **排查租约泄露**
@@ -345,3 +367,4 @@ panels:
 | 日期 | 版本 | 变更内容 |
 |------|------|----------|
 | 2024-10-01 | 1.0 | 初始版本，包含基础监控指标和告警规则 |
+| 2026-10-20 | 1.1 | 校正端点前缀为 `/api/v1/system/*`、归档请求体为 `{"days": N}`、表名为 `znt_conversations`；标注会话列表缓存已移除、部分指标无写入方 |

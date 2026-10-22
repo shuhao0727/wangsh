@@ -2,7 +2,7 @@
 
 > 状态：reference
 > Owner：frontend
-> 最近复核：2026-10-19
+> 最近复核：2026-10-20
 > 归档条件：设计系统和自动 UI 门禁完整覆盖本文规则
 
 本文合并原样式护栏、单页治理、页面体检模板和最终回归清单。目标是在不改变业务
@@ -136,7 +136,7 @@ Canvas、媒体视口、拖拽手柄等确需固定尺寸时：
 ### Dialog、Sheet 与浮层
 
 > **按钮顺序合同**（2026-10-04 抢救自已删除的 `DIALOG_BUTTON_ORDER_REPORT.md`，与代码一致）：
-> `DialogFooter` 使用 `flex flex-col-reverse sm:flex-row sm:justify-end gap-button-gap`
+> `DialogFooter` 使用 `flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2`
 > （见 `frontend/src/components/ui/dialog.tsx`）。即：**次要/取消按钮在前，主要按钮在后**；
 > 移动端通过 `flex-col-reverse` 让主按钮显示在上方。危险操作按钮与常规按钮分离，
 > 不与主按钮相邻。只有一个按钮的对话框（如纯提示）不受此约束。

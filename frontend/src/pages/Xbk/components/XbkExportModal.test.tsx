@@ -18,8 +18,14 @@ const setup = (
     grade: "高二",
     class_name: "2",
   },
+  exportType: Props["exportType"] = "course-selection",
 ) => {
-  const props: Props = { open: true, filters, onCancel: vi.fn() };
+  const props: Props = {
+    open: true,
+    exportType,
+    filters,
+    onCancel: vi.fn(),
+  };
   const view = render(<XbkExportModal {...props} />);
   return {
     ...view,
@@ -31,10 +37,6 @@ const setup = (
   };
 };
 const submit = () => screen.getByRole("button", { name: "导出" });
-const selectType = async (name: string) => {
-  fireEvent.keyDown(screen.getByRole("combobox"), { key: "ArrowDown" });
-  fireEvent.click(await screen.findByRole("option", { name }));
-};
 const deferred = <T,>() => {
   let resolve!: (value: T) => void;
   let reject!: (reason: unknown) => void;
@@ -101,8 +103,7 @@ describe("XBK export filters", () => {
     ["教师分发表", "teacher-distribution"],
     ["各班分发表", "distribution"],
   ])("exports %s with the exact academic-year filters", async (label, type) => {
-    const view = setup();
-    await selectType(label);
+    const view = setup(undefined, type as Props["exportType"]);
     fireEvent.click(submit());
     await waitFor(() => expect(view.props.onCancel).toHaveBeenCalledOnce());
     expect(xbkDataApi.exportTables).toHaveBeenCalledExactlyOnceWith({
@@ -122,8 +123,7 @@ describe("XBK export filters", () => {
   });
 
   it("allows cross-grade distribution export instead of forcing one grade", async () => {
-    const view = setup({ year: "2026-2027", term: "上学期" });
-    await selectType("各班分发表");
+    const view = setup({ year: "2026-2027", term: "上学期" }, "distribution");
     fireEvent.click(submit());
     await waitFor(() => expect(view.props.onCancel).toHaveBeenCalledOnce());
     expect(xbkDataApi.exportTables).toHaveBeenCalledWith({

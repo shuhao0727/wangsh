@@ -45,7 +45,10 @@ export interface XbkSelectionRow {
   id: number;
   year: string;
   term: string;
+  /** 选课写入时的年级快照，不随学生转年级变化 */
   grade?: string | null;
+  /** 学生当前所在年级；列表筛选按此口径，展示优先使用它 */
+  student_grade?: string | null;
   student_no: string;
   name?: string | null;
   course_code: string;
@@ -81,6 +84,8 @@ export interface XbkCourseStatItem {
   quota?: number;
   class_count?: number;
   allowed_total?: number;
+  /** 容量口径：per_grade_class / unset_grade / cross_grade */
+  capacity_basis?: string | null;
 }
 
 export interface XbkClassStatItem {
@@ -398,7 +403,8 @@ export const xbkDataApi = {
     grade?: string;
     class_name?: string;
     search_text?: string;
-    format?: "xlsx" | "xls";
+    // 后端只支持 xlsx；format=xls 会被 400 拒绝
+    format?: "xlsx";
   }): Promise<Blob> => {
     const res = await api.client.get("/xbk/export", {
       params,
@@ -414,7 +420,8 @@ export const xbkDataApi = {
     grade?: string;
     class_name?: string;
     search_text?: string;
-    format?: "xlsx" | "xls";
+    // 后端只支持 xlsx；format=xls 会被 400 拒绝
+    format?: "xlsx";
   }): Promise<Blob> => {
     const res = await api.client.get("/xbk/export", {
       params,

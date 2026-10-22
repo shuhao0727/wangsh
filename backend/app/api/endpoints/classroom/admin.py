@@ -23,6 +23,15 @@ def _is_global_manager(current_user: UserInfo) -> bool:
     return current_user.get("role_code") in {"admin", "super_admin"}
 
 
+async def _publish_activity_changed(action: str, activity_id: int) -> None:
+    """管理端活动变更通知，供列表页失效缓存。"""
+    await svc.publish("admin_global", {
+        "type": "classroom_interaction_changed",
+        "action": action,
+        "activity_id": activity_id,
+    })
+
+
 def _admin_stream_channel(current_user: UserInfo) -> str:
     if _is_global_manager(current_user):
         return "admin_global"
@@ -82,6 +91,7 @@ async def create_activity(
 ):
     try:
         activity = await svc.create_activity(db, data.dict(), current_user.get("id"))
+        await _publish_activity_changed("create", activity.id)
         return _to_response(activity)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -98,6 +108,7 @@ async def update_activity(
         # 教师不应能修改他人创建的活动草稿
         await _assert_can_manage_activity(db, activity_id, current_user)
         activity = await svc.update_activity(db, activity_id, data.dict(exclude_unset=True))
+        await _publish_activity_changed("update", activity_id)
         return _to_response(activity)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -112,6 +123,7 @@ async def delete_activity(
     try:
         await _assert_can_manage_activity(db, activity_id, current_user)
         await svc.delete_activity(db, activity_id)
+        await _publish_activity_changed("delete", activity_id)
         return {"message": "已删除"}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -127,6 +139,7 @@ async def duplicate_activity(
     try:
         await _assert_can_manage_activity(db, activity_id, current_user)
         activity = await svc.duplicate_activity(db, activity_id, current_user.get("id"))
+        await _publish_activity_changed("duplicate", activity.id)
         return _to_response(activity)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -142,6 +155,7 @@ async def restart_activity(
     try:
         await _assert_can_manage_activity(db, activity_id, current_user)
         activity = await svc.restart_activity(db, activity_id)
+        await _publish_activity_changed("restart", activity_id)
         return _to_response(activity)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -230,6 +244,7 @@ async def start_activity(
     try:
         await _assert_can_manage_activity(db, activity_id, current_user)
         activity = await svc.start_activity(db, activity_id)
+        await _publish_activity_changed("start", activity_id)
         return _to_response(activity)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -250,6 +265,7 @@ async def end_activity(
             analysis_agent_id=(req.analysis_agent_id if req else None),
             analysis_prompt=(req.analysis_prompt if req else None),
         )
+        await _publish_activity_changed("end", activity_id)
         return _to_response(activity)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

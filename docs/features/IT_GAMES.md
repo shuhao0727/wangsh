@@ -74,7 +74,7 @@ IT 游戏资源库模块为信息技术教学场景提供教学游戏安装包�
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | `GET` | `/it/games` | 游戏列表，支持 `?category=&search=&page=&size=` 过滤，仅返回上架游戏 |
-| `GET` | `/it/games/categories` | 获取所有分类列表（去重排序），响应为 `{"categories": [...]}` |
+| `GET` | `/it/games/categories` | 获取上架游戏分类列表（去重排序），响应为 `{"categories": [...]}` |
 | `GET` | `/it/games/{id}` | 获取单个游戏详情 |
 
 ### 登录接口

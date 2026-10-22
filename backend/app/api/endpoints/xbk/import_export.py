@@ -54,6 +54,16 @@ _IDENTITY_WHITESPACE = (
 )
 _STUDENT_IDENTITY_CONFLICT = (
     "导入学号与数据库中另一姓名或年级的学生冲突，已阻止整份文件导入。请核对跨班级、跨年级的唯一学号；如需更正姓名或年级，请明确编辑原记录。")
+# 课程限额缺失不等于 0：旧实现把 None 写成 0，课程会静默变成“任何人都选不上”。
+_COURSE_QUOTA_REQUIRED = (
+    "各班限报人数不能为空：新增课程必须填写各班限报人数，系统无法把空值推断为 0 或不限。"
+    "已存在的课程未提供该列或单元格为空时保留库中原值。")
+_COURSE_GRADE_CONFLICT = (
+    "课程 {code} 的年级与已有记录不一致（{location}：文件为 {incoming}，库中为 {stored}）。"
+    "已阻止整份文件导入；如需调整年级，请先在课程目录中编辑原记录。")
+_SELECTION_GRADE_CONFLICT = (
+    "学生 {student_no} 的年级与已有选课快照不一致（{location}：文件为 {incoming}，库中为 {stored}）。"
+    "已阻止整份文件导入；如需更正年级，请先在选课记录中编辑原记录。")
 
 
 def _student_identity_condition(values: Dict[str, Any]):
@@ -246,13 +256,17 @@ async def _filter_selection_references(db, valid, row_numbers, errors, *, lock=F
     """Keep file row attribution while excluding invalid natural-key parents."""
     reference_errors = await selection_reference_errors(db, [values for values, _ in valid], lock=lock)
     accepted = []
-    for item, row_number, messages in zip(valid, row_numbers, reference_errors):
+    accepted_rows = []
+    accepted_indexes = []
+    for index, (item, row_number, messages) in enumerate(zip(valid, row_numbers, reference_errors)):
         if messages:
             errors.append(_row_errors(row_number, messages))
         else:
             accepted.append(item)
+            accepted_rows.append(row_number)
+            accepted_indexes.append(index)
     errors.sort(key=lambda error: error["row"])
-    return accepted
+    return accepted, accepted_rows, accepted_indexes
 
 
 def _validate_import_values(scope, values, fields):
@@ -278,6 +292,7 @@ def _prepare_import_row(row, scope, defaults, fields, required):
     preview = {k: _normalize_str(row.get(k)) for k in row.index}
     values = {}
     period = None
+    quota_missing = False
     try:
         values["year"], values["term"] = _get_year_term(row, year, term)
         preview["学年"], preview["学期"] = str(values["year"]), values["term"]
@@ -285,6 +300,9 @@ def _prepare_import_row(row, scope, defaults, fields, required):
     except HTTPException as exc:
         messages.append(str(exc.detail))
     values["grade"] = _normalize_str(row.get("年级")) or _normalize_str(grade)
+    # 记录年级是否真的来自文件：仅文件显式给出的年级才参与“与库中快照比对”，
+    # 页面筛选默认值不得把已有记录判成年级冲突。
+    grade_from_file = _normalize_str(row.get("年级")) is not None
     if values["grade"] is not None:
         preview["年级"] = values["grade"]
     for label, field in fields.items():
@@ -296,10 +314,18 @@ def _prepare_import_row(row, scope, defaults, fields, required):
             messages.append(f"{label}不能为空")
         values[field] = value
     if scope == "courses":
-        values["quota"] = _normalize_str(row.get("各班限报人数"))
+        # 缺列或空单元格都记为“未提供”，交给整文件上下文区分新增与更新；
+        # 不能再把它静默折成 0，否则新课限额为 0 且没有任何提示。
+        quota_text = _normalize_str(row.get("各班限报人数"))
+        quota_missing = quota_text is None
+        if quota_text is not None:
+            values["quota"] = quota_text
     if not messages:
         values, messages = _validate_import_values(scope, values, fields)
-    return values, preview, messages, period
+        if scope == "courses" and quota_missing:
+            # 更新时保留库中原 value；是否允许缺省由后续预检按“新增/已存在”裁决。
+            values.pop("quota", None)
+    return values, preview, messages, period, quota_missing, grade_from_file
 
 
 def _record_import_identity(scope, values, key_fields, row_number, seen_keys):
@@ -319,6 +345,72 @@ def _record_import_identity(scope, values, key_fields, row_number, seen_keys):
                 f"{advice}"
             ))
         seen_keys[key] = row_number
+
+
+async def _validate_import_parent_snapshots(
+    scope: str, valid: list, row_numbers: List[int], db: AsyncSession,
+    grade_flags: List[bool], selected_grade: Optional[str] = None,
+) -> None:
+    """Reject silent grade/quota overwrites before any write (preview and execute).
+
+    - 新增课程缺少“各班限报人数”：整份文件 422（行号 + 字段名），不再静默写 0。
+    - 已存在课程/选课：**文件显式给出**的年级与库中快照不一致时整份 422；
+      文件未给出年级时（例如整列缺失、沿用页面筛选默认值）保留库中原值。
+    - 导入页面选择的年级与文件中的年级不一致：整份 422。否则用户选择的年级
+      会被文件值静默丢弃（新增路径）或只在库中已有记录时才被拒绝（更新路径），
+      同一份文件按记录是否已存在得到两种结果。
+    """
+    if scope not in {"courses", "selections"} or not valid or db is None:
+        return
+    if selected_grade:
+        for (values, _), row_number, grade_from_file in zip(valid, row_numbers, grade_flags):
+            file_grade = values.get("grade") if grade_from_file else None
+            if file_grade is not None and file_grade != selected_grade:
+                raise HTTPException(status_code=422, detail=(
+                    f"第{row_number}行的年级为 {file_grade}，与本次导入选择的年级 "
+                    f"{selected_grade} 不一致。请在页面上选择 {file_grade} 后重试，"
+                    "或修改文件中该行的年级。"
+                ))
+    if scope == "courses":
+        model, key_fields = XbkCourse, ("year", "term", "course_code")
+        columns = (XbkCourse.year, XbkCourse.term, XbkCourse.course_code, XbkCourse.grade)
+    else:
+        model, key_fields = XbkSelection, ("year", "term", "student_no")
+        columns = (XbkSelection.year, XbkSelection.term, XbkSelection.student_no, XbkSelection.grade)
+    keys = list({tuple(values[field] for field in key_fields) for values, _ in valid})
+    # 自然键唯一性包含软删除记录（课程按 (year, term, course_code) 唯一，
+    # 选课恢复也会命中旧行），因此这里不按 is_deleted 过滤，避免恢复时静默改快照。
+    stored: Dict[tuple[str, ...], List[Optional[str]]] = {}
+    key_columns = [getattr(model, field) for field in key_fields]
+    for offset in range(0, len(keys), 500):
+        statement = select(*columns).where(
+            tuple_(*key_columns).in_(keys[offset:offset + 500]),
+        )
+        for *key, grade in (await db.execute(statement)).all():
+            stored.setdefault(tuple(key), []).append(_normalize_str(grade))
+    for (values, _), row_number, grade_from_file in zip(valid, row_numbers, grade_flags):
+        key = tuple(values[field] for field in key_fields)
+        if key not in stored:
+            if scope == "courses" and "quota" not in values:
+                raise HTTPException(status_code=422, detail=f"第{row_number}行 {_COURSE_QUOTA_REQUIRED}")
+            continue
+        stored_grades = [grade for grade in stored[key] if grade is not None]
+        if not grade_from_file:
+            # 文件没有提供年级时保留库中快照，不用筛选默认值或 NULL 覆盖历史值。
+            values.pop("grade", None)
+            continue
+        incoming_grade = values.get("grade")
+        if incoming_grade is not None and any(
+            stored_grade != incoming_grade for stored_grade in stored_grades
+        ):
+            template = _COURSE_GRADE_CONFLICT if scope == "courses" else _SELECTION_GRADE_CONFLICT
+            raise HTTPException(status_code=422, detail=template.format(
+                code=values.get("course_code"),
+                student_no=values.get("student_no"),
+                location=f"第{row_number}行",
+                incoming=incoming_grade,
+                stored=stored_grades[0],
+            ))
 
 
 async def _prepare_import(
@@ -343,10 +435,11 @@ async def _prepare_import(
     valid = []
     seen_keys = {}
     valid_row_numbers = []
+    valid_grade_flags = []
     periods = set()
     for index, row in df.iterrows():
         row_number = int(index) + 2
-        values, preview, messages, period = _prepare_import_row(
+        values, preview, messages, period, _quota_missing, grade_from_file = _prepare_import_row(
             row, scope, (year, term, grade), fields, required,
         )
         if period is not None:
@@ -357,13 +450,21 @@ async def _prepare_import(
         else:
             valid.append((values, preview))
             valid_row_numbers.append(row_number)
+            valid_grade_flags.append(grade_from_file)
     if len(periods) > 1:
         raise HTTPException(status_code=422, detail=(
             f"文件包含{len(periods)}个不同的学年/学期组合，已阻止整份文件导入。"
             "请检查学年列是否被 Excel 自动递增，并按同一学期拆分文件。"
         ))
     if scope == "selections" and valid:
-        valid = await _filter_selection_references(db, valid, valid_row_numbers, errors, lock=lock_references)
+        valid, valid_row_numbers, kept_indexes = await _filter_selection_references(
+            db, valid, valid_row_numbers, errors, lock=lock_references,
+        )
+        valid_grade_flags = [valid_grade_flags[index] for index in kept_indexes]
+    await _validate_import_parent_snapshots(
+        scope, valid, valid_row_numbers, db, valid_grade_flags,
+        selected_grade=_normalize_str(grade),
+    )
     return int(df.shape[0]), list(df.columns), valid, errors
 
 
@@ -430,6 +531,10 @@ async def _execute_import_upsert(db, scope, model, statement, key_fields, update
 async def _guard_import_parent(db, scope, current, values):
     if current is None:
         return
+    if scope == "courses" and "quota" not in values:
+        # 文件未提供限额时保留原值；守卫必须按库中原限额比较，
+        # 不能把“未提供”当成 0 而误判为限额下调。
+        values = {**values, "quota": current.quota}
     guard = guard_student_change if scope == "students" else guard_course_change
     await guard(db, current, values)
 
@@ -534,6 +639,14 @@ async def export_data(
     db: AsyncSession = Depends(get_db),
     _: Dict[str, Any] = Depends(require_admin),
 ) -> StreamingResponse:
+    # 导出统一使用 xlsx（openpyxl 生成的是 OOXML 字节）。旧参数 format=xls
+    # 过去只改扩展名、不改字节，Excel 会提示“文件格式与扩展名不符”，
+    # 因此这里明确拒绝，而不是静默返回伪装成 .xls 的 xlsx。
+    if format != "xlsx":
+        raise HTTPException(
+            status_code=400,
+            detail="不支持 .xls 导出，请使用 xlsx",
+        )
     diagnostics_df = None
     if scope == "students":
         stmt = select(XbkStudent).where(XbkStudent.is_deleted.is_(False))
@@ -833,7 +946,7 @@ async def export_data(
             force_text_cells(ws)
     output.seek(0)
 
-    filename = f"xbk_{scope}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.{format}"
+    filename = f"xbk_{scope}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
     headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
     return StreamingResponse(
         output,

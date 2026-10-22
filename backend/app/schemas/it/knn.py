@@ -71,7 +71,8 @@ class Submit(Contract):
     student_no: StudentNo
     request_id: UUID
     expected_revision: StrictInt = Field(ge=0)
-    features: list[StrictInt] = Field(min_length=12, max_length=12)
+    # 按教学设计只采集六类运动的每周参与天数，不再采集喜欢程度。
+    features: list[StrictInt] = Field(min_length=6, max_length=6)
     label: Label
     display_consent: StrictBool = False
 
@@ -84,9 +85,9 @@ class Submit(Contract):
     @field_validator("features")
     @classmethod
     def valid_features(cls, values):
-        for i, value in enumerate(values):
-            if value < 0 or value > (7 if i % 2 == 0 else 4):
-                raise ValueError("参与天数应为 0～7 的整数，喜欢程度应为 0～4 的整数")
+        for value in values:
+            if value < 0 or value > 7:
+                raise ValueError("每周参与天数应为 0～7 的整数")
         return values
 
 

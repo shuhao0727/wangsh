@@ -9,7 +9,11 @@ from urllib.parse import quote
 from app.core.deps import require_admin
 from app.db.database import get_db
 from app.schemas.xbk.academic_year import AcademicYear, split_academic_year
-from app.services.xbk.exports.course_selection import build_student_course_selection_xlsx
+from app.services.xbk.exports.course_selection import (
+    CourseSelectionExportConflict,
+    CourseSelectionExportScopeError,
+    build_student_course_selection_xlsx,
+)
 from app.services.xbk.exports.class_distribution import build_class_distribution_xlsx
 from app.services.xbk.exports.teacher_distribution import build_teacher_distribution_xlsx
 
@@ -33,7 +37,16 @@ async def export_tables(
         raise HTTPException(status_code=400, detail="不支持的导出类型")
 
     if export_type == "course-selection":
-        output = await build_student_course_selection_xlsx(db, year, term, class_name, year_start, year_end, grade=grade)
+        try:
+            output = await build_student_course_selection_xlsx(
+                db, year, term, class_name, year_start, year_end, grade=grade,
+            )
+        except CourseSelectionExportScopeError as exc:
+            # 筛选后没有匹配班级：明确 422，不下载空工作簿。
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except CourseSelectionExportConflict as exc:
+            # 同一学生多门有效选课，工作簿无法表达三态，保持原有安全拒绝。
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
         prefix = "学生选课表"
     elif export_type == "distribution":
         output = await build_class_distribution_xlsx(db, year, term, grade, class_name, year_start, year_end)

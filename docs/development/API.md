@@ -44,12 +44,12 @@ JSON 请求对象禁止额外字段，非法字段、类型或范围返回 `422`
 | `student_no` | 名单内学号；去除首尾空格，格式及等价规则见下文 |
 | `request_id` | UUID；客户端一次提交生成一次，网络重试保持不变 |
 | `expected_revision` | 严格整数，`>=0`；首次填写为 `0`，重填使用最近 `check` 返回的当前版本 |
-| `features` | 固定 12 个严格整数；按六类运动交替保存 `[天数, 喜欢程度, ...]`，偶数索引范围 `0..7`，奇数索引范围 `0..4` |
+| `features` | 固定 6 个严格整数；按六类运动顺序保存每周参与天数，每项范围 `0..7` |
 | `label` | 只允许 `球类对抗`、`力量类`、`耐力类`、`技巧类` |
-| `display_consent` | 严格布尔，默认 `false`；只表示愿意作为匿名学生 A 展示，不影响其他匿名样本进入冻结数据 |
+| `display_consent` | 严格布尔，默认 `false`；字段保留兼容，界面恒为 `false`，冻结不再要求同意 |
 
-六类运动的固定顺序为球类对抗、力量、耐力、技巧、团队配合、日常活动。喜欢程度 `0..4`
-依次为完全不喜欢、不太喜欢、一般、比较喜欢、非常喜欢。特征不接受布尔或数字字符串。
+六类运动的固定顺序为球类对抗、力量、耐力、技巧、团队配合、日常活动。按教学设计只采集每周参与天数，不再采集喜欢程度。
+特征不接受布尔或数字字符串。
 
 新提交必须满足服务器时间 `starts_at <= now < ends_at`，且持久状态为 `scheduled`。
 同一批次、同一学号默认只允许一次；重填新增答案版本并自动消耗一次授权，不能覆盖旧答案。
@@ -115,12 +115,12 @@ JSON 请求对象禁止额外字段，非法字段、类型或范围返回 `422`
 
 ### 导出、冻结与错误
 
-CSV 使用 UTF-8 BOM，包含全部名单（含未交）、提交状态、当前版本、重填授权、12 维特征、运动意向、
-匿名展示选择与提交时间。公式危险学号加转义前缀。CSV 不包含历史版本；历史使用专用接口读取。
+CSV 使用 UTF-8 BOM，包含全部名单（含未交）、提交状态、当前版本、重填授权、六项每周参与天数、
+报名类别与提交时间。公式危险学号加转义前缀。CSV 不包含历史版本；历史使用专用接口读取。
 
-冻结要求至少 4 份当前有效答案，且学生 A 已选择同意匿名展示。未指定学号时，按名单顺序选择
-首位同意者。返回 `{"version":1,"aId":"S01","students":[...]}`，每个学生只含 `id`、`label`、
-`features`，不含学号；ID 按当前有效答案的名单顺序生成。每批只能冻结一次，重复冻结 `409`；
+冻结要求至少 4 份当前有效答案；学生 A 由 `a_student_no` 指定，未指定时按名单顺序取首位，不再要求
+任何学生同意匿名展示。返回 `{"version":2,"aId":"S01","featureNames":[...],"students":[...]}`，
+每个学生只含 `id`、`label`、`features`（6 个整数），不含学号；ID 按当前有效答案的名单顺序生成。每批只能冻结一次，重复冻结 `409`；
 后续重填或配置变化不修改快照，可重复读取已冻结 JSON。
 
 | 状态码 | 情况 |
@@ -134,6 +134,11 @@ CSV 使用 UTF-8 BOM，包含全部名单（含未交）、提交状态、当前
 本节不将源码合同或本地验证视为生产升级完成。
 
 ## AI伙伴临时共享榜单（未发布）
+
+> 发布状态待复核：本节标题与正文沿用“未发布”口径，指未确认服务器部署与真实模型验收。
+> 但 `docs/docker/RELEASE_NOTES.md:30`（v2.1.5 已发布镜像）已记录“AI伙伴目录改为服务端维护源
+> 和前端生成副本”，v2.1.3 候选（同文件第 107-121 行）已包含榜单；因此“镜像是否已包含本功能”
+> 与“是否已部署上线”需分开表述，待 release owner 核对后统一。
 
 本节记录当前源码合同，不表示已部署或已完成真实模型验收。实现入口为
 `backend/app/api/endpoints/ai_partner.py`、`backend/app/schemas/ai_partner.py` 与
@@ -377,9 +382,13 @@ PythonLab WS 接入补充（2026-09-09）：terminal/DAP 在业务缓存、termi
 | GET | `/system/settings` | 获取系统设置 | 超级管理员 |
 | GET | `/system/typst-metrics` | Typst 编译指标 | 超级管理员 |
 | POST | `/system/typst-pdf-cleanup` | 清理 Typst PDF | 超级管理员 |
-| GET | `/system/metrics` | 系统指标 | 超级管理员 |
+| GET | `/system/metrics` | 系统指标（Prometheus 文本格式） | 超级管理员 |
+| GET | `/system/ai-agents-metrics` | AI 智能体监控指标（JSON） | 超级管理员 |
+| POST | `/system/archiving/conversations` | 触发对话归档任务，请求体 `{"days": N}` | 管理员 |
+| POST | `/system/archiving/analyses` | 触发分析记录归档任务，请求体 `{"days": N}` | 管理员 |
 
-> 注：本节认证列已按代码实际守卫修正（`require_super_admin`），除公开接口外仅超级管理员可访问。
+> 注：本节认证列已按代码实际守卫修正（`require_super_admin`），除公开接口外仅超级管理员可访问；
+> 归档接口为 `require_admin`（`backend/app/api/endpoints/system/archiving.py:25,46`）。
 
 <!-- APPEND_MARKER_1 -->
 
@@ -388,6 +397,7 @@ PythonLab WS 接入补充（2026-09-09）：terminal/DAP 在业务缓存、termi
 | 方法 | 路径 | 说明 | 认证 |
 |------|------|------|------|
 | GET | `/users/` | 获取用户列表 | 管理员 |
+| GET | `/users/stats` | 用户统计（总数、激活数、角色分布） | 管理员 |
 | GET | `/users/{user_id}` | 获取用户详情 | 管理员 |
 | POST | `/users/` | 创建用户；普通 admin 仅可创建 student/teacher | 管理员 |
 | PUT | `/users/{user_id}` | 更新用户 | 管理员 |
@@ -395,6 +405,9 @@ PythonLab WS 接入补充（2026-09-09）：terminal/DAP 在业务缓存、termi
 | POST | `/users/batch-delete` | 批量删除，请求体为 `{ "user_ids": [1, 2] }`；目标缺失或普通 admin 遇到高权限账号时整批拒绝 | 管理员 |
 | GET | `/users/import/template` | 获取导入模板（Excel） | 管理员 |
 | POST | `/users/import` | 导入用户；普通 admin 仅可新增/更新 student、teacher；高权限行在 `UserImportResult.errors` 中逐行失败 | 管理员 |
+| GET | `/users/privacy/me/export` | 导出本人基础信息、AI 对话与小组讨论消息 | 是 |
+| GET | `/users/privacy/me/data-summary` | 本人上述两类消息数量 | 是 |
+| DELETE | `/users/privacy/me/data` | 校验 `confirmation="DELETE MY DATA"` 后硬删除本人上述两类消息 | 是 |
 
 用户管理权限说明：
 - 普通 `admin` 只能管理和导入 `student`、`teacher`，不能创建、修改或删除 `admin`、`super_admin`。
@@ -488,6 +501,26 @@ PythonLab WS 接入补充（2026-09-09）：terminal/DAP 在业务缓存、termi
 | POST | `/ai-agents/admin/export/conversations` | 导出对话 | 管理员 |
 | GET | `/ai-agents/admin/export/hot-questions` | 导出热门问题 | 管理员 |
 | GET | `/ai-agents/admin/export/student-chains` | 导出学生链 | 管理员 |
+
+上表未逐一展开、但已注册的补充端点（均见 `backend/app/api/endpoints/agents/ai_agents/`）：
+
+| 方法 | 路径 | 说明 | 认证 |
+|------|------|------|------|
+| POST | `/ai-agents/{agent_id}/reveal-api-key` | 二次校验管理员密码后返回明文 API Key | 超级管理员 |
+| GET | `/ai-agents/analysis/hot-questions/live` | 热点实时分桶 | 管理员 |
+| GET | `/ai-agents/analysis/student-chains/live` | 学生问题链实时会话 | 管理员 |
+| POST | `/ai-agents/analysis/task-analysis` | 任务分析（即时） | 管理员 |
+| GET/POST | `/ai-agents/analysis/task-analyses` | 任务分析列表 / 保存 | 管理员 |
+| GET/DELETE | `/ai-agents/analysis/task-analyses/{analysis_id}` | 任务分析详情 / 删除 | 管理员 |
+| POST | `/ai-agents/analysis/task-analyses/stream` | 任务分析 SSE | 管理员 |
+| POST | `/ai-agents/analyses/hot-questions/async` | 异步热点分析 | 管理员 |
+| POST | `/ai-agents/analyses/student-chains/async` | 异步学生链分析 | 管理员 |
+| GET | `/ai-agents/analyses/tasks` | 异步任务列表 | 管理员 |
+| GET/DELETE | `/ai-agents/analyses/tasks/{task_id}` | 异步任务状态 / 取消 | 管理员 |
+| GET | `/ai-agents/analysis/trends`、`/ai-agents/trends` | 分析趋势汇总（两个注册路径） | 管理员 |
+
+> 注：`GET /ai-agents/active` 使用 `require_registered_user`，`POST /ai-agents/usage` 亦为正式登录用户
+> （`crud.py:123`、`usage.py:121`）。
 
 认证边界（2026-09-15）：
 - `/api/v1/ai-agents` 下所有路由均要求服务端认证；“是”表示仅允许正式登录角色 `student`、`teacher`、`admin`、`super_admin`，历史 `guest` 角色不属于正式登录用户。
@@ -615,41 +648,43 @@ PythonLab WS 接入补充（2026-09-09）：terminal/DAP 在业务缓存、termi
 
 | 方法 | 路径 | 说明 | 认证 |
 |------|------|------|------|
-| GET | `/informatics/typst-notes` | 获取笔记列表 | 管理员 |
-| POST | `/informatics/typst-notes` | 创建笔记 | 管理员 |
-| GET | `/informatics/typst-notes/{note_id}` | 获取笔记详情 | 管理员 |
-| PUT | `/informatics/typst-notes/{note_id}` | 更新笔记 | 管理员 |
-| DELETE | `/informatics/typst-notes/{note_id}` | 删除笔记 | 管理员 |
-| GET | `/informatics/typst-notes/{note_id}/assets` | 获取资源列表 | 管理员 |
-| POST | `/informatics/typst-notes/{note_id}/assets` | 上传资源 | 管理员 |
-| DELETE | `/informatics/typst-notes/{note_id}/assets/{asset_id}` | 删除资源 | 管理员 |
-| GET | `/informatics/typst-notes/{note_id}/assets/{asset_id}` | 获取资源 | 管理员 |
-| GET | `/informatics/typst-notes/{note_id}/export.typ` | 导出 Typst 源码 | 管理员 |
-| POST | `/informatics/typst-notes/{note_id}/compile` | 编译为 PDF | 管理员 |
-| POST | `/informatics/typst-notes/{note_id}/compile-async` | 异步编译 | 管理员 |
-| GET | `/informatics/typst-notes/compile-jobs/{job_id}` | 查询编译任务状态 | 管理员 |
-| POST | `/informatics/typst-notes/compile-jobs/{job_id}/cancel` | 取消编译任务 | 管理员 |
-| GET | `/informatics/typst-notes/{note_id}/export.pdf` | 导出 PDF | 管理员 |
+| GET | `/informatics/typst-notes` | 获取笔记列表 | 教职工 |
+| POST | `/informatics/typst-notes` | 创建笔记 | 教职工 |
+| GET | `/informatics/typst-notes/{note_id}` | 获取笔记详情 | 教职工 |
+| PUT | `/informatics/typst-notes/{note_id}` | 更新笔记 | 教职工 |
+| DELETE | `/informatics/typst-notes/{note_id}` | 删除笔记 | 教职工 |
+| GET | `/informatics/typst-notes/{note_id}/assets` | 获取资源列表 | 教职工 |
+| POST | `/informatics/typst-notes/{note_id}/assets` | 上传资源 | 教职工 |
+| DELETE | `/informatics/typst-notes/{note_id}/assets/{asset_id}` | 删除资源 | 教职工 |
+| GET | `/informatics/typst-notes/{note_id}/assets/{asset_id}` | 获取资源 | 教职工 |
+| GET | `/informatics/typst-notes/{note_id}/export.typ` | 导出 Typst 源码 | 教职工 |
+| POST | `/informatics/typst-notes/{note_id}/compile` | 编译为 PDF | 教职工 |
+| POST | `/informatics/typst-notes/{note_id}/compile-async` | 异步编译 | 教职工 |
+| GET | `/informatics/typst-notes/compile-jobs/{job_id}` | 查询编译任务状态 | 教职工 |
+| POST | `/informatics/typst-notes/compile-jobs/{job_id}/cancel` | 取消编译任务 | 教职工 |
+| GET | `/informatics/typst-notes/{note_id}/export.pdf` | 导出 PDF | 教职工 |
+
+> 注：本组守卫为 `require_staff`（teacher/admin/super_admin），见 `typst_notes.py:73` 等。
 
 ### Typst 样式（/informatics/typst-styles）
 
 | 方法 | 路径 | 说明 | 认证 |
 |------|------|------|------|
-| GET | `/informatics/typst-styles` | 获取样式列表 | 管理员 |
-| GET | `/informatics/typst-styles/{key}` | 获取样式详情 | 管理员 |
-| POST | `/informatics/typst-styles` | 创建样式 | 管理员 |
-| PATCH | `/informatics/typst-styles/{key}` | 更新样式 | 管理员 |
-| DELETE | `/informatics/typst-styles/{key}` | 删除样式 | 管理员 |
-| POST | `/informatics/typst-styles/seed/{key}` | 从资源种子样式 | 管理员 |
+| GET | `/informatics/typst-styles` | 获取样式列表 | 教职工 |
+| GET | `/informatics/typst-styles/{key}` | 获取样式详情 | 教职工 |
+| POST | `/informatics/typst-styles` | 创建样式 | 教职工 |
+| PATCH | `/informatics/typst-styles/{key}` | 更新样式 | 教职工 |
+| DELETE | `/informatics/typst-styles/{key}` | 删除样式 | 教职工 |
+| POST | `/informatics/typst-styles/seed/{key}` | 从资源种子样式 | 教职工 |
 
 ### Typst 分类（/informatics/typst-categories）
 
 | 方法 | 路径 | 说明 | 认证 |
 |------|------|------|------|
-| GET | `/informatics/typst-categories` | 获取分类列表 | 管理员 |
-| POST | `/informatics/typst-categories` | 创建分类 | 管理员 |
-| PATCH | `/informatics/typst-categories/{category_id}` | 更新分类 | 管理员 |
-| DELETE | `/informatics/typst-categories/{category_id}` | 删除分类 | 管理员 |
+| GET | `/informatics/typst-categories` | 获取分类列表 | 教职工 |
+| POST | `/informatics/typst-categories` | 创建分类 | 教职工 |
+| PATCH | `/informatics/typst-categories/{category_id}` | 更新分类 | 教职工 |
+| DELETE | `/informatics/typst-categories/{category_id}` | 删除分类 | 教职工 |
 
 ### 公开笔记（/public/informatics/typst-notes）
 
@@ -706,6 +741,10 @@ PythonLab WS 接入补充（2026-09-09）：terminal/DAP 在业务缓存、termi
 补充说明（2026-03-24）：
 - `GET /xbk/data/selections` 可能包含 `id=0` 的虚拟行（用于展示未选课/休学等状态），该类虚拟行不对应真实选课主键。
 - `PUT/DELETE /xbk/data/selections/{selection_id}` 仅适用于真实记录（`selection_id > 0`）。
+- 权限修正：`/xbk/data` 与 `/xbk/analysis` 的 **GET 读取**使用 `require_xbk_access`
+  （公开开关开启时允许匿名读取，否则仅 admin/super_admin）；同组 **POST/PUT/DELETE 写操作**
+  使用 `require_admin`。见 `backend/app/api/endpoints/xbk/_common.py:23` 与
+  `students.py:36,62`、`analysis.py:81`、`bulk_ops.py:71`。
 
 ### 统计分析（/xbk/analysis）
 
@@ -737,9 +776,15 @@ PythonLab WS 接入补充（2026-09-09）：terminal/DAP 在业务缓存、termi
 - 预检返回有效/无效行数、预览和带工作表行号的错误。执行支持 `skip_invalid`；严格模式先完成全文件校验再写入，数据库失败回滚。导入格式、容量限制及重复键规则以 [XBK 功能文档](../features/XBK.md#导入校验与交互约定) 为准。
 - 非法文件/内容可返回 400，容量超限 413，字段/行校验失败 422；缺少旧 `.xls` 引擎返回 400 并提示格式转换。
 - 预检与执行均在单文件重复自然键、包含多个年份/学期组合、学生同学号与现存姓名/年级冲突时整份返回 422；`skip_invalid=true` 不绕过这些文件级保护。学生学号需跨班级及年级唯一；同人重复导入仍可更新班级/性别，具体规则见 XBK 文档。
+- 课程导入中新增课程缺少“各班限报人数”整份 422（含行号与字段名）；已存在课程缺该列时保留库中原限额。导入请求的 `grade` 与文件中某行年级不一致、或文件年级与库中已有课程/选课快照不一致时整份 422；文件未提供年级时保留库中快照。
+- `GET /xbk/export/{export_type}?format=xlsx&year=…&term=…` 的 `export_type` 取 `course-selection` / `distribution` / `teacher-distribution`；`grade` / `class_name` 会真正参与筛选，`course-selection` 只生成匹配班级的工作表，筛选后无匹配名册返回 422，未筛选时仍导出全部班级（R3 回导基线）。`format` 只决定文件字节格式，不决定导出类型。
+- 两类导出端点的 `format` 都只接受 `xlsx`；传 `xls` 返回 400“不支持 .xls 导出，请使用 xlsx”，不再返回伪装成 `.xls` 的 xlsx 字节，文件名固定为 `.xlsx`。
 - `DELETE /xbk/data` 必须指定 `year` 和 `term`；携带 `class_name` 时 `scope=all|courses` 返回 400，不能按班级删除共享课程。父记录删除会清理同一时期的关联选课。
+- `DELETE /xbk/data` 的年级范围统一按“属于本次筛选范围的学生集合”裁决：`scope=all` 与 `scope=selections` 对同一筛选的选课删除结果一致，不再因课程所属年级扩展删除范围。孤立选课（学生已不存在）仍按 `year`/`term` 与年级快照清理。
 - 学生、课程、选课 PUT 唯一键冲突返回 409 并回滚；不意味着自然键变更已实现关联级联改号。手工与导入共享字段规范化/校验，选课未知或已删除父实体：手工 404，导入作为行错误处理；“未选”只要求有效学生。学生导入冲突更新在数据库写入时重新校验身份，晚冲突整批回滚；新增/更新计数与父实体并发删除边界见 XBK 文档。
-- `/xbk/analysis/summary` 接受 `grade`；班级身份是 `(grade, class_name)`，班级筛选从有效名册解析实际年级，跨年级同名班级不合并。课程统计以有效课程目录为主表并保留 0 人课程，容量按课程所属年级的班级数计算；指定班级时每个匹配年级的 `class_count=1`，摘要课程数与真实课程统计行数一致。涉及学生的统计排除孤立及已删除学生选课。完全无选课记录属于“休学/其他”，课程代码为空串或“未选”的记录均属于“未选”，课程统计合并两种表示；未选明细与导出使用同一口径。
+- 课程开设年级（`xbk_courses.grade`）为空表示全年级可选，非空时仅同年级学生可选。跨年级选课在手工写入返回 409，导入在预检阶段给出行级错误（严格模式 422）；该规则与列表筛选、容量分桶口径一致。
+- `/xbk/analysis/summary` 接受 `grade`；班级身份是 `(grade, class_name)`，班级筛选从有效名册解析实际年级，跨年级同名班级不合并。课程统计以有效课程目录为主表并保留 0 人课程；容量与限额校验口径一致，按 `(课程, 学生年级, 班级)` 分桶累计，并以 `capacity_basis`（`per_grade_class` / `unset_grade` / `cross_grade`）标明口径。指定班级时每个匹配年级的 `class_count=1`，摘要课程数与真实课程统计行数一致。涉及学生的统计排除孤立及已删除学生选课。完全无选课记录属于“休学/其他”，课程代码为空串或“未选”的记录均属于“未选”，课程统计合并两种表示；未选明细与导出使用同一口径。
+- `/xbk/data/selections` 的响应行同时包含 `grade`（选课写入时的年级快照）与 `student_grade`（学生当前年级）。列表筛选按学生当前年级，展示应优先使用 `student_grade`，学生转年级后二者会不同。
 - `GET /xbk/export?scope=selections|course_results` 对存在有效学生名册的选课按名册当前年级筛选并输出；孤立或无有效名册的选课回退使用选课记录中的年级快照。`class_name` 仅通过同学年、同学期、同学号的有效名册匹配，避免跨时期同学号造成班级筛选串数据。
 
 ### 公开配置（/xbk）
@@ -747,7 +792,9 @@ PythonLab WS 接入补充（2026-09-09）：terminal/DAP 在业务缓存、termi
 | 方法 | 路径 | 说明 | 认证 |
 |------|------|------|------|
 | GET | `/xbk/public-config` | 获取公开配置 | 否 |
-| PUT | `/xbk/public-config` | 更新公开配置 | 管理员 |
+| PUT | `/xbk/public-config` | 更新公开配置 | 超级管理员 |
+
+> 公开开关开启后匿名用户可读取全量学生名册与选课数据，因此写权限与系统功能开关一致，仅 `super_admin` 可切换。
 
 ## 十一、点名系统（/xxjs）
 
@@ -758,6 +805,10 @@ PythonLab WS 接入补充（2026-09-09）：terminal/DAP 在业务缓存、termi
 | POST | `/xxjs/dianming/import` | 导入班级数据 | 管理员 |
 | DELETE | `/xxjs/dianming/class` | 删除班级 | 管理员 |
 | PUT | `/xxjs/dianming/class/students` | 更新班级学生 | 管理员 |
+
+> 权限细节：读接口（classes / students）使用 `require_user`，再由
+> `backend/app/services/xxjs/dianming_access.py:39` 按身份收窄范围——admin/super_admin 全局，
+> 学生限本人 `study_year + class_name`，教师因尚无授权班级关系返回 `403`（同文件第 61-65 行）。
 
 ## 十二、调试工具 / PythonLab（主入口：/api/v2/pythonlab）
 
@@ -900,14 +951,32 @@ PythonLab WS 接入补充（2026-09-09）：terminal/DAP 在业务缓存、termi
 
 | 方法 | 路径 | 说明 | 认证 |
 |------|------|------|------|
+| GET | `/learning/progress` | 获取当前用户所有模块的学习进度列表 | 是 |
 | GET | `/learning/progress/{module_key}` | 获取当前用户学习进度；首次无记录返回 `200` 和同构默认 payload，`module_key` 支持 `ml`、`ai`、`agents` | 是 |
-| POST | `/learning/progress/{module_key}` | 保存当前用户学习进度 JSON，前端会按模块保留阶段状态、收藏、完成项和笔记 | 是 |
+| POST | `/learning/progress/{module_key}` | 保存当前用户学习进度 JSON（与 PUT 行为一致），前端会按模块保留阶段状态、收藏、完成项和笔记 | 是 |
+| PUT | `/learning/progress/{module_key}` | 同上（upsert） | 是 |
+| DELETE | `/learning/progress/{module_key}` | 删除当前用户该模块的学习进度 | 是 |
 | GET | `/learning/content/{module_key}` | 获取启用且 `owner_id IS NULL` 的公共学习内容；不包含个人导图 | 是 |
 | GET | `/learning/content/{module_key}/admin` | 管理员获取学习内容扩展项（包含禁用项） | 管理员 |
 | PUT | `/learning/content/{module_key}/{section_key}/{item_key}` | 创建或更新学习内容项，`content` 为结构化 JSON，唯一键为模块、分区、条目 | 管理员 |
 | PATCH | `/learning/content/{module_key}/{section_key}/{item_key}/enabled` | 启用或禁用学习内容项 | 管理员 |
 
 说明：`module_key` 目前限制为 `ml`、`ai`、`agents`。`section_key` 用于区分路线图、知识体系、实验、工具、资源、Prompt、安全伦理、框架、核心技术等内容分区；前端也支持 `raw` 分区作为整包覆盖扩展入口。
+
+已注册但上表未列出的补充端点：
+
+| 方法 | 路径 | 说明 | 认证 |
+|------|------|------|------|
+| GET | `/learning/chapters/{module_key}` | 获取模块全部章节（含未启用） | 是 |
+| GET | `/learning/chapters/{module_key}/{slug}` | 获取单章节 | 是 |
+| PUT | `/learning/chapters/{module_key}/{slug}` | 创建或更新章节 | 管理员 |
+| DELETE | `/learning/chapters/{module_key}/{slug}` | 删除章节 | 管理员 |
+| GET | `/learning/mindmaps` | 已发布思维导图广场 | 否 |
+| GET | `/learning/mindmaps/my` | 我的个人导图 | 是 |
+| POST | `/learning/mindmaps` | 创建个人导图 | 是 |
+| PUT | `/learning/mindmaps/{mindmap_id}` | 更新个人导图（仅所有者） | 是 |
+| DELETE | `/learning/mindmaps/{mindmap_id}` | 删除导图（所有者或管理员） | 是 |
+| PATCH | `/learning/mindmaps/{mindmap_id}/publish` | 发布/取消发布导图 | 管理员 |
 
 Markdown 学习书可通过学习内容接口在后台维护。前端内置完整百科式学习书作为 fallback；当管理员写入 `section_key=raw`、`item_key=book` 且 `content` 包含 `book` 对象时，前端会使用该对象覆盖对应模块的内置学习书。外部链接应放在章节 `references` 中作为可选参考，主体知识内容应写入章节 `markdown` 字段。
 

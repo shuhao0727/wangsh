@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { getCurrentAcademicYear } from "../academicYear";
+import type { XbkGrade } from "../grades";
 
 type Filters = {
   year?: string;
   term?: string;
-  grade?: "高一" | "高二";
+  // 年级统一使用 XBK_GRADES 枚举，避免“高三”被前端过滤掉
+  grade?: XbkGrade;
   class_name?: string;
   search_text?: string;
 };

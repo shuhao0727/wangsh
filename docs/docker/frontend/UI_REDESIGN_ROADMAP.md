@@ -91,6 +91,7 @@
 | 44 | `/games/lock-cracker` | `LockCrackerPage` | 教学游戏 | **已完成** | 游戏区、说明、控制和响应式可用性；用户已认可上一批整体效果 |
 | 45 | `/mindmaps` | `MindmapGalleryPage` | 思维导图广场 | **已完成** | 搜索、画廊、预览入口和空状态；用户已认可上一批整体效果 |
 | 46 | `/mindmap-preview` | `MindmapPreviewPage` | 思维导图预览 | **已完成** | 画布、缩放、返回和内容边界；用户已认可上一批整体效果 |
+| 50 | `/games/knn(/:batchId)` | `KnnPage` | 免登录采集 | **待用户确认** | 搜索/批次列表、学号核对、12 项单选项、意向与确认页；教师管理在 `/admin/it-technology?view=knn` 一并检查 |
 
 ### 第六批：基准与系统页面
 
@@ -100,7 +101,10 @@
 | 48 | `/login` | `LoginPage` | 登录页 | 保持现状 | 本轮不主动修改登录页 |
 | 49 | `*` | `NotFoundPage` | 404 页面 | **已完成** | 错误信息、返回入口和页面边界；用户已认可上一批整体效果 |
 
-> 说明：`/`、`/admin`、`/admin/articles/new`、`/admin/articles/edit/:id` 是重定向入口，不新增页面族；它们分别进入登录页、后台仪表盘或文章编辑器。统计按 49 个页面族计算。
+> 说明：`/`、`/admin`、`/admin/articles/new`、`/admin/articles/edit/:id` 是重定向入口，不新增页面族；它们分别进入登录页、后台仪表盘或文章编辑器。统计按 50 个页面族计算。
+>
+> 2026-10-20：补录 2.1.6 新增的 `/games/knn`、`/games/knn/:batchId`（`KnnPage`）。两者共用同一组件，
+> 按本文“同组件参数路由合并为一个页面族”的规则计为第 50 个页面族；原 49 个页面族的编号不变。
 
 ## 非页面交互界面
 

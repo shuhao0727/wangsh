@@ -71,7 +71,7 @@ super_admin（超级管理员）
 |------|------|
 | `hooks/useAuth.ts` | `isSuperAdmin()`, `isAdmin()`, `isTeacher()`, `isStaff()`, `isStudent()` |
 | `components/Auth/AdminGuard.tsx` | 路由守卫：`isStaff()` 准入 `/admin/*` |
-| `components/Auth/ITTechnologyGuard.tsx` | IT 根路由按视图区分：KNN 为教职工，应用目录为管理员 |
+| `components/Auth/ITTechnologyGuard.tsx` | IT 根路由按视图区分：`view=knn` 为教职工（`STAFF_ROLES`），其余为管理员（`IT_TECHNOLOGY_MANAGEMENT_ROLES`） |
 | `layouts/AdminLayout.tsx` | 侧边栏白名单：`menuWhitelist` 按角色过滤 |
 | `components/Auth/UserMenu.tsx` | 右上角角色标签 + 后端管理入口 |
 | `pages/Auth/Login.tsx` | 登录成功后按角色跳转 |
@@ -81,7 +81,7 @@ super_admin（超级管理员）
 | 文件 | 作用 |
 |------|------|
 | `core/deps.py` | `require_super_admin()`, `require_admin()`, `require_staff()`, `require_student()` |
-| `services/auth.py` | 统一认证：`authenticate_user()` 支持姓名+学号 |
+| `services/auth.py` | 统一认证：`authenticate_user()` 以姓名、学号或用户名定位用户，凭据匹配学号或历史密码 |
 | `api/endpoints/management/users/users.py` | 管理员保护：仅可创建、修改、导入、删除 student/teacher；批量操作锁行并原子拒绝缺失或高权限目标 |
 | `api/endpoints/auth/auth.py` | 登录端点：JWT 签发 |
 

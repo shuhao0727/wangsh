@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatXbkClassName } from "../className";
+import type { XbkGrade } from "../grades";
 
 interface XbkDeleteModalProps {
   open: boolean;
@@ -29,7 +30,7 @@ interface XbkDeleteModalProps {
   filters: {
     year?: string;
     term?: "上学期" | "下学期";
-    grade?: "高一" | "高二";
+    grade?: XbkGrade;
     class_name?: string;
   };
 }

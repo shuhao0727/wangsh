@@ -70,6 +70,13 @@ class CourseSelectionExportConflict(ValueError):
         super().__init__(f"存在同一学生多门有效选课，已阻止生成可填写工作簿：{details}")
 
 
+class CourseSelectionExportScopeError(ValueError):
+    """Raised when the requested grade/class filter matches no active roster."""
+
+    def __init__(self, message: str):
+        super().__init__(message)
+
+
 def _set_course_code_validation(
     ws,
     column_letter: str,
@@ -209,8 +216,15 @@ def _unique_sheet_name(label: str, used: set[str]) -> str:
 
 
 async def _load_export_rows(
-    db: AsyncSession, normalized_year: str, term: str
+    db: AsyncSession,
+    normalized_year: str,
+    term: str,
+    *,
+    grade: Optional[str] = None,
+    class_name: Optional[str] = None,
 ) -> tuple[List[XbkCourse], List[XbkStudent]]:
+    # 课程目录按学年/学期整体加载：目录是年级共享的参考资料，
+    # 班级表需要显示本班可填的全部课程及其剩余名额。
     courses = (
         await db.execute(
             select(XbkCourse)
@@ -230,15 +244,19 @@ async def _load_export_rows(
             )
         )
     ).scalars().all()
+    # 名册必须真正应用年级/班级筛选，否则“高一1班”会导出全校工作簿。
+    student_stmt = select(XbkStudent).where(
+        XbkStudent.is_deleted.is_(False),
+        XbkStudent.year == normalized_year,
+        XbkStudent.term == term,
+    )
+    if grade:
+        student_stmt = student_stmt.where(XbkStudent.grade == grade)
+    if class_name:
+        student_stmt = student_stmt.where(XbkStudent.class_name == class_name)
     students = (
         await db.execute(
-            select(XbkStudent)
-            .where(
-                XbkStudent.is_deleted.is_(False),
-                XbkStudent.year == normalized_year,
-                XbkStudent.term == term,
-            )
-            .order_by(
+            student_stmt.order_by(
                 XbkStudent.grade.asc(),
                 XbkStudent.class_name.asc(),
                 XbkStudent.student_no.asc(),
@@ -440,10 +458,30 @@ async def build_student_course_selection_xlsx(
     year_end: Optional[int],
     grade: Optional[str] = None,
 ) -> BytesIO:
-    """Build one versioned workbook for every actual class in the period."""
-    del class_name, grade  # Compatibility parameters cannot narrow the all-class handout.
+    """Build one versioned workbook for the classes matching the current filters.
+
+    ``grade`` / ``class_name`` 现在真正参与名册筛选：未筛选时保持“全部实际班级”，
+    筛选后只生成匹配班级的工作表；筛选后没有匹配班级时明确报错，不返回空工作簿。
+    """
     normalized_year = normalize_academic_year(year)
-    courses, students = await _load_export_rows(db, normalized_year, term)
+    courses, students = await _load_export_rows(
+        db, normalized_year, term, grade=grade, class_name=class_name,
+    )
+    if not students and (grade or class_name):
+        # 筛选后没有匹配班级时明确报错，不返回空工作簿；但整个学期本来就没有
+        # 名册时仍保留“仅课程目录”的空模板（R3 基线合同要求可导出、可解析）。
+        roster_exists = (await db.execute(
+            select(XbkStudent.id).where(
+                XbkStudent.is_deleted.is_(False),
+                XbkStudent.year == normalized_year,
+                XbkStudent.term == term,
+            ).limit(1)
+        )).scalars().all()
+        if roster_exists:
+            scope = "、".join(part for part in (grade, class_name) if part)
+            raise CourseSelectionExportScopeError(
+                f"当前筛选（{scope}）在该学年、学期没有有效学生名册，已阻止生成空工作簿；请调整年级/班级筛选后重试"
+            )
     selections = await _load_selection_map(db, normalized_year, term, students)
     students_by_class, ordered_classes = _group_export_students(students)
     manifest_courses, manifest_students, sheet_by_class = _build_export_manifest(

@@ -479,3 +479,27 @@ def test_empty_period_keeps_a_visible_catalog_and_parses_as_an_empty_complete_se
     assert workbook[CATALOG_SHEET].sheet_state == "visible"
     assert workbook[METADATA_SHEET].sheet_state == "veryHidden"
     assert parse_course_selection_workbook(output).rows == ()
+
+
+def test_all_class_workbook_still_requires_an_unfiltered_export():
+    """R3 回导要求“全班级”基线，因此不带筛选时仍生成全部实际班级。
+
+    P0-2 只让筛选真正生效；未筛选（grade/class_name 均为 None）路径保持不变，
+    否则 R3 工作簿的完整名册合同会被破坏。
+    """
+    db = CaptureDb(
+        [course("C1", 2)],
+        [
+            student("0001", "高一", "1班"),
+            student("0002", "高一", "5班"),
+            student("0003", "高二", "1班"),
+        ],
+        [],
+    )
+    output = asyncio.run(build_student_course_selection_xlsx(
+        db, "2026-2027", "上学期", None, None, None,
+    ))
+    workbook = load_workbook(output, data_only=False)
+    visible = [sheet.title for sheet in workbook.worksheets if sheet.sheet_state == "visible"]
+    assert visible == [CATALOG_SHEET, "高一1班", "高一5班", "高二1班"]
+    assert len(parse_course_selection_workbook(output).rows) == 3

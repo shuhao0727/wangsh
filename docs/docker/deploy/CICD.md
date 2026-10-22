@@ -1,6 +1,6 @@
 # CI/CD 工作流说明
 
-> 最后更新：2026-10-19
+> 最后更新：2026-10-20
 
 ## 一、概览
 
@@ -23,14 +23,14 @@ WangSh 项目使用 GitHub Actions 进行持续集成，使用 Docker Compose + 
 
 - **触发方式**：手动触发（workflow_dispatch）
 - **输入参数**：
-  - `image_tag`（必填）：完整 SemVer 镜像标签（如 `2.1.2`）
-  - `push_latest`（可选）：是否同时推送 `latest` 标签，默认 `false`
+  - `image_tag`（必填）：完整 SemVer 镜像标签（如 `2.1.6`，与 workflow 默认输入一致）
+  - `push_latest`（默认 `false`，需显式设为 `true` 才推送 `latest` 标签）
 - **构建平台**：`linux/amd64`
 - **基础镜像来源**：GitHub 的发布与 PythonLab PR 构建显式使用 Docker Hub 官方基础镜像，通过既有 build args 覆盖本地 ECR 默认源，避免 ECR 匿名下载限流阻断；本地 Dockerfile 默认源保持可配置。
 - **发布门禁**：workflow 通过 concurrency 串行执行，只允许当前 `origin/main` 对应
   commit 调用 reusable `ci-quality.yml`；非 main、落后提交或质量门禁失败时不发布镜像
 - **版本约束**：`image_tag` 必须与 `frontend/package.json` 的完整 SemVer 完全一致
-  （如 package.json 为 `2.1.2` 时 tag 也必须为 `2.1.2`）；workflow 输入通过环境变量传入 shell，
+  （如 package.json 为 `2.1.6` 时 tag 也必须为 `2.1.6`）；workflow 输入通过环境变量传入 shell，
   禁止直接拼接执行
 - **推广流程**：六个镜像先推 `${version}-build-${run_id}`，全部 staging
   manifest 可读取后再推广版本 tag；推广后逐镜像校验 registry manifest digest，
@@ -41,8 +41,8 @@ WangSh 项目使用 GitHub Actions 进行持续集成，使用 Docker Compose + 
   清单版本一致
 - **基础设施边界**：正式发布只拉取六个业务服务，PostgreSQL、Redis 不随应用发布
   隐式升级；Compose 启动使用 `--pull never`
-- **部署完成门禁**：`deploy` 等待首页、API、PostgreSQL、Redis、frontend、gateway、
-  Typst worker 和 PythonLab worker 全部健康后才返回成功
+- **部署完成门禁**：`deploy` 等待 API 健康检查通过（顶层唯一 `status=healthy`），并检查
+  PostgreSQL、Redis、frontend、gateway、Typst worker 和 PythonLab worker 的容器健康状态。
 - **构建的镜像**（共 6 个）：
 
 | 镜像名 | Dockerfile | 构建目标 |
@@ -116,8 +116,8 @@ WangSh 项目使用 GitHub Actions 进行持续集成，使用 Docker Compose + 
 - **触发方式**：与 owner PR 门禁共享 PythonLab 运行时影响路径，并覆盖 Phase C
   probe/soak 脚本
 - **功能**：调用 `pythonlab-pr-runtime.yml`，先执行可见性预热探针，再执行默认
-  5 轮 PR soak；同一全栈运行时也执行真实浏览器 PythonLab smoke，失败上传
-  backend/worker/frontend 日志并始终清理临时资源
+  5 轮 PR soak；同一全栈运行时还执行真实 Chromium pointer-click PythonLab smoke，
+  失败上传 backend/worker/frontend 日志并始终清理临时资源
 - **共享运行时说明**：`pythonlab-pr-runtime.yml` 在数据库迁移后执行一次 CI 合成库的
   AUTH 受控 enrollment（`auth_authority.ready`）。权威 gate 未置位时登录经
   `lock_auth_mutation` fail closed 返回 503「认证持久状态尚未完成受控迁移」，
@@ -127,9 +127,9 @@ WangSh 项目使用 GitHub Actions 进行持续集成，使用 Docker Compose + 
 ### 2.6 ci-quality.yml — 通用质量门禁
 
 - **触发方式**：
-  - `pull_request`
-  - `push` 到 `main`
-  - 文档-only 改动会跳过（`docs/**`、`**/*.md`）
+  - `pull_request`（`paths-ignore`：仅改动 `docs/**`、`**/*.md` 时不触发）
+  - `push` 到 `main`（同样忽略文档-only 改动）
+  - 被 `dockerhub-amd64.yml` 以 `workflow_call` 调用，作为发布前置质量门禁
 - **功能**：
   - 版本：校验 package/lockfile、`.env.example`、生产 Compose 默认标签、Docker Hub
     workflow 默认输入和生产模拟默认版本
@@ -148,8 +148,8 @@ WangSh 项目使用 GitHub Actions 进行持续集成，使用 Docker Compose + 
     changed-lines 覆盖率（变更行 ≥85%，认证/权限/迁移关键路径 ≥95%，审计
     T-2 / 治理 §4.3）。该门禁本阶段 `continue-on-error: true` 只出报告，
     下一阶段按治理收紧为阻断。
-  - 前端：脚本测试、CSS token 完整性、Vitest 默认范围（components、AIAgents、
-    PythonLab、queries、lib、services）、type-check、lint、生产构建和 bundle budget。
+  - 前端：脚本测试、CSS token 完整性、Vitest 默认范围（components、AIAgents、Xbk、
+    PythonLab、queries、lib、services 及少量布局/页面测试）、type-check、lint、生产构建和 bundle budget。
     当前 UI 门禁以 `ci-quality.yml` 为准：`token:check:ci` 检查 token 定义，
     `ui:audit:ci` 对固定尺寸债务执行 baseline ratchet；不能提高 baseline 使新增债务通过。
     已回退版本中不存在的 UI 命令不属于当前发布门禁。
@@ -175,7 +175,7 @@ WangSh 项目使用 GitHub Actions 进行持续集成，使用 Docker Compose + 
 
 ### 2.7 markdown-quality.yml — 文档质量门禁
 
-- **触发**：Markdown、Markdown 合同脚本或本 workflow 变化。
+- **触发**：PR 或 `main` push 修改 Markdown、Markdown 合同脚本或本 workflow。
 - **执行**：`node --test scripts/markdown-contracts.test.mjs`。
 - **覆盖**：相对链接与锚点、代码块/H1 结构、生命周期字段、redirect 长度、
   archive 索引、学习章节数量和 `TEST_STATUS.md` 派生统计。

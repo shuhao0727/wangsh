@@ -1,6 +1,6 @@
 # XXJS 点名系统
 
-> 最后更新：2026-09-14
+> 最后更新：2026-10-20（源码/路由核对；未发布候选记录原文保留）
 
 ## 第一批未发布候选：对象级读取授权（2026-09-14）
 
@@ -12,6 +12,14 @@
   名单权限，因此教师读取点名班级列表或名单会安全拒绝并返回 `403`。后续必须先建立
   明确、可撤销的教师—班级授权关系，再开放相应读取。
 - 未知角色同样拒绝。该实现是未发布候选，尚未完成真实认证链和专用 PostgreSQL 验证。
+- 代码现状（2026-10-20 复核）：`resolve_dianming_read_scope` 已按上述规则实现，两个读端点
+  `GET /classes`、`GET /students` 均先经过该裁决；`backend/tests/xxjs/test_dianming_object_access.py`
+  已存在，但本轮未运行测试。
+
+> 状态更新（2026-10-20）：该授权代码随提交 `ce3f2b2` 入库，并已包含在
+> `shuhao-Virtual-Machine` 当前运行的 `2.1.2` 生产镜像中（提交为 `296ba42` 的祖先，见
+> [发布记录](../docker/RELEASE_NOTES.md)、[TEST_STATUS](../docker/testing/TEST_STATUS.md)）。
+> 教师授权数据源仍未建立，教师读取保持 `403` 的结论不变；“未发布候选”措辞作为历史记录保留。
 
 ## 概述
 
@@ -41,31 +49,35 @@
 | `class_name` | String(64) | 班级名称，带索引 |
 | `student_name` | String(64) | 学生姓名 |
 | `student_no` | String(64) | 学号，可空，带索引 |
-| `created_at` | DateTime | 创建时间（服务端默认值） |
-| `updated_at` | DateTime | 更新时间（自动更新） |
+| `created_at` | DateTime(timezone=True) | 创建时间（`server_default=now()`） |
+| `updated_at` | DateTime(timezone=True) | 更新时间（`server_default=now()`，`onupdate` 自动更新） |
 
-**唯一约束**：`(year, class_name, student_name)` 通过 `uq_xxjs_dianming_student` 约束保证同一班级内不重复。
+**唯一约束**：`(year, class_name, student_name)` 通过 `uq_xxjs_dianming_student` 约束保证同一班级内不重复（`backend/app/models/xxjs/dianming.py:7-10`）。`student_no` 可空且**不参与**唯一约束。
 
 ---
 
 ## API 端点
 
-所有端点在 `/xxjs/dianming` 路由前缀下注册。读操作需登录认证，写操作需管理员权限。
+所有端点在 `/xxjs/dianming` 路由前缀下注册（应用挂载后完整前缀为
+`/api/v1/xxjs/dianming`，`backend/app/api/__init__.py` 与 `backend/main.py`）。读操作需登录认证，写操作需管理员权限。
 
 ### 读操作（需登录）
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| `GET` | `/xxjs/dianming/classes` | 获取班级列表（聚合视图，含各班级学生数），按年份降序、班级名称升序排列 |
-| `GET` | `/xxjs/dianming/students` | 获取指定班级学生名单，query 参数 `year` + `class_name` |
+| `GET` | `/xxjs/dianming/classes` | 获取班级列表（聚合视图，含各班级学生数 `count`），按年份降序、班级名称升序排列；非管理员只返回本人授权范围 |
+| `GET` | `/xxjs/dianming/students` | 获取指定班级学生名单，query 参数 `year` + `class_name`，按 `student_no`、`id` 升序 |
+
+`GET /students` 在查询前先做对象级授权（`authorize_dianming_class_read`），跨班/跨学年
+返回 `403`；`GET /classes` 用 `resolve_dianming_read_scope` 过滤（`backend/app/api/endpoints/xxjs/dianming.py:37-80`）。
 
 ### 写操作（需管理员）
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| `POST` | `/xxjs/dianming/import` | 批量导入（追加模式），`names_text` 换行分隔姓名，`ON CONFLICT DO NOTHING` 去重 |
-| `DELETE` | `/xxjs/dianming/class` | 删除整个班级，query 参数 `year` + `class_name`，返回删除条数 |
-| `PUT` | `/xxjs/dianming/class/students` | 覆盖替换班级学生名单（先删后插），请求体同 import |
+| `POST` | `/xxjs/dianming/import` | 批量导入（追加模式），`names_text` 换行分隔姓名，`ON CONFLICT (year, class_name, student_name) DO NOTHING` 去重，返回该班当前名单 |
+| `DELETE` | `/xxjs/dianming/class` | 删除整个班级，query 参数 `year` + `class_name`，返回 `{"success": true, "deleted": 条数}` |
+| `PUT` | `/xxjs/dianming/class/students` | 覆盖替换班级学生名单（先删后插），请求体同 import，返回该班当前名单 |
 
 ### 请求/响应 Schema
 
@@ -78,7 +90,7 @@
 }
 ```
 
-**DianmingStudent 响应**：
+**DianmingStudent 响应**（schema 仅声明 `id`、`created_at` 及基础字段，不含 `updated_at`）：
 ```json
 {
   "id": 1,
@@ -100,11 +112,21 @@
 
 注意：`PUT /class/students` 覆盖模式仍使用逐条 `db.add`，因为该端点需先清空再插入（与唯一约束冲突的 ON CONFLICT 不适用），但会在后续优化中评估批量插入方案。
 
+补充（2026-10-20 核对）：
+- `POST /import` 使用 `pg_insert(...).on_conflict_do_nothing(constraint="uq_xxjs_dianming_student")`，
+  冲突目标是指名唯一约束 `uq_xxjs_dianming_student`，而不是裸 `ON CONFLICT` 子句。
+- `PUT /class/students` 的“删除 + 逐条 `db.add` + 单次 `commit`”在同一事务内完成，失败时
+  `rollback`，因此覆盖失败不会留下“已清空但未写入”的中间状态。
+- `DianmingImportRequest` 只有 `year` / `class_name` / `names_text` 三个字段；`import` 与
+  `PUT /class/students` 写入时都把 `student_no` 置为 `None`，当前没有经 API 录入学号的路径。
+
 ---
 
 ## 前端页面
 
-点名系统管理员页面集成在 IT Technology 管理后台中（`/admin/it-technology` 下的"点名管理"标签页）。
+点名系统管理员页面集成在 IT Technology 管理后台中（`/admin/it-technology` 应用目录里的
+“随机点名”卡片，进入后为 `dianming-manager` 视图，而非独立标签页；
+`frontend/src/pages/Admin/ITTechnology/index.tsx`）。
 
 **核心组件**：
 - `frontend/src/pages/Admin/ITTechnology/DianmingManager.tsx` — 管理员管理页面，含班级列表表格、搜索过滤、新建/编辑/删除弹窗
@@ -122,13 +144,15 @@
 
 ## 点名播放器
 
-前端还提供了点名播放器页面 `frontend/src/pages/ITTechnology/RollCallPlayer.tsx`，用于上课时随机抽取学生，详情参考教学技术页面。
+前端还提供了点名播放器组件 `frontend/src/pages/ITTechnology/RollCallPlayer.tsx`，由
+`frontend/src/pages/ITTechnology/index.tsx` 在“随机点名”入口内以 `rollcall-selector →
+rollcall-player` 视图切换渲染（无独立路由），用于上课时随机抽取学生，详情参考教学技术页面。
 
 ---
 
 ## 相关文档
 
-- [API 参考](../development/API.md) — 第十一章：信息技术（/xxjs）
+- [API 参考](../development/API.md) — 第十一章：点名系统（/xxjs）
 
 ## 相关文件
 
@@ -138,6 +162,7 @@
 - `backend/app/models/xxjs/dianming.py` — 数据模型
 - `backend/app/schemas/xxjs/dianming.py` — Pydantic Schema
 - `backend/tests/xxjs/test_dianming.py` — 单元测试
+- `backend/tests/xxjs/test_dianming_object_access.py` — 对象级读取授权回归
 - `backend/alembic/versions/1655cf329617_add_xxjs_dianming.py` — 数据库迁移
 
 ### 前端

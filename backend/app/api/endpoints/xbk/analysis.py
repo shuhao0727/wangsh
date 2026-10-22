@@ -143,7 +143,7 @@ async def course_stats(
     student_filters = _student_scope_filters(year, term, grade, class_name)
     course_filters = _course_scope_filters(year, term, grade, class_name, student_filters)
 
-    # 班级身份必须包含年级；同名班级不能跨年级合并。课程容量按课程所属年级计算。
+    # 班级身份必须包含年级；同名班级不能跨年级合并。
     class_count_stmt = (
         select(XbkStudent.grade, func.count(func.distinct(XbkStudent.class_name)).label("count"))
         .where(*student_filters)
@@ -154,6 +154,20 @@ async def course_stats(
         for row_grade, count in (await db.execute(class_count_stmt)).all()
     }
     scoped_class_count = sum(class_counts.values())
+
+    # 限额校验按 (课程, 学生年级, 班级) 分桶（selection_rules._capacity_used：
+    # 每个桶各自与 quota 比较），因此容量统计必须以“桶”为单位，
+    # 而不是仅按课程所属年级的班级数粗略相乘。
+    roster_buckets: set[tuple[Optional[str], str]] = {
+        (str(row_grade) if row_grade is not None else None, str(cls))
+        for row_grade, cls in (
+            await db.execute(
+                select(XbkStudent.grade, XbkStudent.class_name)
+                .where(*student_filters)
+                .distinct()
+            )
+        ).all()
+    }
 
     student_scope_sub = (
         select(
@@ -209,13 +223,59 @@ async def course_stats(
     )
     rows = (await db.execute(course_stmt)).all()
 
+    # 实际限额按 (课程, 学生年级, 班级) 分桶各自与 quota 比较，因此每个可容纳
+    # 该课程的“桶”都提供一份 quota。除了课程所属年级的班级，跨年级选课的学生
+    # 所在班级同样是真实存在的桶，必须计入容量，否则“已选/上限”偏小。
+    selected_bucket_rows = (
+        await db.execute(
+            select(
+                XbkSelection.course_code,
+                XbkStudent.grade,
+                XbkStudent.class_name,
+            )
+            .select_from(XbkSelection)
+            .join(
+                XbkStudent,
+                and_(
+                    XbkStudent.year == XbkSelection.year,
+                    XbkStudent.term == XbkSelection.term,
+                    XbkStudent.student_no == XbkSelection.student_no,
+                ),
+            )
+            .where(
+                XbkSelection.is_deleted.is_(False),
+                XbkSelection.course_code.notin_(UNSELECTED_COURSE_CODES),
+                XbkStudent.is_deleted.is_(False),
+                *student_filters,
+            )
+            .distinct()
+        )
+    ).all()
+    selected_buckets: dict[str, set[tuple[Optional[str], str]]] = {}
+    for selected_code, selected_grade, selected_class in selected_bucket_rows:
+        selected_buckets.setdefault(str(selected_code), set()).add(
+            (str(selected_grade) if selected_grade is not None else None, str(selected_class))
+        )
+
     items = []
     for code, name, quota, course_grade, count in rows:
-        course_class_count = (
-            class_counts.get(str(course_grade), 0)
-            if course_grade
-            else scoped_class_count
-        )
+        if course_grade:
+            # 课程已设年级：基数桶为该年级的班级。
+            base_buckets = {
+                bucket for bucket in roster_buckets
+                if bucket[0] == str(course_grade)
+            }
+            basis = "per_grade_class"
+        else:
+            # 课程未设年级：容量按名册中每个 (年级, 班级) 桶累计。
+            base_buckets = set(roster_buckets)
+            basis = "unset_grade"
+        cross_buckets = selected_buckets.get(str(code), set()) - base_buckets
+        capacity_buckets = base_buckets | cross_buckets
+        if cross_buckets:
+            # 存在跨年级选课，容量口径需要叠加这些真实分桶。
+            basis = "cross_grade"
+        course_class_count = len(capacity_buckets)
         items.append({
             "course_code": str(code),
             "course_name": str(name),
@@ -224,6 +284,7 @@ async def course_stats(
             "grade": str(course_grade) if course_grade else None,
             "class_count": course_class_count,
             "allowed_total": int(quota or 0) * course_class_count,
+            "capacity_basis": basis,
         })
     
     unselected_stmt = (
@@ -246,7 +307,8 @@ async def course_stats(
     if unselected_count:
         items.append({
             "course_code": "未选", "course_name": "未选", "count": unselected_count,
-            "quota": 0, "grade": grade, "class_count": scoped_class_count, "allowed_total": 0,
+            "quota": 0, "grade": grade, "class_count": scoped_class_count,
+            "allowed_total": 0, "capacity_basis": None,
         })
 
     # Calculate unselected students (Actually Suspended/Other in new logic)
@@ -266,6 +328,7 @@ async def course_stats(
             "grade": grade,
             "class_count": 0,
             "allowed_total": 0,
+            "capacity_basis": None,
         })
     
     # 按照课程代码排序 (尝试转换为数字排序)

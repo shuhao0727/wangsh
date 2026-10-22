@@ -165,14 +165,39 @@ def test_ordinary_export_every_text_field(scope, payload):
 
 
 @pytest.mark.parametrize("scope", SCOPES)
-def test_ordinary_export_distinct_field_mapping_and_legacy_xls_alias(scope):
+def test_ordinary_export_distinct_field_mapping(scope):
     row = synthetic_row()
-    ws = assert_xlsx_contract(ordinary_bytes(scope, row, file_format="xls"))["data"]
+    ws = assert_xlsx_contract(ordinary_bytes(scope, row))["data"]
     for col, (_, attr) in enumerate(FIELDS[scope], start=1):
         if attr != "quota":
             assert_text(ws.cell(2, col), getattr(row, attr))
         else:
             assert (ws.cell(2, col).value, ws.cell(2, col).data_type) == (3, "n")
+
+
+def test_ordinary_export_rejects_legacy_xls_alias():
+    """.xls 只改扩展名会产出“格式与扩展名不符”的文件，必须显式 400。"""
+    from fastapi import HTTPException
+
+    async def run():
+        with pytest.raises(HTTPException) as excinfo:
+            await import_export.export_data(
+                scope="students", year=YEAR, term=TERM, grade=None, class_name=None,
+                search_text=None, format="xls", db=CaptureDb([]), _={"role": "admin"})
+        assert excinfo.value.status_code == 400
+        assert "xlsx" in str(excinfo.value.detail)
+    asyncio.run(run())
+
+
+def test_ordinary_export_filename_is_xlsx():
+    async def run():
+        response = await import_export.export_data(
+            scope="students", year=YEAR, term=TERM, grade=None, class_name=None,
+            search_text=None, format="xlsx", db=CaptureDb([]), _={"role": "admin"})
+        disposition = response.headers["content-disposition"]
+        assert disposition.endswith('.xlsx"'), disposition
+        assert ".xls" not in disposition.replace(".xlsx", "")
+    asyncio.run(run())
 
 
 @pytest.mark.parametrize("kind", KINDS)

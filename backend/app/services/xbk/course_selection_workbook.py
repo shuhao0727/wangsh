@@ -296,8 +296,7 @@ def _validate_metadata_header(ws: Worksheet, issues: list[WorkbookIssue]) -> Non
         issues.append(_metadata_issue('工作簿元数据表头已被修改', 7))
 
 
-def _read_metadata_student(ws: Worksheet, row: int, issues: list[WorkbookIssue]) -> Optional[WorkbookStudent]:
-    values = [normalize_cell(ws.cell(row=row, column=col).value) for col in range(2, 8)]
+def _read_metadata_student(values: Sequence[object], row: int, issues: list[WorkbookIssue]) -> Optional[WorkbookStudent]:
     sheet, grade, class_name, student_no, name, baseline_course = values
     if not all((sheet, grade, class_name, student_no, name)):
         issues.append(_metadata_issue('学生基线信息不完整', row))
@@ -315,10 +314,9 @@ def _parse_metadata_quota(value: object) -> Optional[int]:
     return quota
 
 
-def _read_metadata_course(ws: Worksheet, row: int, issues: list[WorkbookIssue]) -> Optional[WorkbookCourse]:
-    code = normalize_cell(ws.cell(row=row, column=5).value)
-    name = normalize_cell(ws.cell(row=row, column=6).value)
-    quota = _parse_metadata_quota(ws.cell(row=row, column=8).value)
+def _read_metadata_course(values: Sequence[object], row: int, issues: list[WorkbookIssue]) -> Optional[WorkbookCourse]:
+    code, name, _, quota_raw = values
+    quota = _parse_metadata_quota(quota_raw)
     if quota is None:
         issues.append(_metadata_issue('课程限额无效', row))
         return None
@@ -331,17 +329,33 @@ def _read_metadata_course(ws: Worksheet, row: int, issues: list[WorkbookIssue]) 
 def _read_metadata_records(ws: Worksheet, issues: list[WorkbookIssue]) -> tuple[list[WorkbookStudent], list[WorkbookCourse]]:
     students: list[WorkbookStudent] = []
     courses: list[WorkbookCourse] = []
-    for row in range(8, ws.max_row + 1):
-        kind = normalize_cell(ws.cell(row=row, column=1).value)
+    # read_only 模式下 `ws.cell(row=r, column=c)` 每次都会从头重新解析整份 XML，
+    # 逐格读取 1800+ 行会让确认阶段耗时数分钟。这里一次性遍历，按行取列。
+    for row_index, row_values in enumerate(
+        ws.iter_rows(min_row=8, max_col=8, values_only=True), start=8
+    ):
+        kind = normalize_cell(row_values[0] if len(row_values) > 0 else None)
         if not kind:
             continue
+        padded = tuple(row_values) + (None,) * max(0, 8 - len(row_values))
         if kind == '学生':
-            student = _read_metadata_student(ws, row, issues)
+            student = _read_metadata_student(
+                [normalize_cell(value) for value in padded[1:7]], row_index, issues
+            )
             if student is not None:
                 students.append(student)
             continue
         if kind == '课程':
-            course = _read_metadata_course(ws, row, issues)
+            course = _read_metadata_course(
+                [
+                    normalize_cell(padded[4]),
+                    normalize_cell(padded[5]),
+                    padded[6],
+                    padded[7],
+                ],
+                row_index,
+                issues,
+            )
             if course is not None:
                 courses.append(course)
             continue

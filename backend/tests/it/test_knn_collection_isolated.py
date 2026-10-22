@@ -43,7 +43,8 @@ from app.services.it import knn, knn_common, knn_exports
 TEACHER = {"id": 1, "role_code": "teacher"}
 OTHER = {"id": 2, "role_code": "teacher"}
 ADMIN = {"id": 3, "role_code": "admin"}
-FEATURES = [3, 2, 4, 1, 5, 3, 0, 4, 6, 2, 7, 1]
+# 六类运动的每周参与天数（教学设计只采集天数）。
+FEATURES = [3, 2, 4, 1, 5, 3]
 MIGRATION_PATH = Path(__file__).resolve().parents[2] / "alembic/versions/20261020_0001_knn_collection.py"
 
 
@@ -75,8 +76,8 @@ class ContractTests(unittest.TestCase):
                 configuration(numbers)
 
     def test_strict_features_consent_and_extra_fields(self):
-        for changes in [{"features": FEATURES[:-1]}, {"features": [True] + FEATURES[1:]},
-                        {"features": [8] + FEATURES[1:]}, {"features": FEATURES[:1] + [5] + FEATURES[2:]},
+        for changes in [{"features": FEATURES[:-1]}, {"features": FEATURES + [1]},
+                        {"features": [True] + FEATURES[1:]}, {"features": [8] + FEATURES[1:]},
                         {"features": [1.0] + FEATURES[1:]}, {"display_consent": "false"},
                         {"expected_revision": True}, {"unknown": 1}, {"label": "其他"}]:
             with self.subTest(changes=changes), self.assertRaises(ValidationError):
@@ -300,17 +301,31 @@ class PostgreSQLTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(len(await knn.list_batches(db, ADMIN)), 1)
             self.assertEqual((await knn_common.get_batch(db, batch["id"], ADMIN)).id, batch["id"])
 
-    async def test_delete_only_empty_draft(self):
+    async def test_delete_allowed_except_while_collecting(self):
+        # 草稿、待开始、已结束都允许连同名单与答案一并删除。
         draft = await self.create(["1"], open_batch=False)
         async with self.sessions() as db:
             self.assertEqual(await knn.delete_batch(db, draft["id"], TEACHER), {"ok": True})
             with self.assertRaises(HTTPException) as missing:
                 await knn_common.get_batch(db, draft["id"])
             self.assertEqual(missing.exception.status_code, 404)
+
+        # 已有提交的已结束批次同样可以删除，级联清理名单与答案。
+        finished = await self.create(["1", "2"])
+        await self.answer(finished["id"], submission("1"))
+        async with self.sessions() as db:
+            await knn.change_state(db, finished["id"], "close", TEACHER)
+        async with self.sessions() as db:
+            self.assertEqual(await knn.delete_batch(db, finished["id"], TEACHER), {"ok": True})
+            with self.assertRaises(HTTPException):
+                await knn_common.get_batch(db, finished["id"])
+
+        # 采集中禁止删除。
         opened = await self.create(["1"])
         async with self.sessions() as db:
-            with self.assertRaises(HTTPException):
+            with self.assertRaises(HTTPException) as busy:
                 await knn.delete_batch(db, opened["id"], TEACHER)
+            self.assertEqual(busy.exception.status_code, 409)
 
     async def test_freeze_requires_four_and_consent_then_stays_immutable(self):
         batch = await self.create(["1", "2", "3", "4"])

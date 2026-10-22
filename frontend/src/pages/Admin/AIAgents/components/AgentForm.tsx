@@ -142,6 +142,8 @@ const AgentForm: React.FC<AgentFormProps> = ({
   const watchedApiEndpoint = form.watch("api_endpoint");
   const watchedApiKey = form.watch("api_key");
   const watchedSystemPrompt = form.watch("system_prompt");
+  // Dify 的模型由平台侧应用决定，请求体不携带模型名，因此不展示该字段
+  const isDifyAgent = form.watch("agent_type") === "dify";
 
   const canTest = useMemo(() => {
     const hasName = Boolean(watchedName?.trim());
@@ -497,88 +499,90 @@ const AgentForm: React.FC<AgentFormProps> = ({
                 />
               </div>
 
-              <FormField
-                control={form.control}
-                name="model_name"
-                render={() => (
-                  <FormItem>
-                    <div className="flex items-center gap-2">
-                      <FormLabel>模型</FormLabel>
-                      {discoveringModels ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin text-text-tertiary" />
-                      ) : (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="h-auto p-0 text-xs text-text-tertiary hover:text-text-base"
-                          onClick={discoverModels}
-                          disabled={!watchedApiEndpoint?.trim()}
-                          title="重新获取可用模型列表"
-                        >
-                          <RefreshCw className="mr-1 h-3 w-3" />
-                          刷新模型
-                        </Button>
-                      )}
-                    </div>
-                    <FormControl>
-                      {availableModels.length > 0 ? (
-                        <Select
-                          value={formValues.model_name || ""}
-                          onValueChange={(v) => {
-                            if (v === "__custom__") return;
-                            setField("model_name", v);
-                          }}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="请选择模型" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {availableModels.map((model) => (
-                              <SelectItem key={model.id} value={model.id}>
-                                {model.id}
+              {!isDifyAgent && (
+                <FormField
+                  control={form.control}
+                  name="model_name"
+                  render={() => (
+                    <FormItem>
+                      <div className="flex items-center gap-2">
+                        <FormLabel>模型</FormLabel>
+                        {discoveringModels ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin text-text-tertiary" />
+                        ) : (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-auto p-0 text-xs text-text-tertiary hover:text-text-base"
+                            onClick={discoverModels}
+                            disabled={!watchedApiEndpoint?.trim()}
+                            title="重新获取可用模型列表"
+                          >
+                            <RefreshCw className="mr-1 h-3 w-3" />
+                            刷新模型
+                          </Button>
+                        )}
+                      </div>
+                      <FormControl>
+                        {availableModels.length > 0 ? (
+                          <Select
+                            value={formValues.model_name || ""}
+                            onValueChange={(v) => {
+                              if (v === "__custom__") return;
+                              setField("model_name", v);
+                            }}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="请选择模型" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {availableModels.map((model) => (
+                                <SelectItem key={model.id} value={model.id}>
+                                  {model.id}
+                                </SelectItem>
+                              ))}
+                              <SelectItem value="__custom__">
+                                ✏️ 手动输入其他模型...
                               </SelectItem>
-                            ))}
-                            <SelectItem value="__custom__">
-                              ✏️ 手动输入其他模型...
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-                      ) : (
-                        <Input
-                          placeholder={
-                            discoveringModels
-                              ? "正在发现可用模型..."
-                              : "测试连接或点击「刷新模型」获取列表"
-                          }
-                          value={formValues.model_name}
-                          onChange={(e) => setField("model_name", e.target.value)}
-                          disabled={discoveringModels}
-                        />
-                      )}
-                    </FormControl>
-                    {formValues.model_name &&
-                      availableModels.length > 0 &&
-                      !availableModels.some((m) => m.id === formValues.model_name) && (
-                        <p className="text-xs text-amber-500">
-                          当前模型不在发现列表中，请确认模型名称正确
-                        </p>
-                      )}
-                    <p className="text-xs text-text-tertiary">
-                      {discoveringModels
-                        ? "正在发现可用模型..."
-                        : modelDiscoveryResult?.success
-                          ? `已发现 ${availableModels.length} 个模型`
-                          : modelDiscoveryResult?.success === false
-                            ? `发现失败: ${
-                                modelDiscoveryResult.error_message || "未知错误"
-                              }`
-                            : "点击「刷新模型」或「测试连接」获取可用模型列表"}
-                    </p>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <Input
+                            placeholder={
+                              discoveringModels
+                                ? "正在发现可用模型..."
+                                : "测试连接或点击「刷新模型」获取列表"
+                            }
+                            value={formValues.model_name}
+                            onChange={(e) => setField("model_name", e.target.value)}
+                            disabled={discoveringModels}
+                          />
+                        )}
+                      </FormControl>
+                      {formValues.model_name &&
+                        availableModels.length > 0 &&
+                        !availableModels.some((m) => m.id === formValues.model_name) && (
+                          <p className="text-xs text-amber-500">
+                            当前模型不在发现列表中，请确认模型名称正确
+                          </p>
+                        )}
+                      <p className="text-xs text-text-tertiary">
+                        {discoveringModels
+                          ? "正在发现可用模型..."
+                          : modelDiscoveryResult?.success
+                            ? `已发现 ${availableModels.length} 个模型`
+                            : modelDiscoveryResult?.success === false
+                              ? `发现失败: ${
+                                  modelDiscoveryResult.error_message || "未知错误"
+                                }`
+                              : "点击「刷新模型」或「测试连接」获取可用模型列表"}
+                      </p>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
 
               <FormField
                 control={form.control}

@@ -107,7 +107,8 @@
 | `ai` | 人工智能课程 |
 | `agents` | AI 智能体课程 |
 
-所有子模块（chapters、content、mindmaps、progress）共享相同的 module_key 校验逻辑，仅允许这三个值。
+Chapters、Content、Progress 共享相同的 module_key 校验逻辑，仅允许这三个值；Mindmaps
+不校验该字段，创建时默认写入 `module_key="mindmap"`，可保存任意字符串。
 
 ---
 
@@ -115,16 +116,16 @@
 
 ### Chapters（章节管理）
 
-4 个端点（2 公开 + 2 管理）。以 module_key 和 slug 为联合标识，提供 Markdown 章节的列表、详情、创建/更新（upsert）和删除操作。章节支持 `group_name` 分组、`difficulty` 难度分级和 `sort_order` 排序，前端 BookReader 组件据此渲染分组目录和进度。
+4 个端点（2 登录 + 2 管理）。以 module_key 和 slug 为联合标识，提供 Markdown 章节的列表、详情、创建/更新（upsert）和删除操作。章节支持 `group_name` 分组、`difficulty` 难度分级和 `sort_order` 排序，前端 BookReader 组件据此渲染分组目录和进度。
 
-- **公开接口**：`GET /learning/chapters/{module_key}` 列出模块所有章节，`GET /learning/chapters/{module_key}/{slug}` 获取单章节详情。二者均需登录，按 `sort_order` 排序。
+- **登录接口**：`GET /learning/chapters/{module_key}` 列出模块所有章节，`GET /learning/chapters/{module_key}/{slug}` 获取单章节详情。二者均需登录，按 `sort_order` 排序。
 - **管理接口**：`PUT` 使用 upsert 语义——章节不存在则创建，存在则更新；`DELETE` 删除章节。均需 admin 权限。
 
 ### Content（内容管理）
 
-4 个端点（2 公开 + 2 管理）。基于 `(module_key, section_key, item_key)` 三键定位的结构化内容系统。content 字段存储 JSON，tags 存储 JSON 数组，前端可按需解析。
+4 个端点（1 登录 + 3 管理）。基于 `(module_key, section_key, item_key)` 三键定位的结构化内容系统。content 字段存储 JSON，tags 存储 JSON 数组，前端可按需解析。
 
-- **公开接口**：`GET /learning/content/{module_key}` 仅返回 `enabled=true AND owner_id IS NULL` 的公共内容项；个人导图不经此通用接口返回，创建者使用既有 `/learning/mindmaps/my` 归属接口。管理员全量接口和发布/取消发布规则不变
+- **登录接口（公共内容）**：`GET /learning/content/{module_key}` 仅返回 `enabled=true AND owner_id IS NULL` 的公共内容项；个人导图不经此通用接口返回，创建者使用既有 `/learning/mindmaps/my` 归属接口。管理员全量接口和发布/取消发布规则不变
 - **管理接口**：`GET /learning/content/{module_key}/admin` 返回全部内容项（含停用）；`PUT` upsert；`PATCH /enabled` 启用/停用切换
 
 ### Mindmaps（思维导图）

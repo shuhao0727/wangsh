@@ -9,10 +9,11 @@
 [UI_REDESIGN_ROADMAP.md](UI_REDESIGN_ROADMAP.md)，已确认视觉规则以
 [EMBEDDED_UI_STYLE_GUIDE.md](EMBEDDED_UI_STYLE_GUIDE.md) 为准。
 2026-10-19 只校正本文的索引职责，未重新核验下列全部路由和数量。
+2026-10-20 抽查了路由与组件常量、弹窗/抽屉文件路径；页面与浮层数量未重新统计。
 
 ---
 
-## 公共页面（19 个）
+## 公共页面（20 个）
 
 | # | 路由 | 组件 | 说明 |
 |---|------|------|------|
@@ -22,7 +23,7 @@
 | 4 | `/informatics` | InformaticsPage | 信息学笔记列表 |
 | 5 | `/informatics/:id` | InformaticsDetailPage | PDF 阅读器 + 目录 |
 | 6 | `/it-technology` | ITTechnologyPage | IT 技术应用 |
-| 7 | `/it-technology/python-lab(/:id)` | PythonLabPage | PythonLab 画布编辑器 |
+| 7 | `/it-technology/python-lab(/:id)` | ITTechnologyPythonLabPage | PythonLab 画布编辑器 |
 | 8 | `/personal-programs` | PersonalProgramsPage | 个人节目 |
 | 9 | `/ai-agents` | AIAgentsPage | AI 智能体对话 |
 | 10 | `/xbk` | XbkPage | 选课系统 |
@@ -35,6 +36,11 @@
 | 17 | `/games/lock-cracker` | LockCrackerPage | 密码锁破解游戏（穷举法教学） |
 | 18 | `/mindmaps` | MindmapGalleryPage | 思维导图广场（无布局） |
 | 19 | `/mindmap-preview` | MindmapPreviewPage | 思维导图预览（无布局） |
+| 20 | `/games/knn(/:batchId)` | KnnPage | KNN 运动习惯采集（免登录，无布局） |
+
+> 公共页面“组件”列同样以 `frontend/src/App.tsx` 的懒加载常量为准；`pages/Informatics/index.tsx`
+> 与 `pages/MindmapGallery.tsx`、`pages/MindmapPreview.tsx` 的模块默认导出名分别是
+> `InformaticsReaderPage`、`MindmapGallery`、`MindmapPreview`，引用时按实际导出名导入。
 
 ---
 
@@ -42,31 +48,33 @@
 
 | # | 路由 | 组件 | 说明 |
 |---|------|------|------|
-| 20 | `/admin/dashboard` | DashboardPage | 仪表盘概览 |
-| 21 | `/admin/users` | UsersPage | 用户管理 |
-| 22 | `/admin/articles` | ArticlesPage | 文章管理 |
-| 23 | `/admin/articles/editor/new\|:id` | ArticleEditorPage | 文章编辑器 |
-| 24 | `/admin/assessment` | AssessmentPage | 测评管理 |
-| 25 | `/admin/assessment/editor/new\|:id` | AssessmentEditorPage | 测评编辑器 |
-| 26 | `/admin/assessment/:id/questions` | QuestionsPage | 题目管理 |
-| 27 | `/admin/assessment/:id/statistics` | StatisticsPage | 测评统计 |
-| 28 | `/admin/ai-agents` | AIAgentsPage | 智能体管理 |
-| 29 | `/admin/agent-data` | AgentDataPage | 智能体数据 |
-| 30 | `/admin/group-discussion` | GroupDiscussionPage | 分组讨论管理 |
-| 31 | `/admin/classroom-interaction` | ClassroomInteractionPage | 课堂互动 |
-| 32 | `/admin/classroom-plan` | ClassroomPlanPage | 课堂计划 |
-| 33 | `/admin/informatics` | InformaticsPage | 信息学笔记管理 |
-| 34 | `/admin/informatics/editor/new\|:id` | TypstEditorPage | Typst 编辑器 |
-| 35 | `/admin/it-technology` | ITTechnologyPage | IT 技术管理 |
+| 20 | `/admin/dashboard` | AdminDashboardPage | 仪表盘概览 |
+| 21 | `/admin/users` | AdminUsersPage | 用户管理 |
+| 22 | `/admin/articles` | AdminArticlesPage | 文章管理 |
+| 23 | `/admin/articles/editor/new\|:id` | AdminArticleEditorPage | 文章编辑器 |
+| 24 | `/admin/assessment` | AdminAssessmentPage | 测评管理 |
+| 25 | `/admin/assessment/editor/new\|:id` | AdminAssessmentEditorPage | 测评编辑器 |
+| 26 | `/admin/assessment/:id/questions` | AdminAssessmentQuestionsPage | 题目管理 |
+| 27 | `/admin/assessment/:id/statistics` | AdminAssessmentStatisticsPage | 测评统计 |
+| 28 | `/admin/ai-agents` | AdminAIAgentsPage | 智能体管理 |
+| 29 | `/admin/agent-data` | AdminAgentDataPage | 智能体数据 |
+| 30 | `/admin/group-discussion` | AdminGroupDiscussionPage | 分组讨论管理 |
+| 31 | `/admin/classroom-interaction` | AdminClassroomInteractionPage | 课堂互动 |
+| 32 | `/admin/classroom-plan` | AdminClassroomPlanPage | 课堂计划 |
+| 33 | `/admin/informatics` | AdminInformaticsPage | 信息学笔记管理 |
+| 34 | `/admin/informatics/editor/new\|:id` | AdminTypstEditorPage | Typst 编辑器 |
+| 35 | `/admin/it-technology` | AdminITTechnologyPage | IT 技术管理 |
 | 36 | `/admin/it-technology/games` | AdminGamesManagerPage | 游戏资源库管理 |
 | 37 | `/admin/it-technology/ml-book-editor` | AdminMLBookEditorPage | ML 书籍编辑器 |
 | 38 | `/admin/it-technology/learning/:moduleKey` | AdminLearningEditorPage | 学习内容编辑器 |
 | 39 | `/admin/it-technology/learning/:moduleKey/:section` | AdminTabEditorPage | 学习标签页编辑器 |
 | 40 | `/admin/it-technology/mindmap/:moduleKey` | AdminMindMapEditorPage | 思维导图编辑器 |
-| 41 | `/admin/personal-programs` | PersonalProgramsPage | 个人节目管理 |
-| 42 | `/admin/system` | SystemPage | 系统设置 |
+| 41 | `/admin/personal-programs` | AdminPersonalProgramsPage | 个人节目管理 |
+| 42 | `/admin/system` | AdminSystemPage | 系统设置 |
 | 43 | `/admin/games/config` | GameConfigPage | 游戏配置（密码池管理） |
 | 44 | `*` | NotFoundPage | 404 页面 |
+
+> 上表“组件”列统一改用 `frontend/src/App.tsx` 懒加载常量名；模块默认导出名见各页面文件。
 
 ---
 
@@ -116,7 +124,10 @@
 | # | 组件 | 文件 | 说明 |
 |---|------|------|------|
 | 65 | GroupDiscussionPanel | `AIAgents/GroupDiscussionPanel.tsx` | 可拖拽分组讨论窗口 |
-| 66 | OptimizationDialog | `pythonLab/components/OptimizationDialog.tsx` | PythonLab 代码优化对比 |
+| 66 | OptimizationDialog | `Admin/ITTechnology/pythonLab/components/OptimizationDialog.tsx` | PythonLab 代码优化对比 |
+
+> 2026-10-20：补录 `/games/knn`、`/games/knn/:batchId`（`KnnPage`）为公共页面第 20 项。
+> 两个路由共用同一组件，按单组件计入；上方“公共页面”“总计”已同步更新。
 
 ---
 
@@ -124,10 +135,10 @@
 
 | 类别 | 数量 |
 |------|------|
-| 公共页面 | 19 |
+| 公共页面 | 20 |
 | 管理后台页面 | 25 |
 | Task Analysis 页面 | 5 |
 | 弹窗 / Dialog | 12 |
 | 抽屉 / Sheet | 3 |
 | 浮动面板 | 2 |
-| **总计** | **66** |
+| **总计** | **67** |

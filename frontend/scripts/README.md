@@ -19,6 +19,8 @@
 - `ui-visual-routes.json` - UI 审计页面清单
 - `ui-page-workflow.mjs` - 单页治理工作流
 - `ui-migration-metrics.mjs` - UI 迁移指标统计
+- `prod-smoke-ui-lib.mjs` - `prod-smoke-ui.mjs` 的动作分类、404 判定和状态汇总纯函数；由 `test:scripts` 覆盖
+- `bundle-budget-lib.mjs` - 包体预算的 manifest 解析、chunk 汇总与产物校验纯函数；由 `test:scripts` 覆盖
 
 ## 对应 npm 命令
 
@@ -35,11 +37,11 @@ npm run test:scripts
 ```
 
 元信息专项测试：在 `frontend/` 下运行 `npm test -- src/hooks/useAppMeta.metadata.test.tsx`，
-验证本地构建版本、环境标签及无网络请求行为；该文件已显式纳入默认测试收集。
+验证本地构建版本、环境标签及无网络请求行为；该文件已由 `vitest.config.ts` 的 `include` 显式纳入默认测试收集。
 
 后台交互与权限专项：在 `frontend/` 下运行
 `npm test -- src/layouts/AdminLayout.mobile.test.tsx src/pages/Admin/Dashboard/index.permissions.test.tsx`。
-这两个文件显式纳入默认测试收集；组件测试检查交互状态及按身份取数，
+这两个文件已由 `vitest.config.ts` 的 `include` 显式列入默认测试收集；组件测试检查交互状态及按身份取数，
 不能替代真实浏览器中侧栏层级、指针命中、版本标签裁切和网关权限的验收。
 
 

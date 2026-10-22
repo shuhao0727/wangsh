@@ -84,6 +84,10 @@ async def selection_reference_errors(
     commit; previews deliberately remain non-locking snapshots.
     """
     errors: List[List[str]] = [[] for _ in rows]
+    # 课程开设年级：课程只面向其所属年级开设（为空表示全年级可选）。
+    # 预检必须与执行阶段给出一致的年级错误，否则会先显示“可导入”
+    # 再在提交时整份 409。
+    course_grades: Dict[tuple[str, str, str], str] = {}
     for model, field, label, advice in (
         (XbkStudent, "student_no", "学生", "请先维护学生名单"),
         (XbkCourse, "course_code", "课程", "请先维护选课目录"),
@@ -97,17 +101,36 @@ async def selection_reference_errors(
             parents = await lock_key_rows(db, model, ("year", "term", field), keys, shared=True)
             active.update((row.year, row.term, getattr(row, field))
                           for row in parents if not row.is_deleted)
+            if model is XbkCourse:
+                course_grades.update({
+                    (row.year, row.term, row.course_code): row.grade
+                    for row in parents if not row.is_deleted and row.grade
+                })
         else:
             for offset in range(0, len(keys), 500):
                 columns = (model.year, model.term, getattr(model, field))
-                result = await db.execute(select(*columns).where(
+                select_columns = (*columns, model.grade) if model is XbkCourse else columns
+                result = await db.execute(select(*select_columns).where(
                     model.is_deleted.is_(False),
                     tuple_(*columns).in_(keys[offset:offset + 500]),
                 ))
-                active.update(tuple(row) for row in result.all())
+                for record in result.all():
+                    active.add((record[0], record[1], record[2]))
+                    if model is XbkCourse and len(record) > 3 and record[3]:
+                        course_grades[(record[0], record[1], record[2])] = record[3]
         for index, row in enumerate(rows):
             if field == "course_code" and row[field] in UNSELECTED_COURSE_CODES:
                 continue
             if (row["year"], row["term"], row[field]) not in active:
                 errors[index].append(f"{label}不存在（{advice}；须为同学年、同学期且未删除）")
+    for index, row in enumerate(rows):
+        if row.get("course_code") in UNSELECTED_COURSE_CODES:
+            continue
+        scope = str(course_grades.get((row["year"], row["term"], row.get("course_code"))) or "").strip()
+        student_grade = str(row.get("grade") or "").strip()
+        if scope and student_grade and scope != student_grade:
+            errors[index].append(
+                f"课程 {row['course_code']} 仅面向 {scope} 开设，"
+                f"不能分配给 {student_grade} 的学生"
+            )
     return errors

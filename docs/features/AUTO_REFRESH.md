@@ -1,6 +1,6 @@
 # 前端实时更新功能文档
 
-> 最后更新：2026-07-18
+> 最后更新：2026-10-20
 
 ## 概述
 
@@ -16,7 +16,7 @@
 - 连接后端 SSE 端点 `/api/v1/admin/stream`
 - 监听指定事件类型
 - 300ms 事件防抖，避免快速连续事件触发多次请求
-- 指数退避重连（1s → 2s → 4s → ... → 30s cap），成功连接后重置
+- 指数退避重连（1s → 2s → 4s → ... → 60s cap），成功连接后重置
 
 **使用方式**:
 ```typescript
@@ -36,7 +36,7 @@ useAdminSSE('article_changed', loadArticles);
 
 **频道**: `admin_global` - 全局管理员频道
 
-**鉴权**: `require_admin` — 仅管理员可订阅
+**鉴权**: `require_admin_sse` — 仅管理员可订阅（匿名 `401`、非管理员 `403`；SSE 专用依赖允许既有 query token/Cookie 回退）
 
 **事件类型**:
 - `article_changed` - 文章变更（create/update/delete）
@@ -44,8 +44,10 @@ useAdminSSE('article_changed', loadArticles);
 - `agent_changed` - 智能体变更（create/update/delete）
 - `assessment_changed` - 测评变更（create/update/delete）
 - `discussion_changed` - 讨论会话变更（delete/batch_delete）
-- `activity_started` / `activity_ended` / `activity_changed` - 课堂活动
+- `activity_started` / `activity_ended` / `activity_changed` - 课堂活动（起止事件由 `app/services/classroom_events.py` 发布到 `admin_global`；`activity_changed` 目前仅用于批量删除。教师自己的活动另经 `admin_{user_id}` 频道推送，见 `app/api/endpoints/classroom/admin.py`）
 - `new_response` - 新答题
+
+> 说明：本端点只转发 `admin_global` 事件；教师专属课堂频道不在本页订阅范围内。
 
 ---
 
@@ -58,18 +60,29 @@ useAdminSSE('article_changed', loadArticles);
 | AIAgents | agent_changed | `pages/Admin/AIAgents/index.tsx` |
 | Assessment | assessment_changed | `pages/Admin/Assessment/index.tsx` |
 | GroupDiscussion | discussion_changed | `pages/Admin/AgentData/components/GroupDiscussion/index.tsx` |
+| Categories | category_changed | `pages/Admin/Categories/index.tsx` |
+| Informatics | informatics_changed | `pages/Admin/Informatics/index.tsx` |
+| ClassroomInteraction | classroom_interaction_changed | `pages/Admin/ClassroomInteraction/index.tsx` |
 
 ---
 
 ## 注意事项
 
-1. **SSE 连接**：需要管理员权限，自动携带 token
-2. **自动重连**：连接断开后指数退避重连（1s → 30s cap）
+1. **SSE 连接**：需要管理员权限；`EventSource` 同源请求自动携带 Cookie，必要时可用 SSE 依赖接受的 `?token=`
+2. **自动重连**：连接断开后指数退避重连（1s → 60s cap）
 3. **全局频道**：所有管理员共享同一频道，确保多用户协作时数据同步
 4. **多 Worker 支持**：后端 pub/sub 已迁移到 Redis Pub/Sub（优先），当 Redis 不可用时自动降级为进程内模式（仅单 worker 有效）。多 worker 部署时确保 Redis 可用且 `SSE_REDIS_PUBSUB_ENABLED=True` 即可实现跨 worker SSE 广播。
 5. **订阅就绪保证**：`subscribe()` 会等待 Redis 完成 `SUBSCRIBE` 后才返回，本频道并发订阅者共享 ready 信号；发布和订阅握手由按频道锁串行化，发布先发生时会在继续 Redis 广播的同时补发本地队列，避免首事件丢失或重复。
 6. **按频道降级**：单个频道 listener 启动失败或超时只将该频道切换为本地分发，不会把其他健康频道的 Redis 广播一并禁用；等待期间取消连接会同步移除本地订阅。
 7. **关闭兼容性**：清理 Redis PubSub 时优先使用 `aclose()`，并兼容旧客户端的 `close()`；即使 `unsubscribe()` 失败也会继续关闭底层连接。
+8. **发布点覆盖**：`informatics_changed` 由 Typst 笔记创建/更新/删除发布，
+   `category_changed` 由分类创建/更新/删除发布，`classroom_interaction_changed` 由课堂活动的
+   创建/更新/删除/复制/启动/结束/重启发布（均为 `admin_global`）。
+   另：`/api/v1/admin/stream` 使用 `require_admin_sse`，教师账号连接会得到 `403`，
+   而 `/admin/classroom-interaction` 对教师开放（见 `frontend/src/components/Auth/roleAccess.ts`），
+   教师侧该页的 SSE 刷新不可用；`pages/AIAgents/index.tsx`（学生可访问）也调用
+   `useAdminSSE("agent_changed")`，非管理员连接同样为 `403`，只会进入重连退避。
+   这部分属于权限设计问题，需按各页面 owner 复核。
 
 ## 故障边界与回归要求
 

@@ -19,8 +19,10 @@ AI Prompt 和验证入口；历史阶段计划不再作为当前行为依据。
 - 管理端当前只允许 `admin` 和 `super_admin` 创建配置、维护题库、查看统计、重测、
   导出和生成画像；`teacher` 当前没有 Assessment 管理权限。
 - 学生或教职工（`student/teacher/admin/super_admin`）可查看开放测评、答题、提交并读取自己的结果和画像；学生端路由统一使用 `require_student_or_staff`，会话和画像接口另校验当前用户归属。
-- 提交整卷后，系统后台生成初级画像；配置了出题智能体时，还会在不存在同配置个人画像
-  的情况下自动生成个人高级画像。
+- 提交整卷后，系统通过 FastAPI `BackgroundTasks` 后台生成初级画像；配置了出题智能体
+  （`config.agent_id`）时，还会在不存在同配置个人画像的情况下自动生成个人高级画像
+  （`backend/app/api/endpoints/assessment/student.py:107-124`、
+  `backend/app/services/assessment/session_service.py:771-781`）。
 - 管理员可手工生成个人、小组、群体高级画像，也可批量生成个人画像。
 - 初级画像只基于本次测评；高级画像按画像类型和请求参数选择数据源，`data_sources`
   保存服务声明的来源标签，不作为 AI 实际读取内容的运行时审计。
@@ -69,7 +71,7 @@ AI Prompt 和验证入口；历史阶段计划不再作为当前行为依据。
   migration，补齐 `available_start`、`available_end`、`mode`、`adaptive_config`、
   `knowledge_point`、`attempt_seq`、`is_adaptive` 7 个字段；其 `downgrade()` 为保护
   既有数据而不删除字段。
-- 当前 head 为 `20260807_0001_task_analyses_idxs`。
+- 当前 head 为 `20261020_0001`（`backend/alembic/versions/20261020_0001_knn_collection.py:8`，全仓唯一 head）。
 - 已存在数据库必须执行 `alembic upgrade head`，不依赖 ORM `create_all` 补齐结构。
 
 各表没有统一的时间列模板：只有配置表有 `updated_at`，答题表使用 `answered_at`，
@@ -101,8 +103,11 @@ JSON 字段当前以 `Text` 保存：`knowledge_points`、`question_config`、`o
 `agent_ids`、`data_sources` 和 `scores`。修改这些字段结构时必须同时检查服务层解析、
 Pydantic schema、前端类型和已有数据兼容。
 
-历史 migration 中 `znt_assessment_configs.subject` 仍存在，但当前 ORM 和 Pydantic
-配置契约不读写该列。它属于兼容 schema，不应在未提供正式 migration 前直接删除。
+历史 migration 中 `znt_assessment_configs.subject` 已由
+`backend/alembic/versions/20260807_0001_task_analyses_idxs.py` 用
+`DROP COLUMN IF EXISTS` 删除（`upgrade()` 第 38-40 行），当前 ORM、Alembic schema
+与 Pydantic 配置契约均不包含该列；前端类型仅在
+`frontend/src/services/assessment/config.ts:95` 保留一个未被使用的可选字段，不能据此认为数据库仍有该列。
 
 ## 3. API 契约
 
@@ -114,7 +119,7 @@ API 统一挂在 `backend/app/api/endpoints/assessment/` 下，完整路径前�
 
 - 管理端后端统一使用 `require_admin`，即 `admin` 或 `super_admin`。
 - 管理端前端路由统一使用 `ADMIN_ROLES`，与后端保持一致。
-- 登录用户端使用 `get_current_user`，会话、结果和画像按用户 ID 校验归属。
+- 登录用户端使用 `require_student_or_staff`（内部基于 `get_current_user`），会话、结果和画像按用户 ID 校验归属。
 - 画像的 `profile_type` 仅允许 `individual`、`group`、`class`。
 - 个人画像详情必须同时满足 `profile_type=individual` 和本人 `target_id`；group/class 的数字标识即使与用户 ID 相同也返回 403。不存在仍为 404；管理员需使用原管理端入口读取非个人类型，个人入口不因角色提升而豁免类型检查。
 - 群体画像的 `target_id` 是班级名，测评统计必须同时按 `config_id` 和该班学生 ID 过滤。

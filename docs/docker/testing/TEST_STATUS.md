@@ -6,6 +6,46 @@
 > 最近更新：2026-10-20
 > 说明：本文件是当前测试事实的唯一汇总入口；阶段报告只引用本页，不复制新基线。
 
+## 2026-10-21 XBK 导入导出、年级语义与前端交互修复（未发布）
+
+- **范围：** 修复课程导入 quota 静默为 0、选课表导出忽略筛选、导入年级静默覆盖、批量删除年级范围不一致、公开开关权限过宽；统一 `xbk_courses.grade` 语义（空表示全年级可选），补充 `student_grade`、容量分桶口径 `capacity_basis` 与前端年级/学年/导出交互。无新增数据库迁移。行为变更见 [RELEASE_NOTES](../RELEASE_NOTES.md#未发布修复xbk-导入导出与年级语义一致2026-10-21)。
+- **后端：** `tests/xbk` 为 **1415 passed / 104 skipped**，跳过项不计为通过。
+- **前端：** `frontend/src/pages/Xbk` 测试 **109 项通过**；`npm run type-check`（`tsc`）通过，XBK 相关 ESLint 为 **0 error**。
+- **真实环境端到端：** 使用真实 PostgreSQL 与真实 API 验证年级规则：跨年级选课由 200 变为 409，正确匹配仍为 200，无年级课程仍可正常选择。
+- **真实教务数据验证：** 使用 `07-课程处/2026-2027学年/01-上学期` 的真实名单与课程目录，改写为专用学年 `2099-2100` 后导入：学生 **1857** 条、课程 **55** 条、选课 **974** 条全部成功；汇总与列表一致。四条年级规则实测通过：高一学生选高二课程 409、高一学生选高一课程 200、高二学生选高一课程 409、已有选课学生改年级 409。验证后测试数据已清理，三表回到 0 行。
+- **真实数据发现的输入约束：** 原始名单中学号跨年级重号 **828** 个、课程代码跨年级重码 **28** 个，与系统“全校唯一”要求冲突，需在 Excel 侧修正；另有 2 门课的“各班限报人数”填为“固定名单”（非数字），会被字段校验拒绝。这些属于数据准备问题，不是系统缺陷。
+- **选课工作簿（R3）端到端：** 用真实名册导出的工作簿修改 3 名学生（2 人改课、1 人填「未选」）后回导：预览 **0.44 秒 / changed=3**，确认 **0.62 秒 / applied 3 项**，数据库逐项核对全部符合预期。修复前同一文件预览需 **306 秒**、确认超时无响应；根因是元数据表在 `read_only` 模式下逐格调用 `ws.cell()` 反复重解析 XML。再次提交同一文件按设计返回「工作簿导出基线已过期」，不重复应用。
+- **导出拆分实测：** 三个导出按钮在浏览器中均能打开对应弹窗并触发下载，文件可正常打开：选课表 36 个工作表、各班分发表 34 个、教师分发表 50 个；筛选「高一」后各班分发表只含 18 个高一班级表，不含高二。
+- **边界：** 仅本地验证；未构建或发布镜像、未部署服务器、未迁移生产数据库。未额外执行生产模拟 smoke 或真实浏览器多端断点复验。
+
+## 2026-10-21 文档复核遗留项收口（未发布）
+
+- **索引复核（无需补建）：** 逐条核对 `DATABASE_PERFORMANCE_GUIDE.md` 2.1 的候选索引。`GroupDiscussionSession.created_at`
+  无过滤/排序使用点；`ClassroomActivity.analysis_agent_id` 仅在内存过滤，不做数据库谓词或连接；
+  `ClassroomActivity.updated_at`、`InformaticsGithubSyncRun.status`（同步运行记录表体量极小）、
+  `InformaticsGithubSyncSetting`（单例配置表）均无查询价值；`ClassroomActivity.status` 与
+  `InformaticsGithubSyncSource.note_id` 已由迁移覆盖。全部标记为“不需要”，未新增迁移。
+- **SSE 发布点补齐：** 分类（创建/更新/删除）、Typst 笔记（创建/更新/删除）、课堂活动
+  （创建/更新/删除/复制/启动/结束/重启）现在向 `admin_global` 发布 `category_changed`、
+  `informatics_changed`、`classroom_interaction_changed`，与三个管理页的 `useAdminSSE` 监听对齐。
+  新增 `backend/tests/test_admin_sse_publish_points.py` 固定该合同，结果 **3 passed**。
+- **Dify 模型字段：** 确认 Dify 请求体由 `build_stream_payload` 构造，不含 `model_name`，
+  该值只影响列表/详情展示；`AgentForm` 在 `agent_type=dify` 时不再渲染“模型”字段，历史库值保留但不生效。
+- **无障碍指南：** 删除 `ACCESSIBILITY_GUIDE.md` 中已回退且不存在的 `Input` `clearable` 契约整节。
+- **回归：** `tests/classroom + tests/informatics + tests/articles + test_pubsub.py` 为 **235 passed / 2 failed**；
+  两个失败（`test_concurrent_auto_end_claims_activity_once`、`test_locked_plan_keeps_items_and_activities_eagerly_loaded`）
+  在 HEAD 上同样失败，与本次改动无关，未修复也未计入通过。前端 `tsc --noEmit` 通过，
+  `AgentForm.tsx` ESLint **0 error / 4 既有 warning**，Python 治理 **0 errors / 38 warnings**。
+- **边界：** 未部署、未迁移数据库、未发布镜像；SSE 改动只做单元合同验证，未在真实浏览器多标签场景复验。
+
+## 2026-10-20 全量文档准确性整理（未发布）
+
+- **范围：** 按文件边界分七组并行核对 `docs/` 与模块 README，逐条对照源码/配置/迁移更正事实性描述。只改文档，未改代码、配置、迁移或业务数据，未提交、未发布、未部署。
+- **主要更正：** AI 智能体表名 `znt_ai_agents`→`znt_agents`，`provider_type`→`agent_type`、`api_key`→`api_key_encrypted`；PythonLab 会话由数据库表改为 Redis `debug:session:*`，优化日志表为 `znt_optimize_logs`；Alembic head 统一为 `20261020_0001_knn_collection`；Typst 笔记/样式/分类权限由“管理员”更正为 `require_staff`；学习中心多个端点由“公开”更正为需登录；XBK 批量删除由“软删除”更正为物理删除、`/admin/xbk` 更正为 `/xbk`；监控与归档端点补 `/api/v1` 前缀并更正归档请求体为 `{"days": N}`；DEPLOY/CICD 版本号、迁移 head、健康检查与自引用跳转描述同步。
+- **派生计数：** 补录 2.1.6 新增 `/games/knn(/:batchId)` 为第 50 个页面族，UI-PAGES 公共页面 19→20、总计 66→67；`docs/README.md`、`docs/docker/README.md`、`docs/docker/frontend/README.md` 的“49 个页面族”同步为 50。
+- **门禁：** `node scripts/check-markdown-contracts.mjs`（`141 files / 658 links / 0 missing`）、`node --test scripts/markdown-contracts.test.mjs` 与 `git diff --check` 通过；上一条 v2.1.6 记录中的 `652 links` 保留为发布时快照。
+- **验证边界：** 仅做静态核对，未运行后端/前端测试、未启动浏览器、未连接真实数据库或模型。仍标注“待复核”的条目见各文档内注记与本次整理报告。
+
 ## 2026-10-20 v2.1.6 镜像发布（已完成，服务器未部署）
 
 - **GitHub 与来源：** [PR #7](https://github.com/shuhao0727/wangsh/pull/7) 已通过六项检查并合并；正式镜像源码为 `542c0d8e20832c8e367bac43a81e4c365ce1c949`。[发布工作流 39381756718](https://github.com/shuhao0727/wangsh/actions/runs/39381756718) 全部成功，输入 `image_tag=2.1.6`、`push_latest=false`。[GitHub Release v2.1.6](https://github.com/shuhao0727/wangsh/releases/tag/v2.1.6) 已正式创建，tag 指向同一源码，附件 `release-set.txt` 已上传。
