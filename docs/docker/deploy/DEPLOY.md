@@ -14,7 +14,11 @@
 已切换。参数合同、真实 TCP 与 TLS/Sentinel 验收不得混计，实际证据见
 [TEST_STATUS](../testing/TEST_STATUS.md)。
 
-> 最后更新：2026-10-19
+> 复核注记：该批 Redis 工厂实现已在 2026-10-16 的 `9f84619` 回滚，当前源码
+> 不包含 `REDIS_SSL_CA_CERTS` 等参数，缓存客户端仍传入 `ssl_context`
+> （`backend/app/utils/cache_helpers.py`）。本节仅保留发布前置记录，恢复前须按当前代码复核。
+
+> 最后更新：2026-10-20
 
 ---
 
@@ -253,8 +257,11 @@ IMAGE_REPOSITORY_PREFIX=shuhao07
 必须使用同一个完整版本号。`check-version-consistency.mjs` 与 `verify-release-set` 均按完全一致
 校验，避免补丁版本复用旧镜像标签或同标签镜像漂移。
 
-当前版本更新仍是显式同步，不会自动改写其他文件。至少需要同步
-`.env.example`、`frontend/package.json` 和 `frontend/package-lock.json`。
+当前版本更新仍是显式同步，不会自动改写其他文件。`check-version-consistency.mjs` 实际
+校验 `.env.example` 的 `APP_VERSION`/`REACT_APP_VERSION`/`IMAGE_TAG`、
+`frontend/package.json`、`frontend/package-lock.json`、`docker-compose.yml` 的
+`IMAGE_TAG` 默认值、`dockerhub-amd64.yml` 的 `image_tag` 默认值和 `deploy.sh` 的
+`SIM_VERSION` 默认值，因此发布前需同步这些位置。
 
 首页和后台布局的版本/环境标签由前端构建时的 `REACT_APP_VERSION` /
 `REACT_APP_ENV` 提供，不通过 `/system/overview` 或 `/system/settings` 查询。
@@ -293,7 +300,7 @@ IMAGE_REPOSITORY_PREFIX=shuhao07
 | **调试模式** | DEBUG=true | DEBUG=false |
 | **代码加载** | 本地目录挂载（热加载） | 代码打包到镜像内 |
 | **网关** | 可选（开发时不启动） | 必需（Caddy 反向代理） |
-| **数据库** | 本地 ./data/postgres | Docker volume postgres_data |
+| **数据库** | 宿主机 ./data/postgres（bind mount） | 宿主机 ./data/postgres（bind mount，dev/prod 共用） |
 | **镜像来源** | 本地构建 (Dockerfile.dev) | Docker Hub 或本地构建 (Dockerfile.prod) |
 
 ---
@@ -435,8 +442,8 @@ bash scripts/deploy.sh deploy
 docker compose ps
 ```
 
-详细健康检查要求首页可访问、API 返回 HTTP 2xx 且顶层唯一
-`status` 为 `healthy`，并检查 PostgreSQL、Redis、frontend、gateway 和两个 worker。
+详细健康检查要求 API 返回 HTTP 2xx 且顶层唯一 `status` 为 `healthy`，并检查
+PostgreSQL、Redis、frontend、gateway 和两个 worker 的容器运行及健康状态。
 宿主机需要 Bash、Docker CLI、curl 和基础 Unix 工具；API JSON 由已运行的 backend
 容器内 Python 标准库从 stdin 校验，不要求宿主机安装 Python。
 
@@ -600,9 +607,9 @@ backend、Typst worker、PythonLab worker 的 `TIMEZONE` 和容器 `TZ`。开发
 REDIS_HOST=redis
 PYTHONLAB_CONTAINER_NAMESPACE=pythonlab
 PYTHONLAB_WORKSPACE_ROOT=/tmp/pythonlab/workspaces
-PYTHONLAB_HOST_WORKSPACE_ROOT=./data/pythonlab/workspaces
+PYTHONLAB_HOST_WORKSPACE_ROOT=/absolute/path/to/wangsh/data/pythonlab/workspaces
 # 可选：DockerProvider 无法自动解析 bind mount 时，填写宿主机绝对路径
-HOST_WORKSPACE_ROOT=
+HOST_WORKSPACE_ROOT=/absolute/path/to/wangsh/data/pythonlab/workspaces
 ```
 
 生产 Compose 不固定 Redis `container_name`，应用和 worker 统一通过服务名 `redis`
@@ -833,7 +840,8 @@ PythonLab 更新后，旧运行容器若缺少模式标签或资源/镜像/网�
 
 `bootstrap_db.py --initial-only` 只用于真正空库的首次初始化：它仅创建受维护迁移链之前的 legacy baseline，并以 `VARCHAR(64)` 创建空的 `alembic_version`，不会 stamp。创建前会从独立 metadata 副本排除迁移管理的索引（包括迁移原生 SQL 定义），由所属 migration 按依赖顺序创建扩展和索引；不得在 bootstrap 中临时建扩展或先建再删这些索引。 XBK baseline 副本使用迁移前的整数年份，并排除后续学年检查约束；原 migration 负责转换到 `VARCHAR(9)` 并建立约束，不能把当前 ORM 字段形态提前当作旧基线。失败后已提交 baseline 的专用模拟库不能再次当成空库；保留诊断并使用新的专用空库重验，不绕过非空保护。随后必须执行完整 `alembic upgrade head`，再由普通 `bootstrap_db.py` 补兼容字段和视图。不要在全新空库上绕过 bootstrap 直接执行 Alembic；历史 revision 中存在超过 32 字符的标识。对于已有标准 `VARCHAR(32)` 版本表的历史库，Alembic online 环境会在迁移事务前幂等扩容为 `VARCHAR(64)`。已有业务表但缺失 `alembic_version` 的数据库仍会被拒绝，避免把历史库误标记为最新。
 
-当前 head `20260711_0002_restore_legacy_baseline_indexes` 会幂等恢复 legacy baseline
+当前 head `20261020_0001_knn_collection` 位于 legacy baseline 索引恢复之后；
+`20260711_0002_restore_legacy_baseline_indexes` 会幂等恢复 legacy baseline
 路径可能跳过的 3 个 XBK `grade` 索引和 2 个文章样式索引。空库升级验收必须查询
 `pg_indexes` 确认这 5 个索引存在，不能只以 `alembic current` 到达 head 作为成功依据。
 
@@ -891,6 +899,10 @@ IMAGE_TAG=${OLD_VERSION} APP_VERSION=${OLD_VERSION} REACT_APP_VERSION=${OLD_VERS
 每次正式发布都必须把 `release-set.txt` 按版本归档到安全位置。只覆盖
 `IMAGE_TAG`/`APP_VERSION` 而继续使用当前版本的 release-set 会被门禁拒绝，这是预期
 行为；`VERSION`、`REACT_APP_VERSION` 如已设置也必须完全一致，不能通过跳过校验规避。
+另需注意：`verify-release-set` 还会把 release-set 版本与当前源码
+`frontend/package.json` 版本比较（`scripts/deploy.sh` 的 `verify_release_set`），
+因此在较新源码树上直接验证旧版本 release-set 会被拒绝；回滚验证应在对应旧版本
+源码或等价的 `VERSION_CHECK_ROOT` 校验根目录下执行。
 回滚脚本通过一次性 backend 容器执行 Alembic downgrade，不要求新版 backend 保持
 运行。默认流程先记录原本运行的写服务，再停止 `backend`、`typst-worker` 和
 `pythonlab-worker` 建立数据库无写入窗口，之后才执行备份和 downgrade。停止或备份
@@ -1000,8 +1012,11 @@ bash scripts/deploy.sh restore-db ./backups/your-backup.dump --yes
 ### 健康检查
 
 ```bash
-# 基础健康检查
+# 基础健康检查（生产网关会把 /api/health 重写为后端 /health）
 curl http://localhost:6608/api/health
+
+# 开发直连后端
+curl http://localhost:8000/health
 
 # 检查所有服务状态
 docker compose ps
@@ -1041,7 +1056,7 @@ docker compose logs backend | grep ERROR
 
 生产候选 `gateway/Caddyfile` 使用 Caddy 2.8.4 原生能力，不依赖未验证的第三方限速模块：
 
-- - 请求头上限 `64KB`，超限由 Caddy 返回 `431`；
+- 请求头上限 `64KB`，超限由 Caddy 返回 `431`；
 - Caddy server 读取请求头、读取请求体、写响应和空闲连接分别设置 `5s`、`30s`、`30s`、`2m`；
 - 反代 dial、等待上游响应头、读取上游响应、写入上游请求分别设置 `5s`、`30s`、`60s`、`30s`；
 - 上游 keep-alive 空闲时间设置为 `30s`。
@@ -1077,8 +1092,9 @@ readiness 拒绝服务，生产恢复须另验备份及权限来源。
 `--initial-only` bootstrap 只为真正空库建立 legacy baseline；已有业务表但
 缺失或空版本表须拒绝，不 stamp 冒充完成迁移。完整升级后普通 bootstrap
 再处理兼容字段并检查合同；已有 head 的 startup 不执行 schema DDL。
-`/health` 与 `/api/system/health` 共用 readiness 合同：healthy 返回 200，
-degraded/unhealthy 返回 503；`/ping` 仅为 liveness。Compose/网关切换属于
+`/health`（根路径）与 `/api/v1/health`（system health 路由，不含 `/system` 前缀）均返回
+`status` 字段；当前代码未按 `status` 改写 HTTP 状态码，`/api/v1/health` 仅在异常路径
+返回 503，`/health` 异常时仍返回 `unhealthy` 状态体，`/ping` 仅为 liveness。Compose/网关切换属于
 后续独立批，不因提交此 API 自动改变现用运行栈。
 
 实际执行范围和首败/复测见 [TEST_STATUS](../testing/TEST_STATUS.md)；
@@ -1086,11 +1102,11 @@ degraded/unhealthy 返回 503；`/ping` 仅为 liveness。Compose/网关切换�
 
 ## 前端独立 HTML 目录入口与字体源
 
-生产前端 Caddy 明确处理 `/games/ai-partner` 与 `/games/ai-partner/*`；
-`try_files {path} {path}/index.html =404` 仅允许该路径自己的目录 index。
+生产前端 Caddy 对 `/games/ai-partner/*` 明确处理；
+`try_files {path} =404` 只允许命中该路径下真实存在的文件。
 独立入口和 JS/静态资源缺失必须为 404，不得用主站 `/index.html` 刷出 200。
-独立 HTML 保持 `no-cache`，生产字体源允许已固定 KaTeX CSS 所用的
-`https://cdn.jsdelivr.net`；不扩大 object、base、form 边界，也不关闭 TLS 校验。
+独立 HTML 保持 `no-cache`，字体源为 `'self' data: https://fonts.gstatic.com`
+（`https://cdn.jsdelivr.net` 仅出现在 `style-src`，不扩大 object、base、form 边界，也不关闭 TLS 校验）。
 
 验收须用同一候选配置及构建产物检查裸路径、目录、显式 HTML 与不存在资源；
 检查 MIME、CSP、cache header 和双引擎原生交互。只挂载静态产物的 Caddy

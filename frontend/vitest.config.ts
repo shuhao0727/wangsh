@@ -27,6 +27,7 @@ export default defineConfig({
     include: [
       "src/components/**/*.test.{ts,tsx}",
       "src/pages/AIAgents/**/*.test.{ts,tsx}",
+      "src/pages/Games/Knn/**/*.test.{ts,tsx}",
       "src/pages/Xbk/**/*.test.{ts,tsx}",
       "src/pages/Admin/ITTechnology/pythonLab/**/*.test.{ts,tsx}",
       "src/hooks/queries/**/*.test.{ts,tsx}",

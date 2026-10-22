@@ -411,6 +411,37 @@ def test_bulk_selection_grade_can_clean_orphan_records_without_other_grade(db):
     assert [r.student_no for r in db.session.scalars(select(XbkSelection)).all()] == ["orphan2"]
 
 
+def test_bulk_all_grade_does_not_cascade_through_shared_course(db):
+    """P0-4：课程属于该年级不能作为删除其他年级学生选课的理由。
+
+    S2 是高二学生，但选了高一课程 C1；按“全部 + 高一”删除时，S2 的选课
+    必须保留。旧实现使用 or_(孤立, 学生集合, 课程集合)，会误删这条记录。
+    """
+    seed(
+        db, student("S1"), student("S2", grade="高二"),
+        course("C1", grade="高一"), course("C2", grade="高二"),
+        selection("S1", "C1"), selection("S2", "C1"), selection("S2", "C2"),
+    )
+    result = asyncio.run(bulk_ops.delete_data("all", DEFAULT_YEAR, "上学期", "高一", None, db, {}))
+    # 删除 S1 的学生行、S1 的选课、以及高一的课程 C1；S2 的选课不在删除范围。
+    assert result == {"deleted": 3}
+    assert {r.student_no for r in db.session.scalars(select(XbkSelection)).all()} == {"S2"}
+    assert {r.student_no for r in db.session.scalars(select(XbkStudent)).all()} == {"S2"}
+
+
+def test_bulk_all_grade_still_removes_only_matching_orphans(db):
+    """孤立选课仍按 year/term/年级清理，但不能通过课程集合扩展。"""
+    seed(
+        db, selection("orphan-match", "C1", grade="高一"),
+        selection("orphan-other", "C1", grade="高二"),
+        selection("other-term", "C1", year=DEFAULT_YEAR, term="下学期", grade="高一"),
+    )
+    asyncio.run(bulk_ops.delete_data("all", DEFAULT_YEAR, "上学期", "高一", None, db, {}))
+    assert [r.student_no for r in db.session.scalars(select(XbkSelection)).all()] == [
+        "orphan-other", "other-term",
+    ]
+
+
 @pytest.mark.parametrize("empty_code", ["", "未选"])
 @pytest.mark.parametrize("view", ["summary", "empty-selection", "course-stats", "unselected-export"])
 def test_unselected_aliases_agree_across_analysis_and_export(db, empty_code, view):
@@ -592,6 +623,90 @@ def test_course_stats_merge_legacy_blank_and_imported_unselected(db):
     assert rows[0]["count"] == 2
 
 
+def test_selections_list_filters_by_live_grade_and_exposes_student_grade(db):
+    """筛选按学生当前年级，grade 仍是快照，student_grade 反映当前年级。"""
+    seed(
+        db,
+        student("MOVED", year=2032, grade="高二", cls="1班"),
+        student("EMPTY", year=2032, grade="高一", cls="1班"),
+        course("C1", year=2032, grade="高一"),
+        selection("MOVED", "C1", year=2032, grade="高一"),  # 选课快照仍是旧年级
+    )
+
+    current = run_filtered(
+        selections.list_selections, db, year=FUTURE_YEAR, term="上学期", grade="高二",
+        search_text=None, page=1, size=50,
+    )
+    assert current["total"] == 1
+    moved = current["items"][0]
+    assert moved["student_no"] == "MOVED"
+    assert moved["grade"] == "高一"  # 写入时的快照保持不变
+    assert moved["student_grade"] == "高二"  # 学生当前年级
+
+    stale = run_filtered(
+        selections.list_selections, db, year=FUTURE_YEAR, term="上学期", grade="高一",
+        search_text=None, page=1, size=50,
+    )
+    assert stale["total"] == 1
+    assert stale["items"][0]["student_no"] == "EMPTY"
+    assert stale["items"][0]["course_code"] == "休学或其他"
+    assert stale["items"][0]["grade"] == stale["items"][0]["student_grade"] == "高一"
+
+
+def test_course_stats_capacity_matches_per_class_buckets(db):
+    """课程容量口径与 selection_rules 的 (课程, 年级, 班级) 分桶限额一致。"""
+    seed(
+        db,
+        student("G1-A", year=2032, grade="高一", cls="1班"),
+        student("G1-B", year=2032, grade="高一", cls="2班"),
+        student("G2-A", year=2032, grade="高二", cls="1班"),
+        course("GRADED", year=2032, grade="高一"),
+        course("UNSET", year=2032, grade=None),
+    )
+    rows = {
+        row["course_code"]: row
+        for row in run_filtered(
+            analysis.course_stats, db, year=FUTURE_YEAR, term="上学期"
+        )["items"]
+        if row["course_code"] not in {"未选", "休学或其他"}
+    }
+
+    # 课程有年级：容量 = quota × 该年级班级数。
+    assert rows["GRADED"]["grade"] == "高一"
+    assert rows["GRADED"]["class_count"] == 2
+    assert rows["GRADED"]["allowed_total"] == 6
+    assert rows["GRADED"]["capacity_basis"] == "per_grade_class"
+
+    # 课程年级为空：按名册中真实的 (年级, 班级) 分桶累计，而不是只乘班级总数。
+    assert rows["UNSET"]["grade"] is None
+    assert rows["UNSET"]["class_count"] == 3
+    assert rows["UNSET"]["allowed_total"] == 9
+    assert rows["UNSET"]["capacity_basis"] == "unset_grade"
+
+
+def test_course_stats_capacity_includes_cross_grade_buckets(db):
+    """存在跨年级选课时，跨年级班级同样是真实容量桶，必须计入上限。"""
+    seed(
+        db,
+        student("G1-A", year=2032, grade="高一", cls="1班"),
+        student("G1-B", year=2032, grade="高一", cls="2班"),
+        student("G2-A", year=2032, grade="高二", cls="1班"),
+        course("GRADED", year=2032, grade="高一"),
+        selection("G2-A", "GRADED", year=2032, grade="高一"),
+    )
+    row = next(
+        item
+        for item in run_filtered(
+            analysis.course_stats, db, year=FUTURE_YEAR, term="上学期"
+        )["items"]
+        if item["course_code"] == "GRADED"
+    )
+    assert row["count"] == 1
+    assert row["class_count"] == 3  # 高一 2 个班 + 高二 1 个跨年级班
+    assert row["allowed_total"] == 9
+    assert row["capacity_basis"] == "cross_grade"
+
+
 @pytest.mark.parametrize("scope", ["selections", "course_results"])
 def test_selection_exports_use_live_roster_grade_and_keep_orphan_snapshot(db, scope):
     seed(
@@ -636,7 +751,9 @@ def test_suspended_export_correlates_semester_and_ignores_selection_grade(db, te
     ("students", {"S1", "S3"}, 4),
     ("courses", {"S2"}, 2),
     ("selections", {"S1", "S3", "orphan"}, 3),
-    ("all", {"S1", "S2", "S3", "orphan"}, 7),
+    # P0-4 变更：年级范围统一按“本次筛选内学生”删除选课，不再因课程属于该年级
+    # 而连带删除其他年级学生（S2）对该课程的选课；孤立选课仍按 year/term/年级清理。
+    ("all", {"S1", "S3", "orphan"}, 6),
 ])
 def test_bulk_grade_cascades_keep_persisted_identity_and_orphan_boundaries(db, scope, removed, deleted):
     deleted_parent = student("S3")

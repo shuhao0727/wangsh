@@ -205,11 +205,38 @@
 
 .xbk-toolbar-imports {
   margin-left: auto;
+  /* 四个导入按钮常驻，空间不足时整组换行而不是压缩文字 */
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .xbk-toolbar-maintenance {
   padding-left: 10px;
   border-left: 1px solid var(--ws-color-border-secondary);
+}
+
+/* 学年筛选：输入框与候选下拉拼接为一个控件 */
+.xbk-year-combobox {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+
+.xbk-year-combobox input {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.xbk-year-combobox-trigger {
+  flex-shrink: 0;
+  width: var(--ws-control-height);
+  height: var(--ws-control-height);
+  padding: 0;
+  border: 1px solid var(--ws-control-border);
+  border-left: 0;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  background: var(--ws-control-bg);
 }
 
 .xbk-toolbar-group button {

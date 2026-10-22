@@ -2,12 +2,17 @@
 
 > 状态：active
 > Owner：AUTH / backend
-> 最近复核：2026-09-14
+> 最近复核：2026-10-20
 
 ## 第一批未发布候选：公共配置与账号生命周期治理（2026-09-14）
 
-本节描述当前源码中的**未发布候选**，不表示正式环境已经更新、AUTH 正常库已经完成
-切换，或候选依赖与镜像已经发布。
+> 发布状态更新（2026-10-20 复核）：本节的公共功能开关白名单与账号治理源码已包含在
+> `2.1.2` 及后续发布构建中（`frontend/package.json` 当前为 `2.1.6`）；标题保留
+> 2026-09-14 的候选记录。正常环境是否已完成 AUTH authority 切换仍须以部署记录为准，
+> 代码发布不等于正常库已切换。
+
+本节记录当时的**未发布候选**合同；源码发布状态见上方说明。它不表示正式环境已经更新、
+AUTH 正常库已经完成切换，或候选依赖与镜像已经发布。
 
 ### 匿名公共配置白名单
 
@@ -56,7 +61,7 @@ WangSh 使用统一登录系统，所有角色通过 **姓名 + 学号** 登录�
 
 ### 登录页设计
 
-- **布局**：分栏布局 + 4 个动画角色（Tech Cyan 配色）
+- **布局**：分栏布局 + 4 个动画角色（Tech Cyan 配色，其中一个是品牌紫 `#7C3AED` 装饰角色；见 `frontend/src/components/Auth/AnimatedLoginCharacters.tsx`）
 - **交互**：角色眼睛跟随鼠标移动
 - **跳转逻辑**：
   - 未指定 `redirect` 时，所有角色登录后统一进入首页 `/home`，不再按角色自动进入后台；已登录用户访问登录页也遵循此规则。
@@ -123,8 +128,9 @@ guest (访客)
 
 ### 当前权威及跨存储顺序
 
-PostgreSQL 保存撤销依据，Redis 只保存可重建的会话投影。新 Alembic revision
-`20260910_0001_auth_authority`（前序 `20260908_0001_xbk_academic_year`）新增：
+PostgreSQL 保存撤销依据，Redis 只保存可重建的会话投影。Alembic revision
+`20260910_0001_auth_authority`（前序 `20260908_0001_xbk_academic_year`；当前 head 为
+`20261020_0001_knn_collection`）新增：
 
 | 表 | 字段及用途 |
 |---|---|
@@ -155,11 +161,13 @@ PostgreSQL 保存撤销依据，Redis 只保存可重建的会话投影。新 Al
 
 ### 被替换会话的 401 反馈（2026-09-12）
 
-同一用户再次登录后，旧设备的 access 会被持久权威拒绝，`401` detail 区分两种语义：
+同一用户再次登录后，旧设备的 access 会被持久权威拒绝，`401` detail 区分三种语义：
 
 - 持久状态仍 `active` 但 `nonce` 已被新登录轮换 → `账号已在其他地方登录，请重新登录`，
   前端据此展示“你的账号已在其他地方登录，当前设备已下线，请重新登录”。
 - 主动登出/撤销/过期（状态 `inactive` 或缺失）→ `会话已失效，请重新登录`，不误报异地登录。
+- 同 IP 校验失败（`AUTH_ENFORCE_SAME_IP_PER_REQUEST` 开启且请求 IP 与持久绑定不一致）→
+  `登录环境已变更，请重新登录`（`backend/app/core/deps.py` 的 `_session_reject_detail`）。
 
 判定在 `session_guard.verify_request_session_detail`：持久权威拒绝时先读
 `auth_session_states`，仅当 `active` 且 nonce 不匹配才给替换语义；Redis 投影不是该判定依据。
@@ -282,7 +290,7 @@ peer 属于 `AUTH_TRUSTED_PROXY_CIDRS`（逗号分隔 CIDR）时才被采纳**�
 - 通用管理推送、课堂管理推送和学生课堂推送使用入场认证实际接受的 token（含既有 Cookie 回退），不重新挑选另一身份。订阅前、每次输出事件前及等待事件期间重验 JWT 到期、nonce 与现有可选 IP 合同。
 - 事件等待轮询为 1 秒，单次会话存储校验上限为 2 秒；缺失认证上下文、验证拒绝、存储异常/超时均结束流，并取消待取事件任务、释放订阅。不发送附带私有数据的错误帧；已开始响应后也不改写 HTTP 状态。
 - 这不是原子即时撤销：最后检查与发送之间的在途帧、浏览器/代理已缓存数据及网络发送阻塞仍有边界。不能把轮询间隔当作全链路断连 SLA；不周期重查数据库角色、停用或班级关系。
-- AI 供应商流和小组讨论流未接入本守卫；完整网关/浏览器、多角色及故障验收与 AUTH 双存储问题保持独立。实例证据只见 [TEST_STATUS](../docker/testing/TEST_STATUS.md)。
+- AI 供应商流与小组讨论流（含小组讨论 `public-config` 流）同样以 `session_checked_stream` 包裹，接入同一套会话复查与清理；但其上游装配、并发与供应商故障语义不在本节范围。完整网关/浏览器、多角色及故障验收与 AUTH 双存储问题保持独立。实例证据只见 [TEST_STATUS](../docker/testing/TEST_STATUS.md)。
 
 ## 前端权限检查
 
@@ -343,7 +351,7 @@ auth.isStudent();     // 仅 student
 ### 路由保护
 
 - **AdminGuard.tsx**：使用 `isStaff()` 做路由准入（教师也可进 `/admin/*`）
-- **AdminLayout.tsx**：使用 `menuWhitelist` 按角色过滤侧边栏菜单
+- **AdminLayout.tsx**：`layouts/AdminLayout.tsx` 调用 `components/Auth/roleAccess.ts` 的 `getAdminMenuWhitelist` 按角色过滤侧边栏菜单
 - **ITTechnologyGuard.tsx**：仅 `/admin/it-technology?view=knn` 允许教师与管理员；教师侧栏直达该视图并保留所选 `batch`，应用目录和其他 IT 编辑器继续要求管理员，KNN 批次归属另由后端校验。功能合同见 [KNN 采集](KNN_SURVEY.md)。
 - **Login.tsx**：默认跳转 `/home`；保留安全站内 redirect 与后台教职工校验
 

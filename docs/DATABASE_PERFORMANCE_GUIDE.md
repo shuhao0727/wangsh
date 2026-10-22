@@ -2,7 +2,7 @@
 
 > 状态：reference
 > Owner：database
-> 最后更新：2026-07-21
+> 最后更新：2026-10-20
 >
 > 来源说明：本文档已整合早期的数据库性能分析、优化指南和查询示例。原独立文档不再
 > 作为当前入口；现行数据库结构变更仍必须通过 Alembic migration。
@@ -146,16 +146,32 @@ ORDER BY tablename, indexname;
 
 ### 2.1 已识别的缺失索引
 
-#### 高优先级（立即添加）
-1. **GroupDiscussionSession.created_at** - 常用排序字段
-2. **ClassroomActivity.status** - 高频筛选字段
-3. **ClassroomActivity.analysis_agent_id** - 外键列
-4. **InformaticsGithubSyncSource.note_id** - 外键列
+> 复核结论（2026-10-21）：下列条目为早期分析结论，逐条核对当前模型、迁移与实际查询后，
+> **均无需新增索引**。已补齐或确认不需要的条目直接记录结论，不再作为待办。
 
-#### 中优先级（建议添加）
-1. **ClassroomActivity.created_at/updated_at** - 时间戳字段
-2. **InformaticsGithubSyncRun.status** - 状态字段
-3. **InformaticsGithubSyncSetting.created_at/updated_at** - 时间戳字段
+#### 高优先级
+
+1. **GroupDiscussionSession.created_at** — **不需要**。现有查询按 `session_date` +
+   `class_name` 等值过滤，排序使用 `group_no` 或 `last_message_at`，没有按 `created_at`
+   过滤或排序的查询（`backend/app/services/agents/group_discussion/session_service.py:219-238`）。
+   该字段仅用于展示。
+2. **ClassroomActivity.status** — 已由 `20260817_0001` 的
+   `ix_znt_classroom_activities_status_created(status, created_at)` 覆盖。
+3. **ClassroomActivity.analysis_agent_id** — **不需要**。该列只在应用层读取和写入
+   （`backend/app/services/classroom_analysis.py:64`），实际查询是先按主键取活动，再取
+   全部可用智能体做内存过滤，不按此列做数据库过滤或连接。
+4. **InformaticsGithubSyncSource.note_id** — 已实施：`20260311_0001` 中的
+   `ix_inf_github_sync_sources_note_id`。
+
+#### 中优先级
+
+1. **ClassroomActivity.created_at/updated_at** — **不需要**。`created_at` 已被上述
+   `(status, created_at)` 复合索引覆盖；`updated_at` 没有查询或排序使用点。
+2. **InformaticsGithubSyncRun.status** — **不需要**。表内只有同步运行记录，
+   按状态查询仅用于判断“是否有正在运行的任务”（`github_sync.py:337`），表体量极小，
+   顺序扫描成本可忽略。
+3. **InformaticsGithubSyncSetting.created_at/updated_at** — **不需要**。单例配置表，
+   按 `id` 取最新一条（`github_sync.py:151`），只有个位数行。
 
 ### 2.2 复合索引建议
 
@@ -195,9 +211,10 @@ ON znt_conversations(user_id, created_at, message_type);
 CREATE INDEX IF NOT EXISTS idx_assessment_sessions_user_status 
 ON znt_assessment_sessions(user_id, status);
 
--- 5. 按会话和题目查询答题记录
-CREATE INDEX IF NOT EXISTS idx_attempts_session_question 
-ON znt_assessment_attempts(session_id, question_id);
+-- 5. 按会话和题目查询答题记录（表名为 znt_assessment_answers，
+--    见 backend/app/models/assessment/answer.py:13；answers 已有 session_id 索引）
+CREATE INDEX IF NOT EXISTS idx_answers_session_question
+ON znt_assessment_answers(session_id, question_id);
 ```
 
 ### 2.4 索引创建原则
@@ -211,12 +228,12 @@ ON znt_assessment_attempts(session_id, question_id);
 
 以下索引已通过 Alembic 迁移落地：
 
-1. **GroupDiscussionSession.created_at 索引** — 20260211 迁移，优化会话列表按时间排序
-2. **znt_conversations 复合索引** — 20260428 迁移：
+1. **znt_conversations 复合索引** — `20260428_add_agent_conversation_indexes.py`：
    - `(agent_id, message_type, created_at)` — 智能体对话分类查询
    - `(session_id, created_at)` — 会话消息时序查询
-3. **sys_users.full_name 索引** — 20260614 迁移，优化姓名登录查询性能
-4. **InformaticsGithubSyncSource.note_id 索引** — 20260311 迁移，外键列索引
+2. **sys_users.full_name 索引** — `20260614_0001_add_fullname_index.py`，优化姓名登录查询性能
+3. **InformaticsGithubSyncSource.note_id 索引** — `20260311_0001_informatics_github_sync.py`
+   第 88-89 行，外键列索引
 
 ## 第三部分：ORM查询优化
 
@@ -231,12 +248,17 @@ ON znt_assessment_attempts(session_id, question_id);
 | sys_learning_progress | 2026-05 | module_key, section_key |
 | ml_books | 2026-05 | module_key |
 | ml_book_chapters | 2026-05 | book_id |
-| znt_task_analyses | 2026-05-22 | — |
-| znt_hot_question_analyses | 2026-05-22 | — |
-| znt_student_chain_analyses | 2026-05-22 | — |
-| znt_agent_analysis_prompt_templates | 2026-05-29 | — |
+| task_analyses | 2026-05-22 | — |
+| hot_question_analyses | 2026-05-22 | — |
+| student_chain_analyses | 2026-05-22 | — |
+| agent_analysis_prompt_templates | 2026-05-29 | — |
 | it_games | 2026-06-24 | category, uploaded_by |
-| it_game_download_logs | 2026-06-24 | category, uploaded_by |
+| it_game_download_logs | 2026-06-24 | game_id, user_id |
+
+> 表名更正依据：模型 `__tablename__` 见 `backend/app/models/agents/ai_agent.py:79,105,130,152`
+> 与迁移 `20260522_0146_task_analyses.py:18`、`20260522_0719_hot_chain_tables.py:18,43`；
+> 原表名的 `znt_` 前缀与实际情况不符。`it_game_download_logs` 的实际索引列为
+> `game_id`、`user_id`（`backend/app/models/it/game.py:47-48`）。
 
 ### 3.1 避免N+1查询问题
 
@@ -339,9 +361,9 @@ async def get_articles_keyset(db: AsyncSession, last_id: int, size: int):
 **正面案例：** `group_discussion` 的 `list_messages` 使用 `after_id` 游标分页，避免了大 offset 带来的性能退化。
 
 **待优化：** 以下模块仍使用 offset/limit 分页，数据量增长后建议迁移到 keyset 模式：
-- `it/games` 游戏列表
-- `users` 用户管理列表
-- `xbk/selections` 选择列表
+- `it/games` 游戏列表（`page` / `size`，`backend/app/api/endpoints/it/games.py:66-74`）
+- `users` 用户管理列表（`skip` / `limit`，`users.py:84-91`）
+- `xbk/selections` 选择列表（`skip` / `limit`，`selections.py:109-119`）
 
 ### 3.4 只选择需要的字段
 
@@ -464,17 +486,21 @@ async def update_article(article_id: int, data: dict):
 
 ### 5.1 连接池配置
 
-在`app/core/config.py`中优化数据库连接池：
+在 `app/core/config/_database.py` 与 `app/db/database.py` 中配置数据库连接池：
 
 ```python
-# 推荐配置
-DATABASE_POOL_SIZE = 20  # 连接池大小
-DATABASE_MAX_OVERFLOW = 20  # 最大溢出连接数（实际配置 DB_MAX_OVERFLOW=20）
-DATABASE_POOL_RECYCLE = 3600  # 连接回收时间（秒）
-DATABASE_POOL_TIMEOUT = 30  # 连接超时时间（秒）
+# 实际配置（backend/app/core/config/_database.py:20-22）
+POSTGRES_MAX_CONNECTIONS = 20  # 连接池大小（DEBUG 下 20，生产默认 50）
+DB_MAX_OVERFLOW = 20           # 最大溢出连接数（DEBUG 下 10）
+DB_POOL_TIMEOUT_SECONDS = 30   # 获取连接超时（DEBUG 下 15）
+# 引擎侧（backend/app/db/database.py:26-30）
+pool_recycle = 3600            # 已设置，单位秒
+pool_pre_ping = True
 ```
 
-> **注意：** 实际项目未设置 `pool_recycle`，建议设为 3600 以避免 PostgreSQL 连接超时断开。
+> **注意：** `pool_recycle=3600` 与 `pool_timeout` 已在 `backend/app/db/database.py` 中显式设置，
+> 早期“未设置 pool_recycle”的说明不再成立。生产环境 `POSTGRES_MAX_CONNECTIONS` 默认 50，
+> 但仓库 `.env.example:95` 与 `.env.dev:73` 均写为 100，以实际环境变量为准。
 
 ### 5.2 连接使用最佳实践
 
@@ -524,7 +550,9 @@ LIMIT 100;
 
 ### 7.1 修复分组讨论服务
 
-**问题文件**：`app/services/agents/group_discussion/session_service.py`
+**问题文件**：`app/services/agents/group_discussion/session_service.py`（该文件存在，
+但 `get_session_with_messages` 是历史示例，当前实现以 `list_messages` 的 `after_id`
+游标分页为主，见该文件第 266-300 行）
 
 **修复前**：
 ```python
@@ -580,6 +608,7 @@ async def get_session_with_messages(db: AsyncSession, session_id: int):
 ### 7.2 正面案例：article service 的 eager loading
 
 article service 正确使用了 `selectinload` 进行关联数据的预加载，避免了 N+1 查询问题，是 ORM 最佳实践的良好示例。
+证据：`backend/app/services/articles/article.py:74-76,95-97,233-235`。
 
 ## 第八部分：优化检查清单
 

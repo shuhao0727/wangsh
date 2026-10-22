@@ -14,6 +14,9 @@ import {
 import {
   ArrowLeft,
   BarChart3,
+  BookOpen,
+  ChevronDown,
+  ClipboardList,
   Download,
   FileSpreadsheet,
   Loader2,
@@ -21,10 +24,11 @@ import {
   RefreshCw,
   Search,
   Trash2,
-  Upload,
+  Users,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import type { XbkTab } from "./types";
+import { XBK_GRADES } from "./grades";
 import { useXbkFilters } from "./hooks/useXbkFilters";
 import { useXbkPagination, DEFAULT_PAGINATION } from "./hooks/useXbkPagination";
 import { xbkDataApi, xbkPublicConfigApi } from "@services";
@@ -33,6 +37,8 @@ import { ConfirmDialog } from "@components/Common/ConfirmDialog";
 import type {
   XbkCourseRow,
   XbkCourseResultRow,
+  XbkScope,
+  XbkExportType,
   XbkSelectionRow,
   XbkStudentRow,
   XbkMeta,
@@ -48,6 +54,12 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -61,7 +73,12 @@ import { calcColumnWidth } from "../../utils/table";
 import "./Xbk.css";
 import { PAGE_SIZE_OPTIONS } from "@/constants/tableDefaults";
 import { formatXbkClassName, sortXbkClassNames } from "./className";
-import { formatAcademicYear, getCurrentAcademicYear } from "./academicYear";
+import {
+  FULL_ACADEMIC_YEAR_RE,
+  formatAcademicYear,
+  getCurrentAcademicYear,
+  normalizeAcademicYear,
+} from "./academicYear";
 
 const FILTER_ALL = "__all__";
 const CURRENT_ACADEMIC_YEAR = getCurrentAcademicYear();
@@ -237,6 +254,8 @@ const XbkPage: React.FC = () => {
   const [enabled, setEnabled] = useState(false);
   const { filters, setFilters } = useXbkFilters();
   const { pg, setPg, updatePg } = useXbkPagination();
+  // 学年输入使用本地草稿态：只有合法值才提交到 filters，避免半截输入触发请求
+  const [yearDraft, setYearDraft] = useState(filters.year ?? "");
   const [activeTab, setActiveTab] = useState<DataTabKey>("course_results");
   const [meta, setMeta] = useState<XbkMeta>({
     years: [],
@@ -265,8 +284,12 @@ const XbkPage: React.FC = () => {
   const [suspendedAll, setSuspendedAll] = useState<XbkStudentRow[]>([]);
 
   const [importVisible, setImportVisible] = useState(false);
+  // 三个单项导入共用同一弹窗，由 scope 决定标题、字段说明和模板
+  const [importScope, setImportScope] = useState<XbkScope>("students");
   const [workbookImportVisible, setWorkbookImportVisible] = useState(false);
   const [exportVisible, setExportVisible] = useState(false);
+  // 三个导出入口共用同一弹窗，由类型决定标题与说明
+  const [exportType, setExportType] = useState<XbkExportType>("course-selection");
   const [analysisVisible, setAnalysisVisible] = useState(false);
   const [deleteVisible, setDeleteVisible] = useState(false);
   const [editVisible, setEditVisible] = useState(false);
@@ -286,8 +309,34 @@ const XbkPage: React.FC = () => {
     XbkStudentRow | XbkCourseRow | XbkSelectionRow | null
   >(null);
 
-  const resetFilters = () =>
+  const resetFilters = () => {
+    // 重置时同步草稿态，避免输入框停留在旧的非法值
+    setYearDraft(CURRENT_ACADEMIC_YEAR);
     setFilters({ year: CURRENT_ACADEMIC_YEAR, term: "上学期" });
+  };
+
+  // 学年筛选的统一提交入口：只有合法值或显式清空才写入 filters，非法输入不触发请求
+  const commitYear = useCallback(
+    (raw: string) => {
+      if (!raw.trim()) {
+        // 清空输入框视为“全部学年”
+        setFilters((prev) =>
+          prev.year
+            ? { ...prev, year: undefined, class_name: undefined }
+            : prev,
+        );
+        return;
+      }
+      const normalized = normalizeAcademicYear(raw);
+      if (!normalized) return; // 非法值只保留在草稿里，等用户继续修改
+      setFilters((prev) =>
+        prev.year === normalized
+          ? prev
+          : { ...prev, year: normalized, class_name: undefined },
+      );
+    },
+    [setFilters],
+  );
 
   const loadMeta = useCallback(async () => {
     const requestSeq = ++metaRequestSeqRef.current;
@@ -448,6 +497,15 @@ const XbkPage: React.FC = () => {
   const activePage = pg[activeTab].page;
   const activePageSize = pg[activeTab].size;
 
+  // 删除或筛选后总数变小时，把超出范围的页码夹到最后一页，避免停在空表（显示“3/1”）
+  useEffect(() => {
+    (Object.keys(pg) as DataTabKey[]).forEach((tab) => {
+      const { page, size, total } = pg[tab];
+      const lastPage = Math.max(1, Math.ceil(total / size));
+      if (page > lastPage) updatePg(tab, { page: lastPage });
+    });
+  }, [pg, updatePg]);
+
   const reloadCurrentData = useCallback(
     async () => loadData(activeTab, activePage, activePageSize),
     [activePage, activePageSize, activeTab, loadData],
@@ -549,15 +607,16 @@ const XbkPage: React.FC = () => {
         void handleRefresh();
       } else if ((e.ctrlKey || e.metaKey) && e.key === "i") {
         e.preventDefault();
-        setImportVisible(true);
+        // 导入/导出都需要管理员权限，非管理员不打开入口
+        if (canEdit) setImportVisible(true);
       } else if ((e.ctrlKey || e.metaKey) && e.key === "e") {
         e.preventDefault();
-        setExportVisible(true);
+        if (canEdit) openExportModal("course-selection");
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [enabled, handleRefresh]);
+  }, [canEdit, enabled, handleRefresh]);
 
   const openCreateModal = useCallback(
     (kind: "students" | "courses" | "selections") => {
@@ -566,6 +625,24 @@ const XbkPage: React.FC = () => {
       setEditMode("create");
       setEditRecord(null);
       setEditVisible(true);
+    },
+    [canEdit],
+  );
+
+  const openImportModal = useCallback(
+    (scope: XbkScope) => {
+      if (!canEdit) return;
+      setImportScope(scope);
+      setImportVisible(true);
+    },
+    [canEdit],
+  );
+
+  const openExportModal = useCallback(
+    (type: XbkExportType) => {
+      if (!canEdit) return;
+      setExportType(type);
+      setExportVisible(true);
     },
     [canEdit],
   );
@@ -967,7 +1044,9 @@ const XbkPage: React.FC = () => {
         title: "年级",
         dataIndex: "grade",
         width: gradeWidth,
-        render: (v) => toText(v),
+        // 筛选按学生当前年级，展示也以它为准；grade 是选课写入时的快照，
+        // 学生转年级后会与筛选结果不一致，仅在缺少当前年级时回退使用。
+        render: (_v, record) => toText(record.student_grade ?? record.grade),
       },
       {
         title: "学号",
@@ -1131,15 +1210,14 @@ const XbkPage: React.FC = () => {
   }, [suspendedAll]);
 
   const years = useMemo(() => {
-    const source =
-      meta.years.length > 0
-        ? meta.years
-        : [0, 1, 2].map((offset) =>
-            formatAcademicYear(CURRENT_ACADEMIC_START - offset),
-          );
+    // 始终提供当前学年及前两年，便于在空库或新学年尚未录入时直接选择
+    const recent = [0, 1, 2].map((offset) =>
+      formatAcademicYear(CURRENT_ACADEMIC_START - offset),
+    );
+    const source = [...meta.years, ...recent];
     const values = Array.from(
       new Set(source.map((year) => String(year).trim()).filter(Boolean)),
-    );
+    ).sort((a, b) => b.localeCompare(a));
     const selectedYear = filters.year?.trim();
     if (selectedYear && !values.includes(selectedYear))
       values.unshift(selectedYear);
@@ -1294,31 +1372,87 @@ const XbkPage: React.FC = () => {
             <div className="xbk-filter-body">
               <div className="xbk-filter-field">
                 <label htmlFor="xbk-filter-year">学年</label>
-                <Select
-                  value={filters.year ? String(filters.year) : FILTER_ALL}
-                  onValueChange={(value) =>
-                    setFilters((prev) => ({
-                      ...prev,
-                      year: value === FILTER_ALL ? undefined : value,
-                    }))
-                  }
-                >
-                  <SelectTrigger
+                {/* 可输入 + 候选列表：允许录入数据库尚不存在的学年 */}
+                <div className="xbk-year-combobox">
+                  <Input
                     id="xbk-filter-year"
                     className="h-[var(--ws-control-height)] text-sm"
                     aria-label="学年"
-                  >
-                    <SelectValue placeholder="选择学年" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={FILTER_ALL}>全部学年</SelectItem>
-                    {years.map((year) => (
-                      <SelectItem key={year} value={String(year)}>
-                        {year}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                    placeholder="如 2026-2027"
+                    value={yearDraft}
+                    onChange={(e) => {
+                      // 只更新本地草稿；非法中间值不进入 filters，因此不会触发请求
+                      const next = e.target.value;
+                      setYearDraft(next);
+                      // 完整格式立即提交；纯 4 位年份等失焦/回车再补全提交
+                      if (FULL_ACADEMIC_YEAR_RE.test(next.trim())) {
+                        commitYear(next);
+                      }
+                    }}
+                    onBlur={() => {
+                      // 失焦时提交合法值（纯年份自动补全）；非法输入保留原样供修改
+                      const normalized = normalizeAcademicYear(yearDraft);
+                      if (normalized) {
+                        setYearDraft(normalized);
+                        commitYear(normalized);
+                      } else if (!yearDraft.trim()) {
+                        // 清空输入框视为“全部学年”
+                        setYearDraft("");
+                        commitYear("");
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") e.currentTarget.blur();
+                    }}
+                  />
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="xbk-year-combobox-trigger"
+                        aria-label="选择已有学年"
+                      >
+                        <ChevronDown className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="max-h-64 overflow-y-auto">
+                      <DropdownMenuItem
+                        onSelect={() => {
+                          setYearDraft("");
+                          setFilters((prev) => ({
+                            ...prev,
+                            year: undefined,
+                            class_name: undefined,
+                          }));
+                        }}
+                      >
+                        全部学年
+                      </DropdownMenuItem>
+                      {years.map((year) => (
+                        <DropdownMenuItem
+                          key={year}
+                          onSelect={() => {
+                            setYearDraft(year);
+                            setFilters((prev) => ({
+                              ...prev,
+                              year,
+                              class_name: undefined,
+                            }));
+                          }}
+                        >
+                          {year}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+                {yearDraft.trim() && !normalizeAcademicYear(yearDraft) ? (
+                  <p className="mt-1 whitespace-nowrap text-xs text-[var(--ws-color-warning)]">
+                    格式：YYYY-YYYY
+                  </p>
+                ) : null}
               </div>
 
               <div className="xbk-filter-field">
@@ -1360,7 +1494,7 @@ const XbkPage: React.FC = () => {
                       grade:
                         value === FILTER_ALL
                           ? undefined
-                          : (value as "高一" | "高二"),
+                          : (value as (typeof XBK_GRADES)[number]),
                       class_name: undefined,
                     }))
                   }
@@ -1374,8 +1508,11 @@ const XbkPage: React.FC = () => {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value={FILTER_ALL}>全部年级</SelectItem>
-                    <SelectItem value="高一">高一</SelectItem>
-                    <SelectItem value="高二">高二</SelectItem>
+                    {XBK_GRADES.map((grade) => (
+                      <SelectItem key={grade} value={grade}>
+                        {grade}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -1409,25 +1546,37 @@ const XbkPage: React.FC = () => {
                 </Select>
               </div>
 
-              <div className="xbk-filter-field">
-                <label htmlFor="xbk-filter-search">搜索</label>
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
-                  <Input
-                    id="xbk-filter-search"
-                    aria-label="搜索"
-                    className="h-[var(--ws-control-height)] text-sm pl-[var(--ws-search-input-padding-start)]"
-                    value={filters.search_text || ""}
-                    placeholder="关键字搜索..."
-                    onChange={(e) =>
-                      setFilters((prev) => ({
-                        ...prev,
-                        search_text: e.target.value,
-                      }))
-                    }
-                  />
+              {/* 未选课 / 休学接口不支持关键字过滤，隐藏搜索框并说明，避免误以为搜索生效 */}
+              {activeTab === "unselected" || activeTab === "suspended" ? (
+                <div className="xbk-filter-field">
+                  <span className="text-xs leading-[var(--ws-control-height)] text-text-secondary">
+                    搜索
+                  </span>
+                  <p className="text-xs text-text-tertiary">
+                    当前页签不支持搜索，切换回列表页签后可用
+                  </p>
                 </div>
-              </div>
+              ) : (
+                <div className="xbk-filter-field">
+                  <label htmlFor="xbk-filter-search">搜索</label>
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
+                    <Input
+                      id="xbk-filter-search"
+                      aria-label="搜索"
+                      className="h-[var(--ws-control-height)] text-sm pl-[var(--ws-search-input-padding-start)]"
+                      value={filters.search_text || ""}
+                      placeholder="关键字搜索..."
+                      onChange={(e) =>
+                        setFilters((prev) => ({
+                          ...prev,
+                          search_text: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                </div>
+              )}
 
               <div className="pt-2 border-t border-border">
                 <Button
@@ -1512,22 +1661,36 @@ const XbkPage: React.FC = () => {
               {canEdit ? (
                 <div className="xbk-toolbar-group xbk-toolbar-imports">
                   <Button
-                    variant={
-                      activeTab === "course_results" ? "default" : "outline"
-                    }
+                    variant="outline"
                     size="sm"
                     onClick={() => setWorkbookImportVisible(true)}
                   >
                     <FileSpreadsheet className="h-4 w-4" />
-                    导入学生选课表
+                    导入选课表
                   </Button>
                   <Button
-                    variant="ghost"
+                    variant="outline"
                     size="sm"
-                    onClick={() => setImportVisible(true)}
+                    onClick={() => openImportModal("students")}
                   >
-                    <Upload className="h-4 w-4" />
-                    导入
+                    <Users className="h-4 w-4" />
+                    导入学生
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => openImportModal("courses")}
+                  >
+                    <BookOpen className="h-4 w-4" />
+                    导入课程
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => openImportModal("selections")}
+                  >
+                    <ClipboardList className="h-4 w-4" />
+                    导入选课
                   </Button>
                   {activeTab === "students" ||
                   activeTab === "courses" ||
@@ -1550,6 +1713,12 @@ const XbkPage: React.FC = () => {
                 const next = tab as DataTabKey;
                 setActiveTab(next);
                 updatePg(next, { page: 1 });
+                // 切到不支持搜索的页签时清空关键字，避免它继续影响其它页签的请求
+                if (next === "unselected" || next === "suspended") {
+                  setFilters((prev) =>
+                    prev.search_text ? { ...prev, search_text: undefined } : prev,
+                  );
+                }
               }}
               className="xbk-tabs-root"
             >
@@ -1572,28 +1741,49 @@ const XbkPage: React.FC = () => {
                   aria-label="选课数据操作"
                 >
                   <div className="xbk-toolbar-group">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setExportVisible(true)}
-                    >
-                      <Download className="h-4 w-4" />
-                      导出
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      title="导出当前表格中符合筛选条件的全部结果（不限当前分页）"
-                      onClick={() => void handleExportCurrentTable()}
-                      disabled={exportingCurrent}
-                    >
-                      {exportingCurrent ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Download className="h-4 w-4" />
-                      )}
-                      导出筛选结果
-                    </Button>
+                    {/* 导出走后端 require_admin 接口，非管理员不显示 */}
+                    {canEdit ? (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openExportModal("course-selection")}
+                        >
+                          <FileSpreadsheet className="h-4 w-4" />
+                          导出选课表
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openExportModal("distribution")}
+                        >
+                          <Users className="h-4 w-4" />
+                          导出各班发表
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openExportModal("teacher-distribution")}
+                        >
+                          <BookOpen className="h-4 w-4" />
+                          导出教师发表
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          title="导出当前表格中符合筛选条件的全部结果（不限当前分页）"
+                          onClick={() => void handleExportCurrentTable()}
+                          disabled={exportingCurrent}
+                        >
+                          {exportingCurrent ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Download className="h-4 w-4" />
+                          )}
+                          导出当前结果
+                        </Button>
+                      </>
+                    ) : null}
                     <Button
                       variant="ghost"
                       size="sm"
@@ -1683,32 +1873,52 @@ const XbkPage: React.FC = () => {
           {canEdit ? (
             <XbkImportModal
               open={importVisible}
+              scope={importScope}
               onCancel={() => setImportVisible(false)}
-              onSuccess={async () => {
+              onSuccess={async ({ year, term }) => {
                 setImportVisible(false);
-                await Promise.all([
-                  loadMeta(),
-                  loadSummary(),
-                  reloadCurrentData(),
-                ]);
+                // 回写弹窗实际使用的学年/学期，避免导入后左侧筛选仍停留在旧值
+                const nextYear = year ?? filters.year;
+                const nextTerm = term ?? filters.term;
+                setYearDraft(nextYear ?? "");
+                const changed =
+                  nextYear !== filters.year || nextTerm !== filters.term;
+                if (changed) {
+                  // 筛选变化会通过 effect 自动重载，无需重复请求
+                  setFilters((prev) => ({
+                    ...prev,
+                    year: nextYear,
+                    term: nextTerm,
+                  }));
+                } else {
+                  await Promise.all([
+                    loadMeta(),
+                    loadSummary(),
+                    reloadCurrentData(),
+                  ]);
+                }
               }}
+              filters={{
+                year: filters.year,
+                term: filters.term,
+                grade: filters.grade,
+              }}
+              termOptions={termOptions}
+            />
+          ) : null}
+          {canEdit ? (
+            <XbkExportModal
+              open={exportVisible}
+              exportType={exportType}
+              onCancel={() => setExportVisible(false)}
               filters={{
                 year: filters.year,
                 term: filters.term as "上学期" | "下学期" | undefined,
                 grade: filters.grade,
+                class_name: filters.class_name,
               }}
             />
           ) : null}
-          <XbkExportModal
-            open={exportVisible}
-            onCancel={() => setExportVisible(false)}
-            filters={{
-              year: filters.year,
-              term: filters.term as "上学期" | "下学期" | undefined,
-              grade: filters.grade,
-              class_name: filters.class_name,
-            }}
-          />
           {canEdit ? (
             <XbkDeleteModal
               open={deleteVisible}

@@ -98,6 +98,18 @@ def _identity_store_unavailable(exc: BaseException) -> bool:
     }
 
 
+async def _end_read_only_transaction(db: AsyncSession) -> None:
+    """结束认证阶段隐式开启的只读事务，避免长连接长期持有事务。"""
+    # 测试替身与部分轻量调用方不提供事务接口，此时维持原有行为。
+    if not isinstance(db, AsyncSession) or not db.in_transaction():
+        return
+    try:
+        await db.rollback()
+    except Exception:
+        # 连接已失效时不应覆盖认证结果，交由连接池丢弃该连接。
+        logger.debug("结束只读认证事务失败，连接将随请求关闭")
+
+
 async def _lookup_identity(token: str, db: AsyncSession) -> Optional[Dict[str, Any]]:
     try:
         return await auth_get_current_user(token, db)
@@ -182,6 +194,10 @@ async def get_current_user(
         )
     # 会话有效性校验（基于nonce，必要时校验IP）
     await _verify_session_fence(db, user, effective_token, request)
+    # 认证期间只做只读查询，事务在此收尾。SSE 等长连接会持续数分钟到数小时，
+    # 若不在认证结束时回滚，连接会一直停在 `idle in transaction`，占用连接池并
+    # 阻止 vacuum 回收。端点后续写入会开启新事务，不受影响。
+    await _end_read_only_transaction(db)
     _remember_stream_session(request, user, effective_token)
     return cast(UserInfo, user)
 

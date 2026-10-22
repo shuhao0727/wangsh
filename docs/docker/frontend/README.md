@@ -14,7 +14,7 @@
 | [ACCESSIBILITY_GUIDE.md](ACCESSIBILITY_GUIDE.md) | WCAG 2.1 AA 无障碍改进指南 |
 | [DIALOG-AND-BREAKPOINT-GUIDE.md](DIALOG-AND-BREAKPOINT-GUIDE.md) | 对话框宽度档位与响应式断点规范 |
 | [EMBEDDED_UI_STYLE_GUIDE.md](EMBEDDED_UI_STYLE_GUIDE.md) | 基于 XBK 的嵌入式页面整理规范 |
-| [UI_REDESIGN_ROADMAP.md](UI_REDESIGN_ROADMAP.md) | 49 个页面族的整理顺序、状态和验收记录入口 |
+| [UI_REDESIGN_ROADMAP.md](UI_REDESIGN_ROADMAP.md) | 50 个页面族的整理顺序、状态和验收记录入口 |
 | [../plans/ui-single-page-governance.md](../plans/ui-single-page-governance.md) | 样式护栏、单页体检和最终回归基线 |
 
 ## 前端架构概览

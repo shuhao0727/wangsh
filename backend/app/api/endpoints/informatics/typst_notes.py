@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.deps import get_db, require_staff
+from app.core.pubsub import publish
 from app.utils.rate_limit import rate_limiter
 from app.tasks.typst_compile import compile_typst_note
 from app.utils.typst_pdf_storage import abs_pdf_path
@@ -100,6 +101,9 @@ async def api_create_note(
         toc=payload.toc,
         content_typst=payload.content_typst,
     )
+    await publish("admin_global", {
+        "type": "informatics_changed", "action": "create", "id": note.id,
+    })
     return _to_response(note)
 
 
@@ -138,6 +142,9 @@ async def api_update_note(
         toc=payload.toc,
         content_typst=payload.content_typst,
     )
+    await publish("admin_global", {
+        "type": "informatics_changed", "action": "update", "id": note.id,
+    })
     return _to_response(note)
 
 
@@ -257,6 +264,9 @@ async def api_delete_note(
     if not note:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="笔记不存在")
     await delete_note(db=db, note=note)
+    await publish("admin_global", {
+        "type": "informatics_changed", "action": "delete", "id": note_id,
+    })
     return {"success": True}
 
 

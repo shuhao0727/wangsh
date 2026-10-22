@@ -27,7 +27,7 @@
 - [frontend/UI-PAGES.md](frontend/UI-PAGES.md) - 前端核心页面与重点浮层清单
 - [frontend/ACCESSIBILITY_GUIDE.md](frontend/ACCESSIBILITY_GUIDE.md) - 无障碍访问改进指南
 - [frontend/EMBEDDED_UI_STYLE_GUIDE.md](frontend/EMBEDDED_UI_STYLE_GUIDE.md) - 基于 XBK 的嵌入式页面整理规范
-- [frontend/UI_REDESIGN_ROADMAP.md](frontend/UI_REDESIGN_ROADMAP.md) - 49 个页面族的整理路线图
+- [frontend/UI_REDESIGN_ROADMAP.md](frontend/UI_REDESIGN_ROADMAP.md) - 50 个页面族的整理路线图
 - [plans/ui-single-page-governance.md](plans/ui-single-page-governance.md) - 页面体检模板和交互回归清单；视觉决定以嵌入式规范为准
 
 ### 归档报告

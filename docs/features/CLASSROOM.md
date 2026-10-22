@@ -102,7 +102,7 @@
 | `pending` | 等待分析 | `fill_blank` 类型活动创建时的默认值 |
 | `running` | 分析中 | 后台 worker 已认领任务并开始分析 |
 | `success` | 分析成功 | AI 分析完成并返回结果 |
-| `failed` | 分析失败 | AI 分析出错 |
+| `failed` | 分析失败 | AI 分析出错，或没有可用智能体（`未找到可用智能体…`）、任务入队失败 |
 | `skipped` | 已跳过 | 没有有效作答数据或没有风险空位 |
 
 **自动触发条件**：`fill_blank` 活动成功结束并提交事务后，系统先发布全部 SSE 状态事件，再把分析任务投递到 Celery 默认 `celery` 队列。教师选择的 `analysis_agent_id` 作为首选智能体；未指定或首选不可用时，会按可用智能体列表回退。
@@ -112,7 +112,10 @@
 **功能**：活动结束后，AI 自动分析学生填空答题情况。
 
 **触发方式**：
-- **教师结束活动**时，前端的 AnalysisModal 可选择 AI 代理并传递 `analysis_agent_id`
+- 教师结束活动时，前端不弹独立的 AnalysisModal；分析智能体与提示词在活动表单
+  （`ActivityFormDialog.tsx`）中配置，存入 `analysis_agent_id` / `analysis_prompt`。
+  `handleEnd` 直接把已保存的两个字段传给 `POST /classroom/admin/{id}/end`
+  （`frontend/src/pages/Admin/ClassroomInteraction/index.tsx:158-170`）。
 - 活动结束事务提交后，系统通过后台 worker 异步触发分析，不阻塞结束活动接口
 
 **幂等与重试**：
@@ -133,11 +136,12 @@
 - **默认提示词**：系统内置，200 字简洁分析（总体结论 + 易错分析 + 教学建议）
 - **自定义提示词**：创建/编辑活动时填写 `analysis_prompt` 字段，完全替换默认提示词
 
-**分析上下文（analysis_context）**：
+**分析上下文（analysis_context）**（`backend/app/services/classroom_analysis.py:162-185`）：
 包含活动统计数据的结构化 JSON，供 AI 分析使用：
-- 活动基本信息（标题、描述、正确答案）
-- 响应统计数据（总提交数、正确率）
-- 逐空位统计（各空位正确率、高频错误答案）
+- 活动基本信息（`activity_id`、`title`）
+- 响应统计数据（`total_responses`、`overall_correct_rate`）
+- 风险空位（`risk_slots`：逐空位正确答案、正确率、TOP 5 错误答案）
+- 全局高频错误（`common_mistakes`，最多 10 条）与完整 `blank_slot_stats`
 
 ### 自动结束机制
 
@@ -155,7 +159,7 @@
 | `id` | Integer | 主键，自增 |
 | `activity_id` | Integer, FK, indexed | 活动 ID（FK -> `znt_classroom_activities.id`, CASCADE） |
 | `user_id` | Integer, FK, indexed | 学生 ID（FK -> `sys_users.id`, CASCADE） |
-| `answer` | String(500) | 学生答案（投票为逗号分隔的选项 key，填空为 `|` 分隔的各空位值） |
+| `answer` | String(500) | 学生答案（投票为逗号分隔的选项 key；填空单空位为纯文本，多空位为 JSON 数组字符串，如 `["TCP","80"]`） |
 | `is_correct` | Boolean, nullable | 是否正确（有正确答案时判定） |
 | `submitted_at` | DateTime(tz) | 提交时间，服务端默认 now() |
 
@@ -270,6 +274,10 @@ Items 按 `order_index` 排序，与计划通过 `plan.items` relationship 关�
 | `admin_global` | `admin` / `super_admin` | 全局管理事件广播 |
 | `student_{class_name}` | 特定班级学生 | 班级隔离的学生频道 |
 
+> 补充：无班级活动的事件会发布到内部频道 `student_unassigned_activity_{activity_id}`
+> （`backend/app/services/classroom_events.py:34-38`），当前没有客户端订阅该频道，
+> 学生端只订阅 `student_{class_name}`（`backend/app/api/endpoints/classroom/student.py:39-43`）。
+
 没有班级的活动不会发布到正常学生班级频道；没有班级的学生不能建立课堂 SSE 连接。学生订阅前会统一去除班级名称首尾空白，避免查询可见但 SSE 频道不一致。
 
 ### 事件类型
@@ -377,7 +385,8 @@ frontend/src/hooks/queries/
 
 创建/编辑活动的表单对话框，根据活动类型动态展示不同配置项：
 - **投票类型**：配置选项（key/text 列表）、允许多选、正确答案、时间限制
-- **填空类型**：配置正确答案（多个空位用 `|` 分隔）、AI 分析提示词、时间限制
+- **填空类型**：逐空位填写正确答案（单空位存纯文本，多空位序列化为 JSON 数组字符串，
+  见 `frontend/src/pages/Admin/ClassroomInteraction/utils.ts:30-36`）、AI 分析提示词、时间限制
 
 ### 班级隔离
 
@@ -414,9 +423,14 @@ frontend/src/hooks/queries/
 
 1. 教师创建课堂计划，关联多个已有活动，按顺序排列
 2. 教师点击「开始计划」，计划变为 `active`，但不自动启动第一项
-3. 教师按课堂节奏点击「下一项」，系统启动第一项，之后自动结束当前项并启动下一项
+3. 教师按课堂节奏点击「下一项」，系统启动第一项；之后每次「下一项」自动结束当前项并启动下一项
 4. 学生端通过 `GET /classroom/plans/active-plan` 获取当前进行中的活动和下一项预告
 5. 所有项完成后计划自动结束，也可手动提前结束或重置
+
+> 说明：学生端 active-plan 响应由 `_format_plan(..., include_correct_answer=False)`
+> 生成（`backend/app/api/endpoints/classroom/plan.py:368-377`），只包含计划及 items 字段，
+> 当前没有单独的“下一项预告”字段；下一项需根据 `order_index` 与 items 的
+> `pending` 状态推导。
 
 ---
 
@@ -476,4 +490,6 @@ frontend/src/hooks/queries/
 4. **及时结束**：活动完成后及时点击结束，系统会自动触发超时检查和 AI 分析
 5. **计划预演**：正式上课前预演计划流程，确认活动顺序和内容正确
 6. **AI 分析**：填空类活动建议配置 AI 代理，活动结束后自动获取教学分析报告
-7. **SSE 连接**：管理端和学生端均支持自动重连和心跳保活（15 秒超时）
+7. **SSE 连接**：服务端空闲 15 秒发送 `:keepalive`；学生端 `ClassroomPanel` 断线后 3 秒重连
+   （`frontend/src/pages/AIAgents/ClassroomPanel.tsx:415-450`），管理端经
+   `useAdminSSE` 以指数退避（1s 起、上限 60s）重连 `/api/v1/admin/stream`。

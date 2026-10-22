@@ -30,6 +30,17 @@
 }
 ```
 
+> 字段来源说明（`backend/app/api/endpoints/agents/ai_agents/analysis_helpers.py:265-330`）：
+> `meta` 实际由 `_build_hot_meta` 组装，包含 `analysis_version`、`analysis_type`、
+> `time_range`、`total_questions`、`raw_count`、`valid_question_count`、
+> `prompt_echo_count`、`noise_count`、`duplicate_count`、`active_interval_count`、
+> `unique_students`、`teacher_anchor_*`、`top_hotness_score`、
+> `heat_profile_distribution`、`classes` 等，**不含** `course_name` 与 `note`；
+> `custom_instruction` 也不会作为 JSON 字段传入，教师自定义指令由
+> `hot_agent.py:239-240` 以“## 教师自定义指令”段落追加。`teacher_questions` 经
+> `_compact_teacher_questions` 只保留 `id/time/question/source/user_name`，
+> 不含示例中的 `message_id`。
+
 ### Bloom 层级判定标准
 
 | 层级 | 特征 | 正例 | 反例 |
@@ -86,7 +97,7 @@
 - `medium`：`0.45 <= teacher_anchor_score < 0.70`；可用于辅助解释，不得单独支撑根因判断。
 - `low`：低于 `0.45`；只作为候选关联，必须回到学生原话、时间线和证据索引复核。
 - `teacher_anchor_match_type` 用于区分 `same_session_semantic`、`semantic_time`、`same_session_time`、`time_only`；`teacher_anchor_reason` 说明命中的信号。
-- `teacher_anchor_match_count`、`teacher_anchor_coverage` 和 `teacher_anchor_confidence_distribution` 只在 `included_in_analysis=true` 的有效学生问题集合上计算；被质量筛选排除的原始事件仍可保留候选锚点用于追溯，但不能进入这些统计。`teacher_anchor_coverage` 只是有效问题中成功关联教师提问的比例，不是教学效果评价。没有教师锚点时，应明确写“缺少教师提问上下文”，不要臆造课堂因果。
+- `teacher_anchor_match_count`、`teacher_anchor_coverage` 和 `teacher_anchor_confidence_distribution` 只在未被标记 `included_in_analysis=false` 的有效学生问题集合上计算；被质量筛选排除的原始事件仍可保留候选锚点用于追溯，但不能进入这些统计。`teacher_anchor_coverage` 只是有效问题中成功关联教师提问的比例，不是教学效果评价。没有教师锚点时，应明确写“缺少教师提问上下文”，不要臆造课堂因果。
 - 新生成结果还应读取 `analysis_audit` 作为统计合同：`teacher_anchor_denominator` 应等于 `valid_question_count`，置信度分布总数应等于教师锚点匹配数，且匹配数不得超过有效问题数。若 `warnings` 非空或 `teacher_anchor_statistics_consistent=false`，输出“统计口径需复核”，不能由前端或模型自行补算；旧数据缺少该字段时明确标记审计信息未记录。
 
 主题的 `hotness_components` 和 `hotness_explanation` 必须逐项解释共性、可观察困难信号、持续性的分数贡献；`score_basis` 已明确这是确定性排序信号，不等同于真实学习困难。

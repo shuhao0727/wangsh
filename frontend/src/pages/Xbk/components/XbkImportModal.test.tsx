@@ -61,9 +61,10 @@ const importButton = () => screen.getByRole("button", { name: "导入" });
 const choose = (value = file()) =>
   fireEvent.change(input(), { target: { files: [value] } });
 const ready = async () => waitFor(() => expect(importButton()).toBeEnabled());
-const setup = () => {
+const setup = (scope: "students" | "courses" | "selections" = "students") => {
   const props: ComponentProps<typeof XbkImportModal> = {
     open: true,
+    scope,
     filters: { year: "2026-2027", term: "上学期", grade: "高一" },
     onCancel: vi.fn(),
     onSuccess: vi.fn(),
@@ -284,6 +285,125 @@ describe("XBK import preview and file selection", () => {
   });
 });
 
+describe("XBK import year / term / grade drafts", () => {
+  it("only previews once after typing a full academic year, and never for invalid input", async () => {
+    setup();
+    const yearInput = screen.getByLabelText("学年");
+    choose();
+    await ready();
+    expect(xbkDataApi.previewImport).toHaveBeenCalledTimes(1);
+
+    // 逐字符输入：中间值非法时不发请求，只有完整格式才提交一次
+    fireEvent.change(yearInput, { target: { value: "2027" } });
+    fireEvent.change(yearInput, { target: { value: "2027-" } });
+    expect(xbkDataApi.previewImport).toHaveBeenCalledTimes(1);
+    fireEvent.change(yearInput, { target: { value: "2027-2028" } });
+    await waitFor(() =>
+      expect(xbkDataApi.previewImport).toHaveBeenCalledTimes(2),
+    );
+    expect(xbkDataApi.previewImport).toHaveBeenLastCalledWith(
+      expect.objectContaining({ year: "2027-2028" }),
+    );
+
+    // 非法输入只提示，不请求
+    fireEvent.change(yearInput, { target: { value: "2027-2029" } });
+    expect(await screen.findByText("学年格式不正确")).toBeInTheDocument();
+    expect(xbkDataApi.previewImport).toHaveBeenCalledTimes(2);
+    expect(importButton()).toBeDisabled();
+  });
+
+  it("normalizes a bare 4-digit year on blur", async () => {
+    setup();
+    const yearInput = screen.getByLabelText("学年") as HTMLInputElement;
+    fireEvent.change(yearInput, { target: { value: "2030" } });
+    // 纯年份未失焦前不提交
+    expect(xbkDataApi.previewImport).not.toHaveBeenCalled();
+    fireEvent.blur(yearInput);
+    expect(yearInput.value).toBe("2030-2031");
+    choose();
+    await waitFor(() =>
+      expect(xbkDataApi.previewImport).toHaveBeenLastCalledWith(
+        expect.objectContaining({ year: "2030-2031" }),
+      ),
+    );
+  });
+
+  it("keeps grade unset when the filter bar has no grade", async () => {
+    const props: ComponentProps<typeof XbkImportModal> = {
+      open: true,
+      scope: "students",
+      filters: { year: "2026-2027", term: "上学期" },
+      onCancel: vi.fn(),
+      onSuccess: vi.fn(),
+    };
+    render(<XbkImportModal {...props} />);
+    // 筛选栏无年级时默认“不设置”，不把记录静默打成高一
+    expect(screen.getAllByRole("combobox")[1]).toHaveTextContent("不设置");
+    choose();
+    await ready();
+    expect(xbkDataApi.previewImport).toHaveBeenLastCalledWith(
+      expect.objectContaining({ grade: undefined }),
+    );
+    fireEvent.click(importButton());
+    await waitFor(() =>
+      expect(xbkDataApi.importData).toHaveBeenCalledWith(
+        expect.objectContaining({ grade: undefined }),
+      ),
+    );
+  });
+
+  it("offers 高三 and passes it to preview/import", async () => {
+    setup();
+    await selectOption(1, "高三");
+    choose();
+    await ready();
+    expect(xbkDataApi.previewImport).toHaveBeenLastCalledWith(
+      expect.objectContaining({ grade: "高三" }),
+    );
+    fireEvent.click(importButton());
+    await waitFor(() =>
+      expect(xbkDataApi.importData).toHaveBeenCalledWith(
+        expect.objectContaining({ grade: "高三" }),
+      ),
+    );
+  });
+
+  it("restores the 不设置 option after choosing a grade", async () => {
+    setup();
+    await selectOption(1, "高二");
+    choose();
+    await ready();
+    expect(xbkDataApi.previewImport).toHaveBeenLastCalledWith(
+      expect.objectContaining({ grade: "高二" }),
+    );
+    await selectOption(1, "不设置");
+    await waitFor(() =>
+      expect(xbkDataApi.previewImport).toHaveBeenLastCalledWith(
+        expect.objectContaining({ grade: undefined }),
+      ),
+    );
+  });
+
+  it("lists terms from meta.terms instead of a hardcoded pair", async () => {
+    const props: ComponentProps<typeof XbkImportModal> = {
+      open: true,
+      scope: "students",
+      filters: { year: "2026-2027", term: "暑期课程", grade: "高一" },
+      termOptions: ["上学期", "下学期", "暑期课程"],
+      onCancel: vi.fn(),
+      onSuccess: vi.fn(),
+    };
+    render(<XbkImportModal {...props} />);
+    // 学期初值直接显示筛选栏的“暑期课程”，不再退化为占位符
+    expect(screen.getAllByRole("combobox")[0]).toHaveTextContent("暑期课程");
+    fireEvent.keyDown(screen.getAllByRole("combobox")[0], { key: "ArrowDown" });
+    expect(
+      await screen.findByRole("option", { name: "暑期课程" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "下学期" })).toBeInTheDocument();
+  });
+});
+
 describe("XBK import async isolation", () => {
   it("keeps a replacement file pending when the old preview resolves, then displays only the new preview", async () => {
     const old = deferred<XbkImportPreview>();
@@ -375,40 +495,50 @@ describe("XBK import async isolation", () => {
 
   it.each([
     {
-      index: 0,
-      option: "选课目录",
-      expected: { scope: "courses", grade: "高一" },
+      scope: "courses" as const,
+      index: 1,
+      option: "高二",
+      expected: { scope: "courses", grade: "高二" },
     },
     {
-      index: 0,
-      option: "选课结果",
-      expected: { scope: "selections", grade: "高一" },
+      scope: "selections" as const,
+      index: 1,
+      option: "高二",
+      expected: { scope: "selections", grade: "高二" },
     },
     {
+      scope: "students" as const,
       index: 1,
       option: "高二",
       expected: { scope: "students", grade: "高二" },
     },
+    // 年级初始跟随筛选（高一），选择同一值不触发新预览，用于覆盖无变化场景
     {
+      scope: "students" as const,
       index: 1,
-      option: "不设置",
-      expected: { scope: "students", grade: undefined },
+      option: "高一",
+      expected: { scope: "students", grade: "高一" },
     },
   ])(
     "isolates stale preview on switching $option",
-    async ({ index, option, expected }) => {
+    async ({ scope, index, option, expected }) => {
       const old = deferred<XbkImportPreview>();
       const next = deferred<XbkImportPreview>();
       vi.mocked(xbkDataApi.previewImport)
         .mockReturnValueOnce(old.promise)
         .mockReturnValueOnce(next.promise);
-      setup();
+      setup(scope);
       choose();
       await selectOption(index, option);
       expect(xbkDataApi.previewImport).toHaveBeenLastCalledWith(
         expect.objectContaining(expected),
       );
       await act(async () => old.resolve(preview()));
+      // 选择与当前值相同的年级不会产生新上下文，旧预览仍可用
+      if (option === "高一") {
+        await ready();
+        return;
+      }
       expect(importButton()).toBeDisabled();
       await act(async () => next.resolve(preview()));
       await ready();
@@ -422,7 +552,7 @@ describe("XBK import async isolation", () => {
   );
 
   it.each([{ year: "2027-2028" }, { term: "下学期" as const }])(
-    "re-previews on changing external defaults %j",
+    "resets the file and re-previews on changing external defaults %j",
     async (change) => {
       const pending = deferred<XbkImportPreview>();
       const view = setup();
@@ -430,12 +560,10 @@ describe("XBK import async isolation", () => {
       await ready();
       vi.mocked(xbkDataApi.previewImport).mockReturnValueOnce(pending.promise);
       view.update({ filters: { ...view.props.filters, ...change } });
+      // 学年/学期改为弹窗内可控，外部默认变化会重置文件和预览
+      expect(screen.queryByText("学生.xlsx")).not.toBeInTheDocument();
       expect(importButton()).toBeDisabled();
-      expect(xbkDataApi.previewImport).toHaveBeenLastCalledWith(
-        expect.objectContaining(change),
-      );
       await act(async () => pending.resolve(preview()));
-      await ready();
     },
   );
 
@@ -491,7 +619,7 @@ describe("XBK import submission", () => {
     for (const name of [
       "选择 Excel 文件",
       "移除",
-      "下载模板",
+      "下载学生名单模板",
       "取消",
       "导入",
     ]) {

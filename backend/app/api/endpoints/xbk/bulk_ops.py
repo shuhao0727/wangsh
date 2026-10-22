@@ -20,7 +20,13 @@ router = APIRouter()
 
 
 def _selection_delete_statement(scope, year, term, grade, class_name, student_no_sub, course_code_sub):
-    """Resolve cascade membership from persisted parent identities and orphan snapshots."""
+    """Resolve cascade membership from persisted parent identities and orphan snapshots.
+
+    统一语义：所有范围都只删除“属于本次筛选范围内学生”的选课。
+    课程目录是年级共享数据，不能因为某课程属于该年级就删除其他年级学生的选课。
+    “全部”范围额外保留删除孤立选课（学生已不存在）的能力，但孤立项必须同时
+    匹配 year/term 与年级快照，且不能用课程集合扩展范围。
+    """
     roster_sub = select(XbkStudent.student_no).where(XbkStudent.year == year, XbkStudent.term == term)
     orphan_grade_scope = and_(
         XbkSelection.grade == grade,
@@ -32,13 +38,14 @@ def _selection_delete_statement(scope, year, term, grade, class_name, student_no
     if scope == "students":
         stmt = stmt.where(XbkSelection.student_no.in_(student_no_sub))
     elif scope == "courses":
+        # 课程范围只级联课程自然键关联的选课；年级/班级筛选另行限制在学生名册上。
         stmt = stmt.where(XbkSelection.course_code.in_(course_code_sub))
     elif scope == "all":
         if grade:
+            # 只按学生集合 + 孤立项（year/term/年级匹配）删除，不再用课程集合扩展。
             stmt = stmt.where(or_(
-                orphan_grade_scope,
                 XbkSelection.student_no.in_(student_no_sub),
-                XbkSelection.course_code.in_(course_code_sub),
+                orphan_grade_scope,
             ))
     else:
         if class_name:

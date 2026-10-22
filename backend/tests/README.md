@@ -59,6 +59,7 @@
 ```text
 tests/
 ├── ai_agents/         # AI 智能体接口、凭证、流式与兼容性
+├── ai_partner/        # AI伙伴评分与榜单接口
 ├── articles/          # 文章与分类相关行为
 ├── assessment/        # 测评配置、会话、画像、课堂联动
 ├── auth/              # 登录、登出、刷新、nonce
@@ -68,12 +69,16 @@ tests/
 ├── group_discussion/  # 小组讨论访问控制、成员切换、消息流
 ├── informatics/       # Typst 笔记与 PDF 渲染
 ├── it/                # IT 游戏资源、KNN 采集及隔离合同
+├── learning/          # 章节学习进度
 ├── pythonlab/         # 沙箱、WebSocket、流程图、DAP 和资源限制
 ├── system/            # feature flags、metrics、迁移、bootstrap、生产 smoke 和治理合同
 ├── users/             # 用户 CRUD 与导入
 ├── xbk/               # 校本课程结构、导入导出规则
 ├── xxjs/              # 点名相关测试
+├── test_conversations_view_contract.py  # 会话视图合同
 ├── test_health.py     # 全局健康检查
+├── test_learning_content_visibility_isolated.py  # 学习内容可见性隔离回归
+├── test_migration_preflight_guard_contract.py    # 迁移前置守卫合同
 └── test_pubsub.py     # pubsub 核心行为
 ```
 

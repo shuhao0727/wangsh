@@ -6,6 +6,7 @@ import { z } from "zod";
 import { xbkDataApi } from "@services";
 import type { XbkMeta } from "@services";
 import { isValidAcademicYear } from "../academicYear";
+import { XBK_GRADES, isXbkGrade, type XbkGrade } from "../grades";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,14 +46,15 @@ interface XbkEditModalProps {
   filters: {
     year?: string;
     term?: "上学期" | "下学期";
-    grade?: "高一" | "高二";
+    grade?: XbkGrade;
   };
 }
 
 type FormValues = {
   year: string;
   term: string;
-  grade: "高一" | "高二" | "";
+  // 标准值来自 XBK_GRADES；历史数据可能是枚举外文本（如“中一”），需原样保留
+  grade: string;
   class_name: string;
   student_no: string;
   name: string;
@@ -82,7 +84,8 @@ const EMPTY_FORM: FormValues = {
 const baseFormSchema = z.object({
   year: z.string(),
   term: z.string(),
-  grade: z.union([z.literal("高一"), z.literal("高二"), z.literal("")]),
+  // 先用宽松的字符串承接，枚举校验放到 superRefine，以便放行“枚举外旧值”
+  grade: z.string(),
   class_name: z.string(),
   student_no: z.string(),
   name: z.string(),
@@ -106,6 +109,14 @@ export const XbkEditModal: React.FC<XbkEditModalProps> = ({
   filters,
 }) => {
   const [saving, setSaving] = useState(false);
+  /**
+   * 枚举外旧值兼容：历史数据的 grade 可能是“中一”等不在 XBK_GRADES 中的文本。
+   * 记录当前记录的原始值，编辑时允许原样保留，但禁止再手工改成其他非法值。
+   */
+  const legacyGrade = useMemo(() => {
+    const raw = String(initialValues?.grade || "");
+    return raw && !isXbkGrade(raw) ? raw : "";
+  }, [initialValues]);
   const formSchema = useMemo(
     () =>
       baseFormSchema.superRefine((values, ctx) => {
@@ -127,6 +138,15 @@ export const XbkEditModal: React.FC<XbkEditModalProps> = ({
             code: z.ZodIssueCode.custom,
             path: ["term"],
             message: "请选择学期",
+          });
+        }
+        // 年级：允许空值与标准枚举值；枚举外文本仅在它正是本条记录的
+        // 历史原值时放行（legacyGrade），保证旧数据可以不改年级直接保存。
+        if (values.grade && !isXbkGrade(values.grade) && values.grade !== legacyGrade) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["grade"],
+            message: `年级应为 ${XBK_GRADES.join(" / ")}`,
           });
         }
 
@@ -198,7 +218,7 @@ export const XbkEditModal: React.FC<XbkEditModalProps> = ({
           }
         }
       }),
-    [kind],
+    [kind, legacyGrade],
   );
 
   const form = useForm<FormValues>({
@@ -214,7 +234,7 @@ export const XbkEditModal: React.FC<XbkEditModalProps> = ({
       ...EMPTY_FORM,
       year: String(base.year || filters.year || ""),
       term: String(base.term || filters.term || ""),
-      grade: (base.grade || filters.grade || "") as "高一" | "高二" | "",
+      grade: String(base.grade || filters.grade || ""),
       class_name: String(base.class_name || ""),
       student_no: String(base.student_no || ""),
       name: String(base.name || ""),
@@ -365,7 +385,9 @@ export const XbkEditModal: React.FC<XbkEditModalProps> = ({
                     <FormLabel>年级</FormLabel>
                     <Select
                       value={field.value || "__none__"}
-                      onValueChange={(v) => field.onChange(v === "__none__" ? "" : (v as "高一" | "高二"))}
+                      onValueChange={(v) =>
+                        field.onChange(v === "__none__" ? "" : (v as XbkGrade))
+                      }
                     >
                       <FormControl>
                         <SelectTrigger className="h-8 text-xs">
@@ -374,8 +396,17 @@ export const XbkEditModal: React.FC<XbkEditModalProps> = ({
                       </FormControl>
                       <SelectContent>
                         <SelectItem value="__none__">不设置</SelectItem>
-                        <SelectItem value="高一">高一</SelectItem>
-                        <SelectItem value="高二">高二</SelectItem>
+                        {XBK_GRADES.map((grade) => (
+                          <SelectItem key={grade} value={grade}>
+                            {grade}
+                          </SelectItem>
+                        ))}
+                        {/* 枚举外旧值：保留在下拉里，避免打开即显示为空、保存时被清掉 */}
+                        {legacyGrade ? (
+                          <SelectItem value={legacyGrade}>
+                            {legacyGrade}（历史值）
+                          </SelectItem>
+                        ) : null}
                       </SelectContent>
                     </Select>
                     <FormMessage />

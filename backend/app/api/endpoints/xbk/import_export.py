@@ -14,6 +14,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from starlette.concurrency import run_in_threadpool
 
+from app.api.endpoints.xbk.import_snapshots import (
+    prepare_import_row, require_xlsx_format, validate_import_parent_snapshots,
+)
 from app.api.endpoints.xbk._common import (UNSELECTED_COURSE_CODES, apply_common_filters,
                                            apply_search_filter, selection_reference_errors)
 from app.services.xbk.locking import lock_key_rows
@@ -245,14 +248,16 @@ def _import_spec(scope: str) -> Tuple[Any, Dict[str, List[str]], List[str], Dict
 async def _filter_selection_references(db, valid, row_numbers, errors, *, lock=False):
     """Keep file row attribution while excluding invalid natural-key parents."""
     reference_errors = await selection_reference_errors(db, [values for values, _ in valid], lock=lock)
-    accepted = []
-    for item, row_number, messages in zip(valid, row_numbers, reference_errors):
+    accepted, accepted_rows, accepted_kept = [], [], []
+    for index, (item, row_number, messages) in enumerate(zip(valid, row_numbers, reference_errors)):
         if messages:
             errors.append(_row_errors(row_number, messages))
         else:
             accepted.append(item)
+            accepted_rows.append(row_number)
+            accepted_kept.append(index)
     errors.sort(key=lambda error: error["row"])
-    return accepted
+    return accepted, accepted_rows, accepted_kept
 
 
 def _validate_import_values(scope, values, fields):
@@ -269,37 +274,6 @@ def _validate_import_values(scope, values, fields):
             label = labels.get(error["loc"][0], str(error["loc"][0]))
             messages.append(f"{label}: {error['msg']}")
     return values, messages
-
-
-def _prepare_import_row(row, scope, defaults, fields, required):
-    """Normalize one physical row without deciding whole-file or parent validity."""
-    year, term, grade = defaults
-    messages = []
-    preview = {k: _normalize_str(row.get(k)) for k in row.index}
-    values = {}
-    period = None
-    try:
-        values["year"], values["term"] = _get_year_term(row, year, term)
-        preview["学年"], preview["学期"] = str(values["year"]), values["term"]
-        period = (values["year"], values["term"])
-    except HTTPException as exc:
-        messages.append(str(exc.detail))
-    values["grade"] = _normalize_str(row.get("年级")) or _normalize_str(grade)
-    if values["grade"] is not None:
-        preview["年级"] = values["grade"]
-    for label, field in fields.items():
-        value = _normalize_str(row.get(label))
-        if scope == "selections" and label == "课程代码":
-            value = _normalize_selection_course_code(value)
-            preview[label] = value
-        if label in required and value is None:
-            messages.append(f"{label}不能为空")
-        values[field] = value
-    if scope == "courses":
-        values["quota"] = _normalize_str(row.get("各班限报人数"))
-    if not messages:
-        values, messages = _validate_import_values(scope, values, fields)
-    return values, preview, messages, period
 
 
 def _record_import_identity(scope, values, key_fields, row_number, seen_keys):
@@ -344,9 +318,11 @@ async def _prepare_import(
     seen_keys = {}
     valid_row_numbers = []
     periods = set()
+    grade_flags = []
     for index, row in df.iterrows():
         row_number = int(index) + 2
-        values, preview, messages, period = _prepare_import_row(
+        grade_flags.append(_normalize_str(row.get("年级")) is not None)
+        values, preview, messages, period, _quota_missing = prepare_import_row(
             row, scope, (year, term, grade), fields, required,
         )
         if period is not None:
@@ -363,7 +339,14 @@ async def _prepare_import(
             "请检查学年列是否被 Excel 自动递增，并按同一学期拆分文件。"
         ))
     if scope == "selections" and valid:
-        valid = await _filter_selection_references(db, valid, valid_row_numbers, errors, lock=lock_references)
+        valid, valid_row_numbers, kept = await _filter_selection_references(
+            db, valid, valid_row_numbers, errors, lock=lock_references,
+        )
+        grade_flags = [grade_flags[index] for index in kept]
+    await validate_import_parent_snapshots(
+        scope, valid, valid_row_numbers, db, grade_flags,
+        selected_grade=_normalize_str(grade),
+    )
     return int(df.shape[0]), list(df.columns), valid, errors
 
 
@@ -430,6 +413,9 @@ async def _execute_import_upsert(db, scope, model, statement, key_fields, update
 async def _guard_import_parent(db, scope, current, values):
     if current is None:
         return
+    if scope == "courses" and "quota" not in values:
+        # 未提供限额时保留原值，守卫按库中原限额比较，不能当成 0 误判下调。
+        values = {**values, "quota": current.quota}
     guard = guard_student_change if scope == "students" else guard_course_change
     await guard(db, current, values)
 
@@ -534,6 +520,7 @@ async def export_data(
     db: AsyncSession = Depends(get_db),
     _: Dict[str, Any] = Depends(require_admin),
 ) -> StreamingResponse:
+    require_xlsx_format(format)
     diagnostics_df = None
     if scope == "students":
         stmt = select(XbkStudent).where(XbkStudent.is_deleted.is_(False))
@@ -833,7 +820,7 @@ async def export_data(
             force_text_cells(ws)
     output.seek(0)
 
-    filename = f"xbk_{scope}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.{format}"
+    filename = f"xbk_{scope}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
     headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
     return StreamingResponse(
         output,

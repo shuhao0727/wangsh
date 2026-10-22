@@ -109,9 +109,9 @@ MarkdownStyle.articles → Article[]      (一对多)
 
 **权限说明**：
 - 管理端接口（列表/Create/Update/Delete/Publish）需要 `super_admin` 角色
-- 详情接口（按 ID/Slug）需要登录，普通用户只能看到已发布文章，管理员可看所有
+- 详情接口（按 ID/Slug）需要登录，普通用户与 `admin` 只能看到已发布文章，仅 `super_admin` 可看未发布
 - 公开接口无需认证，仅返回 `published=True` 的文章
-- 公开列表支持 `?q=` 关键词搜索（标题和内容模糊匹配，搜索时跳过缓存）
+- 公开列表支持 `?q=` 关键词搜索（标题和内容模糊匹配，关键词参与缓存键）
 
 ---
 

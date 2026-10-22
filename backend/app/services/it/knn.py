@@ -143,8 +143,10 @@ async def history(db, batch_id, number, user):
 
 async def delete_batch(db, batch_id, user):
     async with writing(db, batch_id, user) as batch:
-        if batch.state != "draft" or any(e.current_revision for e in await roster(db, batch_id)):
-            raise HTTPException(409, "只能删除尚未收集数据的草稿批次")
+        # 采集中（open）的批次禁止删除，避免学生提交中途失效；
+        # 草稿、待开始与已结束的批次允许连同名单、答案一并删除。
+        if phase(batch) == "open":
+            raise HTTPException(409, "采集中不能删除批次，请先结束收集")
         await db.execute(delete(KnnRosterEntry).where(KnnRosterEntry.batch_id == batch_id))
         await db.delete(batch)
     return {"ok": True}

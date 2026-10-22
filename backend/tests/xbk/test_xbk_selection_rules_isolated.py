@@ -467,3 +467,88 @@ def test_import_preflight_database_failure_is_not_misreported_as_conflict(monkey
         ))
 
     assert db.rolled_back is True
+
+
+def catalog_with_grade(code, quota, grade):
+    """指定开设年级的课程；grade=None 表示全年级可选。"""
+    from app.models import XbkCourse as Course
+
+    return Course(
+        year=YEAR, term=TERM, grade=grade, course_code=code,
+        course_name=code, quota=quota, is_deleted=False,
+    )
+
+
+# ── 课程年级范围（方案 D）──────────────────────────────────────────────
+# 学校规则：每门课只面向特定年级开设。XbkCourse.grade 为空表示全年级可选，
+# 非空时只有同年级学生可选。此前该字段只参与列表筛选，容量校验从不读取它。
+
+def test_selection_rejects_course_opened_for_other_grade(db):
+    seed(db, roster("S1", "1班", grade="高一"), catalog_with_grade("C1", 5, "高二"))
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(selections.create_selection(payload("S1", "C1"), db, {}))
+
+    assert exc.value.status_code == 409
+    assert "仅面向" in exc.value.detail
+    assert active(db) == []
+
+
+def test_selection_allows_matching_grade(db):
+    seed(db, roster("S1", "1班", grade="高一"), catalog("C1", 5))
+
+    result = asyncio.run(selections.create_selection(payload("S1", "C1"), db, {}))
+
+    assert result["student_no"] == "S1"
+    assert [(row.student_no, row.course_code) for row in active(db)] == [("S1", "C1")]
+
+
+def test_selection_allows_any_grade_when_course_grade_is_null(db):
+    seed(db, roster("S1", "1班", grade="高二"), catalog_with_grade("C9", 5, None))
+
+    result = asyncio.run(selections.create_selection(payload("S1", "C9"), db, {}))
+
+    assert result["student_no"] == "S1"
+    assert [(row.student_no, row.course_code) for row in active(db)] == [("S1", "C9")]
+
+
+def test_grade_scope_guard_runs_before_capacity(db):
+    """年级不符时给出年级错误，而不是先报“课程已满”。"""
+    seed(db, roster("S1", "1班", grade="高一"), roster("S2", "1班", grade="高二"),
+         catalog_with_grade("C2", 0, "高三"))
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(selections.create_selection(payload("S2", "C2"), db, {}))
+
+    assert exc.value.status_code == 409
+    assert "仅面向" in exc.value.detail
+
+
+def test_student_grade_change_rejected_when_selection_breaks_course_scope(db):
+    """学生转年级后已有选课会变成跨年级，必须拒绝而不是留下违规历史。"""
+    seed(db, roster("S1", "1班", grade="高一"), catalog_with_grade("C1", 5, "高一"),
+         choice("S1", "C1"))
+
+    from app.api.endpoints.xbk import students as students_api
+
+    payload = XbkStudentUpsert(
+        year=YEAR, term=TERM, grade="高二", class_name="1班", student_no="S1", name="S1",
+    )
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(students_api.update_student(1, payload, db, {}))
+
+    assert exc.value.status_code == 409
+    assert "仅面向 高一 开设" in exc.value.detail
+
+
+def test_student_grade_change_allowed_when_course_is_open_to_all_grades(db):
+    seed(db, roster("S1", "1班", grade="高一"), catalog_with_grade("C9", 5, None),
+         choice("S1", "C9"))
+
+    from app.api.endpoints.xbk import students as students_api
+
+    payload = XbkStudentUpsert(
+        year=YEAR, term=TERM, grade="高二", class_name="1班", student_no="S1", name="S1",
+    )
+    result = asyncio.run(students_api.update_student(1, payload, db, {}))
+    assert result["grade"] == "高二"

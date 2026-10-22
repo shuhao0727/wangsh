@@ -27,7 +27,7 @@ CI 和生产镜像中稳定解析 `scripts.bootstrap_db`。仓库根目录另有
 
 ### 烟测套件
 - `smoke_openapi_sweep.py` - 只读 GET 广覆盖扫雷
-- `smoke_feature_suite.py` - users/articles/xbk/classroom 等核心 CRUD 烟测
+- `smoke_feature_suite.py` - users/articles/xbk/classroom 等核心 CRUD 烟测；学习内容部分拆分在同目录 `_smoke_feature_learning.py`，由本脚本导入，不单独执行
 - `smoke_assessment_flow.py` - 测评主链路烟测
 - `smoke_xxjs_dianming.py` - 点名链路烟测
 - `smoke_full_deploy.py` - auth/articles/informatics/agents 综合验证

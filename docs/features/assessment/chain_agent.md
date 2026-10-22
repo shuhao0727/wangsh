@@ -55,6 +55,16 @@
 }
 ```
 
+> 字段来源说明（`backend/app/api/endpoints/agents/ai_agents/analysis_helpers.py:333-408`、
+> `backend/app/services/agents/chain_agent.py:155-205`）：`meta` 实际字段为
+> `analysis_version`、`analysis_type`、`time_range`、`total_questions`、
+> `unique_students`、`teacher_anchor_*`、`chain_count`、`ai_chain_node_count`、
+> `dominant_question_type`、`classes` 等；`custom_instruction` 不作为 JSON 字段传入，
+> 教师自定义指令以“## 教师自定义指令”段落追加。每个学生节点还会带上
+> `teacher_anchor_question`、`teacher_anchor_score`、`teacher_anchor_confidence`、
+> `teacher_anchor_reason`，且只保留 `question` 非空的节点；问题数 ≥2 的学生链
+> 在 Deep Analysis 输入中可能被截到最多 50 条。
+
 ### question_type 分类标准
 
 - `clarify`：学生要求澄清概念/指令 — "X是什么意思"
@@ -115,6 +125,11 @@
 ```
 
 主题相似度计算：`关键词交集数 / min(集合A大小, 集合B大小)`，≥0.4 = 同主题，≥0.6 = 高度同主题。
+
+> 说明：以上阈值是 Prompt 侧的判定口径；确定性预聚类 `merged_groups` 实际使用
+> `time_window_seconds=120`、`similarity_threshold=0.30`
+> （`backend/app/services/agents/agent_deep_analysis.py:371,450`），模型看到的是候选组，
+> 仍需按本节标准确认、拆分或补充合并。
 
 #### 对每个轨迹输出
 - trajectory_type (按上述7种分类)

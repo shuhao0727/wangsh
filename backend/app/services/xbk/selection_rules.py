@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field as dataclass_field
 from datetime import datetime, timezone
 from typing import Any, Iterable, Mapping, Optional, Sequence
 
@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import XbkCourse, XbkSelection, XbkStudent
 from app.services.xbk.locking import lock_key_rows, lock_rows
+from app.services.xbk.grade_scope import normalize_grade, validate_course_grade_scope, validate_student_grade_scope
 
 UNSELECTED_CODES = ("", "未选")
 ACTIVE_SELECTION_UNIQUE_CONSTRAINT = "uq_xbk_selections_active_period_student"
@@ -46,6 +47,9 @@ class SelectionApplyResult:
     rows: Sequence[XbkSelection]
     inserted: int
     updated: int
+    # 学生当前年级（按 (year, term, student_no) 索引），用于 API 输出
+    # student_grade；选课行上的 grade 仍是写入时的快照。
+    student_grades: Mapping[tuple[str, str, str], Optional[str]] = dataclass_field(default_factory=dict)
 
 
 def _student_key(values: Mapping[str, Any]) -> tuple[str, str, str]:
@@ -521,16 +525,14 @@ async def apply_selection_mutations(
     if not mutations:
         return SelectionApplyResult(rows=(), inserted=0, updated=0)
     context = await _build_selection_context(db, mutations)
-    changed_rows, inserted, updated, affected = _apply_mutations(
-        db, mutations, context
-    )
+    changed_rows, inserted, updated, affected = _apply_mutations(db, mutations, context)
     await _flush(db)
     _validate_final_student_positions(context.locked_selections, changed_rows)
+    validate_course_grade_scope(affected, context.courses)
     await _validate_capacities(db, affected, context.courses)
     return SelectionApplyResult(
-        rows=tuple(changed_rows),
-        inserted=inserted,
-        updated=updated,
+        rows=tuple(changed_rows), inserted=inserted, updated=updated,
+        student_grades={key: student.grade for key, student in context.locked_students.items()},
     )
 
 
@@ -628,13 +630,9 @@ async def _validate_student_destination_capacity(
     for selection in active:
         course = courses.get((selection.year, selection.term, selection.course_code))
         if not course:
-            raise HTTPException(
-                status_code=409,
-                detail="学生存在失效课程关联，不能直接变更班级或年级",
-            )
-        used = await _destination_course_used(
-            db, row, values, selection.course_code
-        )
+            raise HTTPException(status_code=409, detail="学生存在失效课程关联，不能直接变更班级或年级")
+        validate_student_grade_scope([selection], values.get("grade"), courses)
+        used = await _destination_course_used(db, row, values, selection.course_code)
         if used + 1 > int(course.quota or 0):
             raise HTTPException(
                 status_code=409,

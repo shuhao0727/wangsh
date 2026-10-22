@@ -1,6 +1,10 @@
 /**
  * XBK 模块类型定义
  */
+import type { XbkGrade } from "./grades";
+
+/** 年级字段：后端为自由文本，前端标准值为 XBK_GRADES；历史数据可能含其他值 */
+export type XbkGradeValue = XbkGrade | (string & {});
 
 export interface XbkStudent {
   id: number;

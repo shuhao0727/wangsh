@@ -327,8 +327,13 @@ def test_mixed_field_error_batch_contract(env, scope, skip):
 def test_exact_storage_limit_and_leading_zero_roundtrip(env, scope, field, size):
     payload = {**PAYLOADS[scope], field: "0" * size}
     if scope == "selections":
-        env.seed(XbkStudent(**{**STUDENT, "term": payload["term"], "student_no": payload["student_no"]}),
-                 XbkCourse(**{**COURSE, "term": payload["term"], "course_code": payload["course_code"]}))
+        # 课程开设年级须与学生年级一致（方案 D），否则会被年级范围校验拦下；
+        # 仅在字段为年级时同步，其余字段（学号/姓名）验证长度边界不受影响。
+        course_overrides = {field: payload[field]} if field == "grade" else {}
+        env.seed(XbkStudent(**{**STUDENT, "term": payload["term"], "student_no": payload["student_no"],
+                               **course_overrides}),
+                 XbkCourse(**{**COURSE, "term": payload["term"], "course_code": payload["course_code"],
+                              **course_overrides}))
 
     async def scenario():
         manual = await env.call("POST", f"/data/{scope}", json=payload)
@@ -429,17 +434,21 @@ def test_both_missing_parents_report_row_and_skip_writes_nothing(env):
 
 
 def test_parent_queries_chunked_and_grade_snapshot_not_reference(env):
-    # Different snapshot grades do not add a new cross-grade rejection policy.
-    rows = [{**SELECTION, "student_no": f"{index:05}", "grade": "快照年级"} for index in range(501)]
-    env.seed(XbkCourse(**{**COURSE, "grade": "共享年级", "quota": 501}),
+    # P0-3：文件年级只与“同一学生已有选课快照”比对，不作为父实体引用键。
+    # 课程年级规则（方案 D）要求学生年级与课程开设年级一致，因此这里用同年级数据，
+    # 本用例只验证分块查询形状与快照比对数量，不涉及跨年级放行。
+    rows = [{**SELECTION, "student_no": f"{index:05}", "grade": STUDENT["grade"]} for index in range(501)]
+    env.seed(XbkCourse(**{**COURSE, "grade": STUDENT["grade"], "quota": 501}),
              *(XbkStudent(**{**STUDENT, "student_no": row["student_no"]}) for row in rows))
 
     async def scenario():
         preview = await env.imp("selections", rows, preview=True)
         assert preview.status_code == 200 and preview.json()["valid_rows"] == 501
         checks = [t for t in env.trace if "sql" in t]
-        assert len(checks) == 3  # 2 student chunks, 1 deduplicated course chunk.
+        # 2 student chunks, 1 deduplicated course chunk, 2 既有选课快照 chunks (P0-3).
+        assert len(checks) == 5
         assert max(len(t["params"].get("param_1", [])) for t in checks) <= 500
+        assert sum("xbk_selections" in t["sql"] for t in checks) == 2
         response = await env.imp("selections", rows)
         assert response.status_code == 200 and response.json()["inserted"] == 501
         assert len(env.snapshot()["selections"]) == 501

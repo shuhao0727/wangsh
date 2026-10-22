@@ -12,8 +12,8 @@
 - **PDF 编译**：同步编译 + Celery 异步编译，内容哈希缓存
 - **笔记分类**：扁平路径式分类（`category_path`，非嵌套树）
 - **样式管理**：可复用 Typst 样式模板（String PK）
-- **资源管理**：附件上传/下载（图片、字体等）
-- **GitHub 同步**：定时/手动同步笔记到 GitHub 仓库
+- **资源管理**：附件上传/下载（默认允许 png/jpg/jpeg/gif/webp/svg/pdf）
+- **GitHub 同步**：定时/手动从 GitHub 仓库同步笔记到本地
 - **公开发布**：已发布笔记可供学生公开访问
 
 ---
@@ -180,6 +180,8 @@
 | GET | `/public/informatics/typst-notes/{note_id}/export.pdf` | 下载 PDF（仅缓存，无触发编译） |
 | GET | `/public/informatics/typst-notes/{note_id}/export.typ` | 下载源码 |
 | GET | `/public/informatics/typst-style` | 公开样式（PPT 导出模式用） |
+| GET | `/public/informatics/typst-style/{style_key}.typ` | 按 key 下载样式源码 |
+| GET | `/public/informatics/typst-style/my_style.typ` | 默认样式快捷入口 |
 
 ---
 
@@ -189,12 +191,13 @@
 
 | 字段 | 说明 |
 |------|------|
+| `repo_url` | 仓库地址（更新配置时的必填字段） |
 | `repo_owner` | 仓库所有者 |
 | `repo_name` | 仓库名称 |
 | `branch` | 分支（默认 "main"） |
 | `token_encrypted` | 加密存储的 GitHub Token |
 | `interval_hours` | 同步间隔（默认 48 小时） |
-| `delete_mode` | 删除模式：`unpublish`（取消发布）或 `delete`（硬删除） |
+| `delete_mode` | 删除模式：`unpublish`（取消发布）或 `soft_delete`（软删除） |
 | `enabled` | 是否启用自动同步 |
 
 ### 同步源映射
@@ -211,7 +214,7 @@
 3. 对比 `source_sha` 检测变更
 4. 新增 → 创建本地笔记 + 映射关系
 5. 修改 → 更新本地笔记内容
-6. 删除 → 根据 `delete_mode` 取消发布或删除
+6. 删除 → 根据 `delete_mode` 取消发布或软删除
 7. 记录同步结果到 `InformaticsGithubSyncRun`
 
 ---
@@ -221,8 +224,8 @@
 Typst 编辑器侧栏与正文共享工作区边界，侧栏独立滚动。进入窄屏时，分屏模式自动切换为编辑模式；预览编译、保存和资源管理仍遵循原有流程。
 
 
-- `/informatics` — 公开笔记列表（`pages/Informatics/index.tsx`）
-- `/informatics/:id` — PDF 阅读器（Reader.tsx + Detail.tsx）
+- `/informatics` — 公开笔记列表与内嵌阅读器（`pages/Informatics/index.tsx` 转出 `Reader.tsx`）
+- `/informatics/:id` — PDF 阅读器（`Detail.tsx`）
 - `/admin/informatics` — 笔记管理后台（`pages/Admin/Informatics/index.tsx`）
 - `/admin/informatics/editor/new|:id` — Typst 在线编辑器（EditorPage.tsx）
 

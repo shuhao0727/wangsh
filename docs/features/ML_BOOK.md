@@ -100,7 +100,8 @@
 
 ### 请求/响应说明
 
-- **Upsert 语义**：PUT 操作中，如果目标书籍或章节不存在则自动创建，存在则更新。`module_key` 在创建书籍时必须遵守校验规则（仅 ml / ai / agents）。
+- **Upsert 语义**：PUT 操作中，如果目标书籍不存在则自动创建，存在则更新；章节 upsert
+  要求所属书籍已存在，否则返回 `404`。`module_key` 在创建书籍时必须遵守校验规则（仅 ml / ai / agents）。
 - **JSON 序列化**：所有 JSON 数组类型的字段（goals、checklist 等）在数据库中以 JSON 字符串存储（`json.dumps(ensure_ascii=False)`），在 API 响应中自动反序列化为 JSON 数组。
 - **SELECTINLOAD**：查询书籍时使用 `selectinload(MLBook.chapters)` 预加载关联章节，避免 N+1 问题。
 
@@ -138,7 +139,7 @@ ML Book 是面向"教科书"场景的书籍系统，Learning 平台是通用化�
 
 | 路由 | 页面组件 | 说明 |
 |------|----------|------|
-| `/admin/it-technology/ml-book-editor` | `AdminMLBookEditorPage` | 书籍编辑器，管理三本书的书籍元数据和章节内容 |
+| `/admin/it-technology/ml-book-editor` | `AdminMLBookEditorPage` | 书籍编辑器；当前实现只读写 `module_key="ml"` 一本书的元数据与章节 |
 | `/admin/it-technology/learning/:moduleKey` | `AdminLearningEditorPage` | Learning 内容编辑器（关联模块） |
 | `/admin/it-technology/learning/:moduleKey/:section` | `AdminTabEditorPage` | 多标签编辑器页面 |
 

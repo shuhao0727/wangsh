@@ -51,6 +51,7 @@ export const knnApi = {
     (await api.client.post<FrozenData>(`${staff}/${id}/freeze`, { a_student_no: a_student_no || null })).data,
   frozen: async (id: string) => (await api.client.get<FrozenData>(`${staff}/${id}/frozen`)).data,
   csv: async (id: string) => (await api.client.get<Blob>(`${staff}/${id}/export.csv`, { responseType: "blob" })).data,
+  remove: async (id: string) => (await api.client.delete<{ ok: boolean }>(`${staff}/${id}`)).data,
 };
 
 export function knnError(error: unknown): string {

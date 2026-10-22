@@ -20,13 +20,14 @@ async def export_csv(db, batch_id, user):
     data = await details(db, batch)
     stream = io.StringIO(newline="")
     writer = csv.writer(stream)
-    writer.writerow(["学号", "状态", "版本", "允许重填", *[f"{d}{s}" for d in DIMENSIONS for s in ["天数", "喜欢程度"]],
-                     "运动意向", "同意匿名展示", "提交时间"])
+    # 按教学设计只导出六项每周参与天数与报名类别，不再导出喜欢程度和匿名展示。
+    writer.writerow(["学号", "状态", "版本", "允许重填", *[f"{d}天数" for d in DIMENSIONS],
+                     "报名类别", "提交时间"])
     for row in data["rows"]:
         answer = row["answer"]
         writer.writerow([csv_cell(row["student_no"]), "已提交" if answer else "未提交", row["current_revision"],
-            "是" if row["refill_allowed"] else "否", *(answer["features"] if answer else [""] * 12),
-            answer["label"] if answer else "", "是" if answer and answer["display_consent"] else "否",
+            "是" if row["refill_allowed"] else "否", *(answer["features"] if answer else [""] * len(DIMENSIONS)),
+            answer["label"] if answer else "",
             answer["submitted_at"].isoformat() if answer else ""])
     return "\ufeff" + stream.getvalue()
 
@@ -39,20 +40,22 @@ async def freeze(db, batch_id, data, user):
         valid = [r for r in rows if r["answer"]]
         if len(valid) < 4:
             raise HTTPException(409, "至少收集 4 份有效答案后才能冻结课堂数据")
-        candidates = [r for r in valid if r["answer"]["display_consent"]]
+        # 按教学设计不再区分“同意匿名展示”，学生 A 由教师指定或按名单顺序取首位。
+        candidates = valid
         if data.a_student_no:
             try:
                 key = student_key(data.a_student_no)
             except ValueError as exc:
                 raise HTTPException(422, str(exc)) from exc
-            candidates = [r for r in candidates if student_key(r["student_no"]) == key]
+            candidates = [r for r in valid if student_key(r["student_no"]) == key]
         if not candidates:
-            raise HTTPException(409, "请选择已同意匿名课堂展示的学生 A")
+            raise HTTPException(409, "请选择名单中的学生作为学生 A")
         chosen = candidates[0]
         students = [{"id": f"S{i:02d}", "label": r["answer"]["label"], "features": r["answer"]["features"]}
                     for i, r in enumerate(valid, 1)]
         a_id = students[valid.index(chosen)]["id"]
-        batch.frozen_data = {"version": 1, "aId": a_id, "students": students}
+        # 冻结结果按教学设计只包含六项天数与类别，并写明特征名便于课堂讲解。
+        batch.frozen_data = {"version": 2, "aId": a_id, "featureNames": list(DIMENSIONS), "students": students}
         batch.frozen_at = now()
     return batch.frozen_data
 

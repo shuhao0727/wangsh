@@ -10,7 +10,8 @@
 
 ### 1. HTML 转义
 
-所有用户可见的文本字段（名称、描述等）在保存前会自动转义 HTML 特殊字符。
+已接入校验的 Schema 字段（见下文“已保护的字段”）在保存前会自动转义 HTML 特殊字符；
+并非所有用户可见字段都强制经过该工具，未列入的字段需按所属模块自行确认。
 
 **转义规则**：
 - `<` → `&lt;`
@@ -86,7 +87,8 @@ if check_prompt_injection(user_message):
 
 ### 任务分析
 
-**Schema**: `app/schemas/agents/ai_agent.py`
+**Schema**: `app/schemas/agents/analysis.py`（API 实际引用入口，见该文件第 95-160 行；
+`ai_agent.py` 中另有未被端点引用的同名历史副本）
 
 | 字段 | 防护类型 | Schema 类 |
 |------|----------|-----------|

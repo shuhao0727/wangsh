@@ -106,17 +106,18 @@ Python 进程
 
 ### 数据模型
 
-**核心表**：
-- `znt_debug_sessions` - 调试会话
-- `znt_debug_optimization_logs` - 优化日志
+**持久化位置**：
+- 调试会话元信息保存在 Redis `debug:session:{session_id}`，不落 PostgreSQL 表
+  （`backend/app/api/pythonlab/constants.py:24`、`backend/app/api/pythonlab/sessions.py:182-184`）。
+- 代码优化记录表为 `znt_optimize_logs`（`backend/app/models/agents/optimization.py:12`）。
 
-**会话字段**：
+**会话元信息字段**（`backend/app/api/pythonlab/sessions.py:162-177`）：
 - `session_id` - 会话 ID
-- `user_id` - 用户 ID
-- `container_id` - 容器 ID
-- `status` - 状态（running、stopped、error）
-- `created_at` - 创建时间
-- `last_heartbeat` - 最后心跳时间
+- `owner_user_id` - 所有者用户 ID
+- `status` - 状态（`PENDING`/`READY`/`ATTACHED`/`RUNNING`/`STOPPED`/`TERMINATING`/`TERMINATED`/`FAILED`/`STARTING`，见 `backend/app/api/pythonlab/constants.py:57-65`）
+- `created_at`、`last_heartbeat_at` - 创建与最后心跳时间
+- `docker_container_id` - 容器 ID
+- `dap_host`、`dap_port` - DAP 连接信息
 
 ---
 
@@ -125,13 +126,15 @@ Python 进程
 ### 容器配置
 
 **镜像**：
-- 生产 Compose：`shuhao07/pythonlab-sandbox:${IMAGE_TAG}`，当前默认 `2.1.2`
-- 本地开发：`pythonlab-sandbox:py311-arm64`，可由 `PYTHONLAB_SANDBOX_IMAGE` 覆盖
+- 生产 Compose：`shuhao07/pythonlab-sandbox:${IMAGE_TAG}`，当前默认 `2.1.6`（`docker-compose.yml:42`、`.env.example:18`）
+- 本地开发：`pythonlab-sandbox:py311-arm64`，可由 `PYTHONLAB_SANDBOX_IMAGE` 覆盖（`start-dev.sh:542`）；
+  `docker-compose.dev.yml` 的 backend/worker 环境默认写 `shuhao07/pythonlab-sandbox:2.1.3`（第 118、231 行），
+  与 `start-dev.sh` 的本地构建标签不同，实际生效值取决于启动方式，属**待复核**项。
 
 **镜像构建**：
 ```bash
 # 生产镜像统一通过受维护的六镜像构建入口
-IMAGE_TAG=2.1.2 bash scripts/deploy.sh build
+IMAGE_TAG=2.1.6 bash scripts/deploy.sh build
 
 # 开发入口会在本地 sandbox 镜像缺失时按当前架构自动构建
 bash start-dev.sh
@@ -143,8 +146,8 @@ bash start-dev.sh
 - 磁盘：512MB（工作目录配额）
 
 **网络**：
-- 隔离网络
-- 仅允许访问后端 API
+- `plain` 模式使用 `--network none`，完全隔离外部访问（`backend/app/core/sandbox/docker.py:262-264`）
+- `debug` 模式使用默认 Docker 网络并发布 debugpy 端口（`backend/app/core/sandbox/docker.py:258-261`），DAP 暴露策略仍受 OPS-01 约束
 
 > 注意：`docker-compose.yml` 中的 `pythonlab-sandbox` 服务只是镜像构建/预拉取占位容器；真实调试会话的 CPU / 内存限制由 backend 创建 sandbox 时按 `PYTHONLAB_DEFAULT_MEMORY_MB` 和请求 limits 动态下发。
 
@@ -155,8 +158,8 @@ bash start-dev.sh
 **修复**：
 - 历史止血阶段曾将默认内存从 32MB 提升到 80MB
 - 当前部署基线已统一到 128MB
-- `docker.py` 添加 `max(limits_mb, default_mem)` 保底逻辑
-- 环境变量：`PYTHONLAB_DEFAULT_MEMORY_MB=128`
+- `docker.py` 的 `_resolve_memory_mb_limit` 对请求值与默认值统一取 `max(32, 值)` 保底，不会低于 32MB（`backend/app/core/sandbox/docker.py:22-31`）
+- 环境变量：`PYTHONLAB_DEFAULT_MEMORY_MB=128`（Compose 与 `.env.example` 覆盖值；代码默认仍为 512，见 `backend/app/core/config/_pythonlab.py:34`）
 
 ---
 
@@ -176,10 +179,12 @@ bash start-dev.sh
 
 ### debugpy 配置
 
-```python
-import debugpy
-debugpy.listen(("0.0.0.0", 5678))
-debugpy.wait_for_client()
+沙箱实际通过命令行启动 debugpy 并等待客户端，而不是在用户代码里调用 Python API
+（`backend/app/core/sandbox/docker.py:219-222`）：
+
+```bash
+python -Xfrozen_modules=off -m debugpy \
+  --listen 0.0.0.0:${PYTHONLAB_DEBUGPY_PORT:-5678} --wait-for-client /workspace/main.py
 ```
 
 ---
@@ -228,10 +233,12 @@ debugpy.wait_for_client()
 
 ### 超时配置
 
-- `PYTHONLAB_SESSION_TTL_SECONDS=3600` - 会话总超时
-- `PYTHONLAB_UNATTACHED_TTL_SECONDS=600` - 未连接超时
-- `PYTHONLAB_IDLE_TIMEOUT_SECONDS=3600` - 空闲超时
-- `PYTHONLAB_HEARTBEAT_TIMEOUT_SECONDS=180` - 心跳超时
+- `PYTHONLAB_SESSION_TTL_SECONDS=3600` - 会话总超时（Compose/`.env.example` 覆盖值；代码默认 1800，见下方说明）
+- `PYTHONLAB_UNATTACHED_TTL_SECONDS=600` - 未连接超时（同上，代码默认 300）
+- `PYTHONLAB_IDLE_TIMEOUT_SECONDS=3600` - 空闲超时（同上，代码默认 1800）
+- `PYTHONLAB_HEARTBEAT_TIMEOUT_SECONDS=180` - 心跳超时（同上，代码默认 60）
+
+> 默认值来源：`backend/app/core/config/_pythonlab.py:17-25` 提供代码级默认（1800/300/1800/60），`docker-compose.yml:48-62` 与 `.env.example:144-152` 显式覆盖为 3600/600/3600/180。两者不一致时以部署环境变量为准，不在代码中硬编码改默认。
 
 ### 自动清理
 
@@ -252,7 +259,9 @@ debugpy.wait_for_client()
 **孤儿探测（不是删除授权）**：
 
 - `cleanup_orphans` 按 `PYTHONLAB_ORPHAN_CLEANUP_ENABLED` 定期扫描容器名（`{namespace}_u{user_id}`）并按
-  `debug:user:{owner}:sessions` 判断 owner 是否仍有会话。
+  `debug:user:{owner}:sessions` 判断 owner 是否仍有会话。该开关同时门控 backend 启动时的
+  `start_background_tasks` 轮询（`backend/app/core/startup.py:176-188`）；关闭后 Celery beat
+  仍按 `pythonlab-cleanup-orphans` 调度（`backend/app/core/celery_app.py:63-68`）。
 - 它只做 owner 级探测：`terminate_session("orphan", ...)` 因缺少匹配的 ownership 记录会被保守拒绝
   （日志 `Preserving sandbox without current ownership`），因此**调度任务成功不等于资源已回收**。该合同由
   `backend/tests/pythonlab/test_sandbox_ownership_closure.py` 固定，不要把它改成按名字直删。
@@ -340,21 +349,21 @@ HTTP provider 仅对选定的 `NetworkError` / `TimeoutException` 类型进入�
 
 **队列**：`celery`
 
-**并发数**：3（可配置）
+**并发数**：3（`docker-compose.yml:305` 取 `${PYTHONLAB_WORKER_CONCURRENCY:-3}`）
 
-**任务**：
-- 会话清理
-- 容器管理
-- 孤儿容器清理
+**任务**（Celery 任务名见 `backend/app/tasks/pythonlab.py:373-580`）：
+- `app.tasks.pythonlab.cleanup_stale_sessions` - 会话清理（beat 每 120s，`backend/app/core/celery_app.py:69-72`）
+- `app.tasks.pythonlab.cleanup_orphans` - 孤儿容器清理（beat 间隔取 `PYTHONLAB_ORPHAN_CLEANUP_INTERVAL_SECONDS`，默认 300s）
+- `app.tasks.pythonlab.start_session`、`app.tasks.pythonlab.stop_session` - 容器创建与停止
 
 ### Kill 脚本修复
 
 **问题**：kill 脚本误杀容器 init 进程
 
-**修复**：
-- 排除 PID 1
-- 排除非 python 进程
-- 只杀死用户代码进程
+**修复**（`backend/app/core/sandbox/docker.py:136-150`、`200-218`）：
+- 排除 PID 1 与当前执行脚本自身的进程
+- 只匹配 cmdline 以 `python` 开头且包含 `debugpy` 的进程
+- 命中后对该进程发 `SIGKILL`；不按名称批量杀其他进程
 
 ---
 
@@ -384,13 +393,13 @@ HTTP provider 仅对选定的 `NetworkError` / `TimeoutException` 类型进入�
 
 **位置**：`frontend/src/pages/Admin/ITTechnology/pythonLab/`
 
-**主要文件**：
-- `index.tsx` - 主页面
-- `CanvasToolbar.tsx` - 工具栏
-- `TemplatePalette.tsx` - 模板面板
-- `RightPanelView.tsx` - 右侧面板
-- `FloatingPopup.tsx` - 浮动弹窗
-- `OptimizationDialog.tsx` - 优化对话框
+**主要文件**（均在 `frontend/src/pages/Admin/ITTechnology/pythonLab/` 下）：
+- `PythonLabStudio.tsx` - Studio 主入口（无 `index.tsx`）
+- `components/CanvasToolbar.tsx` - 工具栏
+- `components/TemplatePalette.tsx` - 模板面板
+- `components/rightPanel/RightPanelView.tsx` - 右侧面板
+- `components/FloatingPopup.tsx` - 浮动弹窗
+- `components/OptimizationDialog.tsx` - 优化对话框
 
 ### 共享实验资源
 

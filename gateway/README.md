@@ -24,7 +24,7 @@ owner: ops
 - 站点级 `request_body { max_size 16MB }` 位于所有路由处理器之前，覆盖 API、健康检查和前端入口；
 - 超过 16 MiB 时客户端最终会收到 Caddy 的 `413 Request Entity Too Large`；但隔离实测发现，部分超限请求可能先有约 16 MB 前缀到达 upstream，因此当前不能把它表述为“超限请求绝不触达 upstream”；
 - `servers.timeouts.read_body 30s` 负责慢请求时间预算，不替代大小上限；
-- 16 MiB 高于当前后端导入请求预算（10 MiB）并留出 multipart 封装空间，后端业务限制仍然有效；
+- 16 MiB 高于当前后端导入请求预算（10 MiB，`MAX_UPLOAD_SIZE = 10485760` 与 XBK `MAX_IMPORT_BYTES = 10 * 1024 * 1024`）并留出 multipart 封装空间，后端业务限制仍然有效；
 - 独立 Docker + mock upstream 已验证小请求正常、超限请求最终返回 413；同时观察到部分超限请求前缀可能到达 upstream。若要求“先完整缓冲、超限零转发”，仍需另设并验证可靠的边缘限制层。
 
 ### 通用入口限速

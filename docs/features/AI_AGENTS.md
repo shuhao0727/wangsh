@@ -1,6 +1,6 @@
 # AI 智能体系统文档
 
-> 最后更新：2026-10-19
+> 最后更新：2026-10-20
 > 
 > **注意**：SSE流式输出修复已于2026-03-23完成，Dify集成已支持完整流式效果。
 
@@ -42,6 +42,11 @@ AI 智能体系统是项目的核心功能模块，支持多平台 AI 对话、�
 
 ## AI伙伴临时共享榜单（未发布）
 
+> 发布状态更新（2026-10-20 复核）：本节对应源码已随 `2.1.4` 及后续发布构建进入镜像
+> （`0797303` 为 `2.1.3` 版本准备提交，其后是 `2.1.4` 发布准备 `78b86de`；当前
+> `frontend/package.json` 为 `2.1.6`）。标题保留原文以维持既有链接锚点；“未发布”只适用于
+> 本节记录的候选阶段，不代表当前构建内容。服务器是否已部署仍以发布记录为准。
+
 - 独立页面入口仍为 `/games/ai-partner/index.html`。源码维护于 `frontend/ai-partner/`，
   来源为 `/Users/wsh/Documents/Codex/项目/img2threejs-试用/robot-v1`；保留三维展示、选型与课堂检查。
   本轮将原前端规则评分改为后端调用平台已配置模型，评价价格/性价比、完成度、选型合理性和验证风险；
@@ -69,8 +74,8 @@ AI 智能体系统是项目的核心功能模块，支持多平台 AI 对话、�
   前后端各自携带运行资源，继续独立构建。CI 使用 `node scripts/sync-ai-partner-catalog.mjs --check` 检查副本漂移，
   不直接编辑前端派生副本；脚本入口见 [scripts/README.md](../../scripts/README.md)。
 
-本节仅记录未发布变更，不表示已构建镜像、推送或部署；本轮实际测试结果由主线程统一写入
-[TEST_STATUS](../docker/testing/TEST_STATUS.md)，此处不复制测试数字。
+以上为候选阶段的变更记录；当前构建状态见本节开头说明。本节不复制测试数字，实际结果
+由主线程统一写入 [TEST_STATUS](../docker/testing/TEST_STATUS.md)。
 
 ## 历史加载与会话身份边界
 
@@ -85,19 +90,20 @@ AI 智能体系统是项目的核心功能模块，支持多平台 AI 对话、�
 ### 数据模型
 
 **核心表**：
-- `znt_ai_agents` - 智能体配置
-- `znt_conversations` - 对话会话
-- `znt_conversation_messages` - 对话消息
-- `znt_agent_usage` - 使用记录
+- `znt_agents` - 智能体配置
+- `znt_conversations` - 对话记录（问题与回答以 `message_type=question/answer` 分行保存）
 - `znt_group_discussion_sessions` - 小组讨论会话
 - `znt_group_discussion_messages` - 小组讨论消息
 - `znt_group_discussion_members` - 小组讨论成员
 - `znt_group_discussion_analyses` - 讨论分析结果
 
+> 使用记录不是独立表：`/ai-agents/usage` 由 `v_conversations_with_deleted` 视图按
+> `session_id` 聚合 `znt_conversations` 生成（`backend/app/services/agents/agent_usage.py`）。
+
 **关键字段**：
-- `provider_type`：平台类型（openrouter、dify、siliconflow 等）
+- `agent_type`：平台类型（`general` / `dify` / `openai`）；OpenRouter、SiliconFlow 等由 `api_endpoint` 识别为 OpenAI 兼容协议
 - `api_endpoint`：API 端点
-- `api_key`：加密存储的 API 密钥
+- `api_key_encrypted`：加密存储的 API 密钥（旧 `api_key` 列保留但不再写入明文）
 - `model_name`：模型名称
 - `is_active`：是否启用
 
@@ -108,10 +114,11 @@ AI 智能体系统是项目的核心功能模块，支持多平台 AI 对话、�
 ### 配置方式
 
 在智能体配置中设置：
-- `provider_type`: `dify`
+- `agent_type`: `dify`
 - `api_endpoint`: Dify API 地址（如 `http://dify-api:5001/v1`）
 - `api_key`: Dify API Key
-- `model_name`: 对话应用 ID
+- `model_name`: 模型标识，仅对非 Dify 智能体用于请求体和模型列表；Dify 的请求体不携带该值，
+  应用身份由 API Key 绑定，因此 Dify 配置表单不再展示“模型”字段（历史值保留在库中但不生效）
 
 ### 流式输出修复（2026-03-23）
 
@@ -122,7 +129,7 @@ Caddy 网关 → 浏览器，任一层错误缓冲都会破坏流式体验
 
 **修复方案（3层）**：
 
-1. **后端 `backend/app/services/agents/chat_stream.py`**：
+1. **后端 `backend/app/services/agents/chat_stream.py`（Dify 字节流细节在 `chat_stream_dify_helpers.py`）**：
    - 使用 `aiter_bytes()` 增量读取 Dify SSE 字节流，并按单个 SSE 事件边界重新组帧
    - 避免使用 `aiter_text()` 或 `aiter_lines()`（会缓冲），也不聚合完整响应后再返回
 
@@ -225,7 +232,7 @@ HTTP 200 后无有效 SSE，均返回结构化错误而不是成功的空 `messa
 - 班级以登录态 `class_name` 为准
 
 **管理员端**：
-- 可读取任意会话（用于巡检与管理）
+- 可读取任意会话（用于巡检与管理；`ensure_session_view_access` 对 `admin`/`super_admin` 直接放行，`teacher` 不在此例外中）
 - 可创建讨论组，班级必填
 - 可禁言/取消禁言成员
 - 批量删除会话返回实际删除数量，响应结构为
@@ -234,9 +241,10 @@ HTTP 200 后无有效 SSE，均返回结构化错误而不是成功的空 `messa
 ### 并发控制
 
 **组号锁机制**：
-- 使用 Redis 分布式锁防止并发建组冲突
+- Redis 按用户记录加入锁（`znt:group_discussion:join_lock:{user_id}`），学生加入后在本锁窗口内不能切换到其他组；教师/管理员和 `GROUP_DISCUSSION_REDIS_ENABLED=false` 时不启用（`backend/app/services/agents/group_discussion/join_lock_service.py`）
 - 锁在加入成功后才会生效
 - 失败请求不会写入锁，避免"失败后被锁组号"
+- 并发建组去重依赖数据库唯一约束：`(session_date, class_name, group_no)` 冲突后回查已有会话（`backend/app/services/agents/group_discussion/session_creation.py`），不是 Redis 分布式锁
 
 **跨系统分析参数校验**：
 - 当传入 `date`/`class_name` 时，校验所选 `session_ids` 与参数一致
@@ -248,7 +256,7 @@ HTTP 200 后无有效 SSE，均返回结构化错误而不是成功的空 `messa
 
 ### 会话生命周期
 
-1. **创建会话**：用户首次发送消息时自动创建
+1. **创建会话**：发送消息后由前端调用 `POST /usage` 写入，服务端按 `session_id` 归并（没有独立会话表）
 2. **消息记录**：每条消息都记录到数据库
 3. **会话列表**：用户可查看历史会话
 4. **导出功能**：管理员可导出对话记录
@@ -292,10 +300,12 @@ HTTP 200 后无有效 SSE，均返回结构化错误而不是成功的空 `messa
 
 - 用户 ID
 - 智能体 ID
-- 模型名称
-- Token 使用量
+- 模型名称（由智能体配置回填）
 - 响应时间
 - 时间戳
+
+> Token 使用量没有独立持久化字段或响应字段：`znt_conversations` 与
+> `AgentUsageResponse` 均不记录 token 计数，使用统计只包含问答次数、响应时间与模型名。
 
 ### 统计分析
 
@@ -382,7 +392,11 @@ HTTP 200 后无有效 SSE，均返回结构化错误而不是成功的空 `messa
 - OpenRouter
 - SiliconFlow
 - Dify
+- Anthropic
 - 自定义 OpenAI 兼容端点
+
+> 模型发现端点还列出 OpenAI、DeepSeek、Azure、Volcengine、Aliyun、Ollama、custom
+> （`backend/app/api/endpoints/agents/model_discovery.py`）。
 
 ### 发现流程
 
@@ -423,7 +437,7 @@ HTTP 200 后无有效 SSE，均返回结构化错误而不是成功的空 `messa
 - `index.tsx` - 主页面
 - `ChatArea.tsx` - 对话区域
 - `AgentSidebar.tsx` - 智能体侧边栏
-- `GroupDiscussion.tsx` - 小组讨论
+- `GroupDiscussionPanel.tsx` - 小组讨论
 - `hooks/useStreamEngine.ts` - 流式输出 Hook
 
 ### 流式输出实现
@@ -457,7 +471,7 @@ HTTP 200 后无有效 SSE，均返回结构化错误而不是成功的空 `messa
 ```json
 {
   "name": "OpenRouter GPT-4",
-  "provider_type": "openrouter",
+  "agent_type": "general",
   "api_endpoint": "https://openrouter.ai/api/v1",
   "api_key": "sk-or-xxx",
   "model_name": "openai/gpt-4-turbo",
@@ -470,7 +484,7 @@ HTTP 200 后无有效 SSE，均返回结构化错误而不是成功的空 `messa
 ```json
 {
   "name": "Dify 对话应用",
-  "provider_type": "dify",
+  "agent_type": "dify",
   "api_endpoint": "http://dify-api:5001/v1",
   "api_key": "app-xxx",
   "model_name": "对话应用ID",

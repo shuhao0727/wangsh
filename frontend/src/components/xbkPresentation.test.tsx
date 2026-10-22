@@ -64,7 +64,7 @@ describe("XBK presentation contracts", () => {
     );
 
     expect(source).toContain("handleExportCurrentTable");
-    expect(source).toContain("导出筛选结果");
+    expect(source).toContain("导出当前结果");
     expect(source).toContain("符合筛选条件的全部结果（不限当前分页）");
   });
 });

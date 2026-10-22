@@ -40,7 +40,9 @@ class XbkSelectionOut(BaseModel):
     id: int
     year: AcademicYear
     term: str
+    # grade 为写入时的选课快照；筛选与展示以 student_grade（学生当前年级）为准。
     grade: Optional[str] = None
+    student_grade: Optional[str] = None
     student_no: str
     name: Optional[str] = None
     course_code: str
