@@ -34,8 +34,26 @@ bash scripts/migrate-db.sh current
 > 漏跑 `alembic upgrade head` 不会产生任何报错，也不影响功能，只是删除课堂活动时
 > 会退化成全表扫描（60k 行基准 1.722ms → 0.662ms）。属于静默的性能损失。
 >
-> 建索引会给 `znt_classroom_plan_items` 加短暂的写锁。数据量小时可忽略，
-> 若该表较大，建议放在低峰期。
+> ~~建索引会给 `znt_classroom_plan_items` 加短暂的写锁~~ **实测该表生产为 0 行**，
+> 建索引在毫秒级完成，无需停写窗口。
+
+**2026-10-26 生产核对结果：**
+
+| 项 | 值 |
+|---|---|
+| 生产库 Alembic 版本 | **`20261020_0001`**（= 2.1.8 对应 revision，无积压迁移） |
+| 本次需执行 | 仅 `20261026_0001` 一个迁移 |
+| `znt_classroom_plan_items` 行数 | **0** |
+| `znt_classroom_{activities,responses,plans}` 行数 | 0 / 0 / 0 |
+| 数据库大小 | 55 MB |
+| 服务器资源 | 磁盘 74G 可用（60%）、内存 13Gi 可用、负载 0.13 |
+
+结论：**没有跨版本迁移积压，建索引无锁表风险，备份体积很小。**
+
+```bash
+# 部署前备份（55 MB，很快）
+bash scripts/deploy.sh backup-db
+```
 
 ### 2. 版本号（已确定：2.2.0）
 
@@ -52,10 +70,9 @@ bash scripts/migrate-db.sh current
 
 部署时需要为 2.2.0 构建六镜像，**不能复用 2.1.8 的镜像**。
 
-> **待确认**：生产库当前 Alembic 版本无法从外部读取（无查询接口，SSH 在本机
-> 网络下不可达，`wangsh.cn` 解析到 198.18.0.100）。部署前须在服务器上执行
-> `check_migration_state.py` 确认起点；若仍在 2.1.6 对应的 revision，
-> 需确认 KNN 迁移 `20261020_0001` 是否已执行。
+生产机上六个镜像当前均为 `2.1.8`（`wangsh-backend`、`frontend`、`gateway`、
+`typst-worker`、`pythonlab-worker`、`pythonlab-sandbox`），发布目录为
+`/home/shuhao/wangsh-releases/{2.1.6,2.1.7,2.1.8,current}`。
 
 ### 3. CI 行为变化
 
