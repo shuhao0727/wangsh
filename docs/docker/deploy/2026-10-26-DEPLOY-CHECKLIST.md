@@ -37,19 +37,25 @@ bash scripts/migrate-db.sh current
 > 建索引会给 `znt_classroom_plan_items` 加短暂的写锁。数据量小时可忽略，
 > 若该表较大，建议放在低峰期。
 
-### 2. 版本号
+### 2. 版本号（已确定：2.2.0）
 
-当前 `package.json` 为 `2.1.8`，而 2.1.8 已发布过。本次若要作为新版本发布，
-需按 [版本管理](DEPLOY.md#版本管理) 同步以下位置后重新构建：
+**2026-10-26 核对结果：**
 
-```bash
-APP_VERSION、IMAGE_TAG、REACT_APP_VERSION、IMAGE_REPOSITORY_PREFIX
-```
+| 项 | 值 | 依据 |
+|---|---|---|
+| 生产实际运行 | **2.1.8** | `GET /api/v1/health` 返回 `"version":"2.1.8"`、`environment: production` |
+| 待部署版本 | **2.2.0** | 标签 `2.2.0` → `62d3976`，已合并 main 并通过 CI |
+| 文档旧记录 | 2.1.6 | DEPLOY.md 原值，已过期，本次已更正 |
 
-`check-version-consistency.mjs` 会校验 `.env.example`、`frontend/package.json`、
-`frontend/package-lock.json`、`docker-compose.yml`、`dockerhub-amd64.yml`、
-`deploy.sh` 六处一致。**若沿用 2.1.8 而不升版本，镜像标签会与已发布版本冲突**，
-需确认是否接受覆盖。
+已按 [版本管理](DEPLOY.md#版本管理) 把六处配置同步到 2.2.0，
+`check-version-consistency.mjs` 校验通过（version 2.2.0 / image tag 2.2.0）。
+
+部署时需要为 2.2.0 构建六镜像，**不能复用 2.1.8 的镜像**。
+
+> **待确认**：生产库当前 Alembic 版本无法从外部读取（无查询接口，SSH 在本机
+> 网络下不可达，`wangsh.cn` 解析到 198.18.0.100）。部署前须在服务器上执行
+> `check_migration_state.py` 确认起点；若仍在 2.1.6 对应的 revision，
+> 需确认 KNN 迁移 `20261020_0001` 是否已执行。
 
 ### 3. CI 行为变化
 

@@ -175,7 +175,8 @@ first visible answer、terminal/error、上游取消和 cleanup latency。
 - **域名**: wangsh.cn
 - **SSH 端口**: 6607
 - **用户**: shuhao
-- **当前镜像版本**: 2.1.6（Docker 镜像标签 `2.1.6`；六镜像已发布，身份以 release-set 为准，本轮未部署服务器，实际运行版本须在部署前核对）
+- **当前镜像版本**: 2.1.8（2026-10-26 实测 `/api/v1/health` 返回 `"version":"2.1.8"`、`environment: production`）
+- **最新版本**: 2.2.0（标签 `2.2.0` → `62d3976`，已合并 main 并通过 CI，**尚未部署**）
 
 ### 快速连接
 ```bash
