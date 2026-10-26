@@ -8,7 +8,7 @@
 
 > 时间：2026-10-26
 > 工作树：`beautiful-satoshi-b71479`（分支 `claude/affectionate-shirley-640fd1`）
-> 规则出处：[`.claude/code-audit-rules.md`](../../../.claude/code-audit-rules.md)
+> 规则出处：`.claude/code-audit-rules.md`（本地工作规则，`.claude/` 已被 gitignore，不随仓库分发）
 > **状态：改动全部完成并通过验证，但尚未提交。**
 
 ## 一、目标与约束
