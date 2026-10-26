@@ -8,7 +8,7 @@ router 由 analysis.py include 组合，函数经 analysis.py 对外 re-export�
 
 import asyncio
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
@@ -30,7 +30,7 @@ from app.services.agents import (
     analyze_student_chains_v2,
     stream_task_sheet_analysis,
 )
-from app.services.agents.hot_agent import deep_analyze_hot_questions
+from app.services.agents.hot_agent import classification_status, classify_hot_questions
 from app.services.agents.chain_agent import deep_analyze_student_chains
 from app.services.agents.providers.common import resolve_credentials
 
@@ -40,13 +40,42 @@ from .analysis_helpers import (
     _serialize_teacher_marks,
     _resolve_prompt_text,
     _resolve_analysis_agent_credentials,
-    _prepare_hot_deep_analysis_input,
     _prepare_chain_deep_analysis_input,
-    _hot_deep_analysis_has_content,
     _chain_deep_analysis_has_content,
 )
 
 router = APIRouter()
+
+
+async def _attach_hot_classification(
+    analysis_result: Dict[str, Any],
+    analysis_agent: Dict[str, Any],
+    task_sheet: Optional[str],
+    prompt_text: Optional[str],
+) -> None:
+    """调用归类智能体，把逐条标签与统计写入分析结果；未配置智能体时记为 skipped。"""
+    if not analysis_agent.get("enabled"):
+        analysis_result["analysis_agent"] = analysis_agent["public"]
+        analysis_result["classification_status"] = {
+            "enabled": False, "status": "skipped", "reason": analysis_agent.get("reason"),
+        }
+        return
+    classification = await classify_hot_questions(
+        task_sheet=task_sheet or "",
+        teacher_questions=analysis_result.get("teacher_questions") or [],
+        student_events=analysis_result.get("student_question_events") or [],
+        custom_prompt=prompt_text,
+        api_endpoint=analysis_agent["api_endpoint"],
+        api_key=analysis_agent["api_key"],
+        agent_type=analysis_agent["agent_type"],
+        agent_model=analysis_agent["agent_model"],
+    )
+    state, reason = classification_status(classification)
+    analysis_result["question_classification"] = classification
+    analysis_result["classification_status"] = {"enabled": True, "status": state, "reason": reason}
+    analysis_result["analysis_agent"] = {
+        **analysis_agent["public"], "status": state, **({"reason": reason} if reason else {}),
+    }
 
 
 @router.post("/analysis/hot-questions/stream")
@@ -92,70 +121,27 @@ async def save_hot_question_analysis_stream(
             )
             yield _sse(
                 "step_started",
-                {
-                    "step_id": "pedagogy_agent",
-                    "message": "正在调用热点问题教学诊断智能体",
-                    "progress": 88,
-                },
+                {"step_id": "classification", "message": "正在归类学生提问（回应 / 生成性 / 无关）", "progress": 88},
             )
             analysis_agent = await _resolve_analysis_agent_credentials(
                 db,
                 analysis_agent_id=body.analysis_agent_id,
-                role="hotspot_pedagogy_diagnosis",
+                role="hotspot_question_classification",
             )
-            analysis_result["analysis_agent"] = analysis_agent["public"]
-            if analysis_agent.get("enabled"):
-                deep_result = await deep_analyze_hot_questions(
-                    _prepare_hot_deep_analysis_input(analysis_result),
-                    custom_prompt=prompt_text,
-                    api_endpoint=analysis_agent["api_endpoint"],
-                    api_key=analysis_agent["api_key"],
-                    agent_type=analysis_agent["agent_type"],
-                    agent_model=analysis_agent["agent_model"],
-                )
-                has_content = _hot_deep_analysis_has_content(deep_result)
-                status_text = "completed" if has_content else "empty"
-                reason = None if has_content else "分析诊断智能体未返回可解析的教学诊断 JSON"
-                analysis_result["deep_analysis"] = deep_result
-                analysis_result["deep_analysis_status"] = {
-                    "enabled": True,
-                    "status": status_text,
-                    "reason": reason,
-                }
-                analysis_result["analysis_agent"] = {
-                    **analysis_agent["public"],
-                    "status": status_text,
-                    **({"reason": reason} if reason else {}),
-                }
-                yield _sse(
-                    "partial_result",
-                    {
-                        "step_id": "pedagogy_agent",
-                        "message": "热点问题教学诊断已生成" if has_content else "热点问题教学诊断未返回有效内容",
-                        "progress": 93,
-                        "result": {
-                            "executive_summary": deep_result.get("executive_summary"),
-                            "theme_analysis_count": len(deep_result.get("theme_analysis") or []),
-                            "teaching_suggestions_count": len(deep_result.get("teaching_suggestions") or []),
-                            "analysis_agent_status": status_text,
-                        },
+            await _attach_hot_classification(analysis_result, analysis_agent, body.task_sheet, prompt_text)
+            status_info = analysis_result["classification_status"]
+            yield _sse(
+                "partial_result",
+                {
+                    "step_id": "classification",
+                    "message": status_info.get("reason") or "学生提问归类已完成",
+                    "progress": 93,
+                    "result": {
+                        "classification_status": status_info["status"],
+                        "totals": (analysis_result.get("question_classification") or {}).get("totals"),
                     },
-                )
-            else:
-                analysis_result["deep_analysis_status"] = {
-                    "enabled": False,
-                    "status": "skipped",
-                    "reason": analysis_agent.get("reason"),
-                }
-                yield _sse(
-                    "partial_result",
-                    {
-                        "step_id": "pedagogy_agent",
-                        "message": analysis_agent.get("reason") or "未启用热点问题教学诊断智能体",
-                        "progress": 90,
-                        "result": {"analysis_agent_status": "skipped"},
-                    },
-                )
+                },
+            )
             record = HotQuestionAnalysis(
                 title=body.title,
                 task_sheet=body.task_sheet,

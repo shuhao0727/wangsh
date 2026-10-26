@@ -40,6 +40,7 @@ export type HotStudentQuestionEvent = {
   content?: string;
   question?: string;
   user_name?: string;
+  user_id?: number;
   student_id?: number;
   class_name?: string;
   session_id?: string;
@@ -49,6 +50,8 @@ export type HotStudentQuestionEvent = {
   included_in_analysis?: boolean;
   theme?: string;
   intent_label?: string;
+  question_type?: string;
+  question_type_label?: string;
   teacher_anchor_id?: string | null;
   teacher_anchor_question?: string | null;
   teacher_anchor_score?: number | null;
@@ -250,8 +253,46 @@ export type BeamNode = {
   evidence_ids?: number[];
 };
 
+/** LLM 逐条归类：回应型挂教师提问 Tn，生成性与无关不挂。 */
+export type HotQuestionCategory = "response" | "generative" | "unrelated";
+export type HotQuestionLabel = {
+  category: HotQuestionCategory;
+  subtype: string | null;
+  teacher_ref: string | null;
+  reason?: string;
+  /** 多轮判定的一致程度，1 表示每轮相同。 */
+  agreement?: number;
+  /** 多数票不足，判为待确认。 */
+  ambiguous?: boolean;
+  votes?: number;
+};
+export type HotTeacherRef = { ref: string; time?: string; question: string; message_id?: number | null };
+export type HotClassificationTeacher = HotTeacherRef & {
+  response_count: number;
+  subtypes: Record<string, number>;
+};
+export type HotQuestionClassification = {
+  version?: string;
+  category_labels?: Record<string, string>;
+  subtype_labels?: Record<string, string>;
+  items?: Record<string, HotQuestionLabel>;
+  totals?: { response: number; generative: number; unrelated: number; unclassified: number };
+  ambiguous_count?: number;
+  unlabelled_count?: number;
+  vote_rounds?: number;
+  subtypes?: Record<string, number>;
+  teachers?: HotClassificationTeacher[];
+  /** 去重后的教师提问清单（含 Tn 编号），页面按它编号。 */
+  teacher_refs?: HotTeacherRef[];
+  batch_count?: number;
+  failed_batch_count?: number;
+};
+
 export type TaskAnalysisResult = {
+  question_classification?: HotQuestionClassification;
+  classification_status?: { enabled?: boolean; status?: "completed" | "partial" | "empty" | "skipped"; reason?: string | null };
   analysis_version?: string;
+  bucket_seconds?: number;
   word_cloud?: WordCloudItem[];
   wordCloud?: WordCloudItem[];
   keywords?: WordCloudItem[];
@@ -302,6 +343,9 @@ export type TaskAnalysisResult = {
     end_at?: string;
     question_count?: number;
     unique_students?: number;
+    student_ids?: number[];
+    evidence_ids?: number[];
+    representative_questions?: string[];
     top_questions?: Array<{ question?: string; count?: number }>;
     is_burst?: boolean;
     near_teacher_mark?: string | null;

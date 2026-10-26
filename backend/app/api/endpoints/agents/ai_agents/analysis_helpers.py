@@ -55,16 +55,21 @@ def _serialize_teacher_marks(marks: Optional[List[Any]]) -> List[Dict[str, Any]]
 
 
 def _task_analysis_payload(row: Any) -> Dict[str, Any]:
+    """转成可直接 JSON 序列化的纯数据。
+
+    原先直接返回含 datetime 的 dict，缓存写入时 json.dumps 失败被静默吞掉，
+    缓存永远不生效、每次请求都打数据库；日期也会让响应无法复用。
+    """
     return {
         "id": row.id,
         "title": row.title,
         "task_sheet": getattr(row, "task_sheet", None) or "",
         "agent_id": row.agent_id,
         "class_name": row.class_name,
-        "start_at": row.start_at,
-        "end_at": row.end_at,
+        "start_at": row.start_at.isoformat() if isinstance(row.start_at, datetime) else row.start_at,
+        "end_at": row.end_at.isoformat() if isinstance(row.end_at, datetime) else row.end_at,
         "result": row.result or {},
-        "created_at": row.created_at,
+        "created_at": row.created_at.isoformat() if isinstance(row.created_at, datetime) else row.created_at,
     }
 
 
@@ -197,139 +202,6 @@ def _compact_teacher_questions(items: List[Dict[str, Any]]) -> List[Dict[str, An
     ]
 
 
-def _partition_student_questions(
-    student_events: List[Dict[str, Any]],
-) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
-    """把学生提问事件拆成有效问题与噪声问题，构造紧凑问题对象。"""
-    student_questions = []
-    noise_questions = []
-    for item in student_events:
-        question = str(item.get("content") or "").strip()
-        if not question:
-            continue
-        compact = {
-            "student_name": item.get("user_name") or "未知学生",
-            "student_id": item.get("student_id"),
-            "class_name": item.get("class_name"),
-            "time": item.get("created_at"),
-            "question": question,
-            "question_type": item.get("question_type"),
-            "question_type_label": item.get("question_type_label"),
-            "bloom_level": item.get("bloom_level"),
-            "terms": item.get("terms") or [],
-            "semantic_terms": item.get("semantic_terms") or [],
-            "intent_code": item.get("intent_code"),
-            "intent_label": item.get("intent_label"),
-            "theme": item.get("theme"),
-            "teacher_anchor_id": item.get("teacher_anchor_id"),
-            "teacher_anchor_question": item.get("teacher_anchor_question"),
-            "teacher_anchor_score": item.get("teacher_anchor_score"),
-            "teacher_anchor_confidence": item.get("teacher_anchor_confidence"),
-            "teacher_anchor_match_type": item.get("teacher_anchor_match_type"),
-            "teacher_anchor_reason": item.get("teacher_anchor_reason") or [],
-            "evidence_id": item.get("message_id"),
-            "quality_label": item.get("quality_label"),
-            "quality_reason": item.get("quality_reason"),
-            "quality_flags": item.get("quality_flags") or [],
-        }
-        is_included = item.get("included_in_analysis", True) and item.get("quality_label", "valid_question") == "valid_question"
-        if is_included:
-            student_questions.append(compact)
-        else:
-            noise_questions.append(compact)
-    return student_questions, noise_questions
-
-
-def _compact_hot_theme(theme: Dict[str, Any]) -> Dict[str, Any]:
-    return {
-        "theme_id": theme.get("theme_id"),
-        "topic": theme.get("topic"),
-        "count": int(theme.get("count") or 0),
-        "unique_students": int(theme.get("unique_students") or 0),
-        "intent_code": theme.get("intent_code") or "other",
-        "intent_label": theme.get("intent_label") or "其他问题",
-        "keywords": theme.get("keywords") or [],
-        "representative_question": theme.get("representative_question"),
-        "active_bucket_count": theme.get("active_bucket_count"),
-        "commonness_score": theme.get("commonness_score"),
-        "difficulty_signal_score": theme.get("difficulty_signal_score"),
-        "persistence_score": theme.get("persistence_score"),
-        "hotness_score": theme.get("hotness_score"),
-        "hotness_components": theme.get("hotness_components") or {},
-        "hotness_explanation": theme.get("hotness_explanation") or [],
-        "score_basis": theme.get("score_basis"),
-        "heat_profile": theme.get("heat_profile"),
-    }
-
-
-def _build_hot_meta(
-    analysis_result: Dict[str, Any],
-    summary: Dict[str, Any],
-    filters: Dict[str, Any],
-    classes: List[str],
-    themes: List[Dict[str, Any]],
-    student_questions: List[Dict[str, Any]],
-) -> Dict[str, Any]:
-    return {
-        "analysis_version": analysis_result.get("analysis_version"),
-        "analysis_type": analysis_result.get("analysis_type"),
-        "time_range": f"{filters.get('start_at') or ''} ~ {filters.get('end_at') or ''}",
-        "total_questions": summary.get("valid_question_count", summary.get("question_count", len(student_questions))),
-        "raw_count": summary.get("raw_count"),
-        "valid_question_count": summary.get("valid_question_count", len(student_questions)),
-        "prompt_echo_count": summary.get("prompt_echo_count"),
-        "noise_count": summary.get("noise_count"),
-        "duplicate_count": summary.get("duplicate_count"),
-        "active_interval_count": summary.get("active_interval_count"),
-        "unique_students": summary.get("unique_students"),
-        "teacher_anchor_count": summary.get("teacher_anchor_count"),
-        "teacher_anchor_match_count": summary.get("teacher_anchor_match_count"),
-        "teacher_anchor_coverage": summary.get("teacher_anchor_coverage"),
-        "teacher_anchor_confidence_distribution": summary.get("teacher_anchor_confidence_distribution") or {},
-        "theme_count": summary.get("theme_count", len(themes)),
-        "intent_distribution": summary.get("intent_distribution"),
-        "burst_count": summary.get("burst_count"),
-        "top_hotness_score": summary.get("top_hotness_score"),
-        "heat_profile_distribution": summary.get("heat_profile_distribution") or {},
-        "classes": classes,
-        "class_name": filters.get("class_name"),
-        "bucket_seconds": filters.get("bucket_seconds"),
-    }
-
-
-def _prepare_hot_deep_analysis_input(analysis_result: Dict[str, Any]) -> Dict[str, Any]:
-    summary = analysis_result.get("summary") or {}
-    filters = analysis_result.get("filters") or {}
-    themes = analysis_result.get("themes") if isinstance(analysis_result.get("themes"), list) else []
-    student_events = (
-        analysis_result.get("student_question_events")
-        if isinstance(analysis_result.get("student_question_events"), list)
-        else []
-    )
-    classes = sorted({str(item.get("class_name")) for item in student_events if item.get("class_name")})
-
-    student_questions, noise_questions = _partition_student_questions(student_events)
-
-    return {
-        "meta": _build_hot_meta(analysis_result, summary, filters, classes, themes, student_questions),
-        "task_sheet": analysis_result.get("task_sheet") or "",
-        "topic_distribution": {
-            str(theme.get("topic") or f"主题{index + 1}"): int(theme.get("count") or 0)
-            for index, theme in enumerate(themes)
-        },
-        "themes": [
-            _compact_hot_theme(theme)
-            for theme in themes[:30]
-        ],
-        "intent_distribution": summary.get("intent_distribution") or {},
-        "student_questions": student_questions,
-        "noise_questions": noise_questions,
-        "teacher_questions": _compact_teacher_questions(analysis_result.get("teacher_questions") or []),
-        "timeline_buckets": (analysis_result.get("timeline_buckets") or [])[:40],
-        "course_hotspot_sequence": (analysis_result.get("course_hotspot_sequence") or [])[:20],
-    }
-
-
 def _compact_student_chain(chain: Dict[str, Any]) -> Dict[str, Any]:
     nodes = chain.get("nodes") if isinstance(chain.get("nodes"), list) else []
     return {
@@ -406,15 +278,6 @@ def _prepare_chain_deep_analysis_input(analysis_result: Dict[str, Any]) -> Dict[
         "ai_main_question_chain": analysis_result.get("ai_main_question_chain") or [],
         "unresolved_questions": (analysis_result.get("unresolved_questions") or [])[:30],
     }
-
-
-def _hot_deep_analysis_has_content(result: Dict[str, Any]) -> bool:
-    return bool(
-        result.get("executive_summary")
-        or result.get("theme_analysis")
-        or result.get("timeline_phases")
-        or result.get("teaching_suggestions")
-    )
 
 
 def _chain_deep_analysis_has_content(result: Dict[str, Any]) -> bool:
