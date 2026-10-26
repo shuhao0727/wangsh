@@ -201,6 +201,17 @@ class CategoryService:
         categories = result.scalars().all()
         
         # 如果需要使用次数，计算每个分类的使用次数
+        # 一次分组聚合取全部计数：原实现每个分类单独查一次，
+        # 公开接口默认开启统计时会产生 N+1（1 次列表 + N 次计数）。
+        usage_counts: dict[int, int] = {}
+        if include_usage_count and categories:
+            rows = await db.execute(
+                select(Article.category_id, func.count())
+                .where(Article.category_id.in_([category.id for category in categories]))
+                .group_by(Article.category_id)
+            )
+            usage_counts = {category_id: count for category_id, count in rows.all()}
+
         category_list = []
         for category in categories:
             category_dict = {
@@ -211,12 +222,8 @@ class CategoryService:
                 "created_at": category.created_at,
                 "updated_at": category.updated_at
             }
-            
             if include_usage_count:
-                usage_query = select(func.count()).select_from(Article).where(Article.category_id == category.id)
-                usage_result = await db.execute(usage_query)
-                category_dict["article_count"] = usage_result.scalar() or 0
-            
+                category_dict["article_count"] = usage_counts.get(category.id, 0)
             category_list.append(category_dict)
         
         # 计算分页信息

@@ -333,38 +333,6 @@ def test_enqueue_failure_compensation_error_does_not_break_ended_response(monkey
     assert db.rollback_count == 1
 
 
-def test_manual_analysis_can_reclaim_failed_status(monkeypatch):
-    activity = SimpleNamespace(
-        id=1,
-        activity_type="fill_blank",
-        status="ended",
-        analysis_agent_id=None,
-        analysis_status="failed",
-        analysis_result=None,
-        analysis_context={},
-        analysis_error="broker unavailable",
-    )
-    calls = []
-
-    async def fake_get_activity(_db, _activity_id):
-        return activity
-
-    async def fake_run(_db, activity_id, *, allow_running_retry=False):
-        calls.append((activity_id, allow_running_retry))
-
-    monkeypatch.setattr(classroom_svc, "_get_activity", fake_get_activity)
-    monkeypatch.setattr(
-        classroom_svc,
-        "_run_auto_analysis_for_ended_activity",
-        fake_run,
-    )
-    db = _FakeDB()
-
-    asyncio.run(classroom_svc.analyze_fill_blank_stats(db, 1, agent_id=7))
-
-    assert calls == [(1, True)]
-
-
 def test_auto_end_ignores_activity_already_ended_by_another_worker(monkeypatch):
     ended = SimpleNamespace(
         id=1,

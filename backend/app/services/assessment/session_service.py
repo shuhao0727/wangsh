@@ -22,6 +22,7 @@ from app.models.assessment import (
     AssessmentBasicProfile,
     StudentProfile,
 )
+from app.services.assessment.question_picker import load_fixed_question_pools
 
 
 # Compatibility exports keep existing callers and tests on the same parser contract.
@@ -308,6 +309,8 @@ async def _draw_questions(
 
     drawn: list[AssessmentQuestion] = []
 
+    fixed_pools = await load_fixed_question_pools(db, config.id, question_config)
+
     for qtype, cfg in question_config.items():
         if isinstance(cfg, dict):
             count = cfg.get("count", 0)
@@ -316,16 +319,7 @@ async def _draw_questions(
         if count <= 0:
             continue
 
-        result = await db.execute(
-            select(AssessmentQuestion).where(
-                and_(
-                    AssessmentQuestion.config_id == config.id,
-                    AssessmentQuestion.question_type == qtype,
-                    AssessmentQuestion.mode == "fixed",
-                )
-            )
-        )
-        pool = list(result.scalars().all())
+        pool = fixed_pools.get(qtype, [])
         if not pool:
             continue
 
@@ -415,6 +409,166 @@ async def get_session_questions(
     return items
 
 
+async def _resolve_correct_answer(db, answer) -> tuple[str, str]:
+    """取题目的正确答案与解析：优先用答题时保存的快照，避免题库后续改动影响判分。"""
+    snapshot_raw = getattr(answer, "question_snapshot", None)
+    if snapshot_raw:
+        try:
+            snap = json.loads(snapshot_raw)
+            return snap.get("correct_answer", ""), snap.get("explanation", "")
+        except Exception:
+            return "", ""
+    question = answer.question
+    if question:
+        return question.correct_answer or "", question.explanation or ""
+    return "", ""
+
+
+def _text_matches(student_answer: str, correct_answer: str) -> bool:
+    """填空题/无 AI 评分时的文本比对：去空白、忽略大小写。"""
+    return student_answer.strip().lower() == correct_answer.strip().lower()
+
+
+async def _grade_fill_answer(db, session, answer, student_answer: str, correct_answer: str) -> dict:
+    """填空题判分：配置了评分智能体时走 AI，失败或无智能体时文本比对兜底。"""
+    result: dict = {"correct_answer": correct_answer}
+    config = (await db.execute(
+        select(AssessmentConfig).where(AssessmentConfig.id == session.config_id)
+    )).scalar_one()
+    question = answer.question
+
+    if question and getattr(config, "agent_id", None):
+        try:
+            grading = await _ai_grade_answer(db, config, question, student_answer, answer.max_score)
+            answer.ai_score = grading["score"]
+            answer.is_correct = grading["is_correct"]
+            answer.ai_feedback = grading["feedback"]
+            return {**result, "is_correct": grading["is_correct"], "earned_score": grading["score"],
+                    "ai_feedback": grading["feedback"]}
+        except Exception as exc:
+            logger.error(f"AI 评分失败 answer_id={answer.id}: {exc}")
+
+    # 未配置评分智能体或 AI 失败：回退文本比对，避免正确答案被误判为 0 分
+    is_correct = _text_matches(student_answer, correct_answer)
+    answer.is_correct = is_correct
+    answer.ai_score = answer.max_score if is_correct else 0
+    return {**result, "is_correct": is_correct, "earned_score": answer.ai_score}
+
+
+async def _grade_answer(db, session, answer, student_answer: str, correct_answer: str, explanation: str) -> dict:
+    """按题型判分并写回答题记录，返回需要合并进响应的字段。"""
+    if answer.question_type == "choice":
+        given = student_answer.strip().upper()
+        is_correct = correct_answer.strip().upper() == given
+        answer.is_correct = is_correct
+        answer.ai_score = answer.max_score if is_correct else 0
+        return {"is_correct": is_correct, "correct_answer": correct_answer,
+                "explanation": explanation, "earned_score": answer.ai_score}
+    if answer.question_type == "fill":
+        return await _grade_fill_answer(db, session, answer, student_answer, correct_answer)
+    # short_answer：仅保存，由教师或后续流程评分
+    return {}
+
+
+def _mastery_status(consecutive_correct: int, mastery_streak: int,
+                    answer_correct: bool, total_attempts: int, max_attempts: int) -> str:
+    """按连续答对与尝试次数判定掌握状态。"""
+    if consecutive_correct >= mastery_streak:
+        return "mastered"
+    if total_attempts >= max_attempts:
+        return "max_attempts_reached"
+    return "practicing"
+
+
+async def _append_adaptive_question(db, session, answer, result: dict) -> None:
+    """自适应题：按知识点连续答对/尝试次数决定是否追加新题，并写回 result。"""
+    knowledge_point = getattr(answer, "knowledge_point", None)
+    if not (getattr(answer, "is_adaptive", False) and knowledge_point):
+        return
+
+    config = (await db.execute(
+        select(AssessmentConfig).where(AssessmentConfig.id == session.config_id)
+    )).scalar_one()
+    adaptive_config = {}
+    adaptive_question = (await db.execute(
+        select(AssessmentQuestion).where(
+            and_(
+                AssessmentQuestion.config_id == session.config_id,
+                AssessmentQuestion.mode == "adaptive",
+                AssessmentQuestion.knowledge_point == knowledge_point,
+            )
+        )
+    )).scalar_one_or_none()
+    if adaptive_question and adaptive_question.adaptive_config:
+        with suppress(Exception):
+            adaptive_config = json.loads(adaptive_question.adaptive_config)
+
+    mastery_streak = adaptive_config.get("mastery_streak", 2)
+    max_attempts = adaptive_config.get("max_attempts", 5)
+
+    attempts = list((await db.execute(
+        select(AssessmentAnswer).options(selectinload(AssessmentAnswer.question)).where(
+            and_(
+                AssessmentAnswer.session_id == session.id,
+                AssessmentAnswer.knowledge_point == knowledge_point,
+                AssessmentAnswer.student_answer.isnot(None),
+            )
+        ).order_by(AssessmentAnswer.attempt_seq.asc())
+    )).scalars().all())
+
+    consecutive_correct = 0
+    for previous in reversed(attempts):
+        if not previous.is_correct:
+            break
+        consecutive_correct += 1
+    total_attempts = len(attempts)
+
+    status = _mastery_status(consecutive_correct, mastery_streak, answer.is_correct, total_attempts, max_attempts)
+    result["mastery_status"] = status
+    if status != "practicing" or answer.is_correct:
+        return
+
+    try:
+        history = []
+        for previous in attempts:
+            if previous.question_snapshot:
+                with suppress(Exception):
+                    history.append(json.loads(previous.question_snapshot).get("content", ""))
+            elif previous.question and previous.question.content:
+                history.append(previous.question.content)
+
+        snapshot = await _ai_generate_realtime_question(
+            db, config, knowledge_point, answer.question_type, answer.max_score,
+            prompt_hint=adaptive_config.get("prompt_hint", ""),
+            history=history,
+        )
+        new_answer = AssessmentAnswer(
+            session_id=session.id,
+            question_id=adaptive_question.id if adaptive_question else None,
+            question_snapshot=json.dumps(snapshot, ensure_ascii=False),
+            question_type=snapshot.get("question_type", answer.question_type),
+            max_score=answer.max_score,
+            knowledge_point=knowledge_point,
+            is_adaptive=True,
+            attempt_seq=total_attempts + 1,
+        )
+        db.add(new_answer)
+        await db.flush()
+        result["next_question"] = {
+            "answer_id": new_answer.id,
+            "question_type": new_answer.question_type,
+            "content": snapshot.get("content", ""),
+            "options": snapshot.get("options"),
+            "score": new_answer.max_score,
+            "is_adaptive": True,
+            "knowledge_point": knowledge_point,
+            "attempt_seq": new_answer.attempt_seq,
+        }
+    except Exception as exc:
+        logger.error(f"自适应追加出题失败 kp={knowledge_point}: {exc}")
+        result["mastery_status"] = "error"
+
+
 async def submit_answer(
     db: AsyncSession,
     session_id: int,
@@ -422,49 +576,25 @@ async def submit_answer(
     answer_id: int,
     student_answer: str,
 ) -> dict:
-    """提交单题答案 — 支持固定题和自适应题"""
+    """提交单题答案 — 支持固定题和自适应题。"""
     session = await _load_session(db, session_id, user_id, for_update=True)
     if session.status != "in_progress":
         raise ValueError("该检测已提交，无法继续答题")
 
-    # 加载 answer
-    answer_result = await db.execute(
+    answer = (await db.execute(
         select(AssessmentAnswer)
         .options(selectinload(AssessmentAnswer.question))
         .execution_options(populate_existing=True)
-        .where(
-            and_(
-                AssessmentAnswer.id == answer_id,
-                AssessmentAnswer.session_id == session_id,
-            )
-        )
-    )
-    answer = answer_result.scalar_one_or_none()
+        .where(and_(AssessmentAnswer.id == answer_id, AssessmentAnswer.session_id == session_id))
+    )).scalar_one_or_none()
     if not answer:
         raise ValueError("答题记录不存在")
-    # 防重复提交：已答过的题不能再提交
     if answer.student_answer is not None:
         raise ValueError("该题已提交过答案，不可重复提交")
 
-    q = answer.question
-    now = datetime.now(timezone.utc)
     answer.student_answer = student_answer
-    answer.answered_at = now
-
-    # 获取正确答案（从 snapshot 或 question）
-    correct_answer = ""
-    explanation = ""
-    snapshot_raw = getattr(answer, "question_snapshot", None)
-    if snapshot_raw:
-        try:
-            snap = json.loads(snapshot_raw)
-            correct_answer = snap.get("correct_answer", "")
-            explanation = snap.get("explanation", "")
-        except Exception:
-            pass
-    elif q:
-        correct_answer = q.correct_answer or ""
-        explanation = q.explanation or ""
+    answer.answered_at = datetime.now(timezone.utc)
+    correct_answer, explanation = await _resolve_correct_answer(db, answer)
 
     result = {
         "answer_id": answer.id,
@@ -478,162 +608,8 @@ async def submit_answer(
         "next_question": None,
         "mastery_status": None,
     }
-
-    # 评分
-    if answer.question_type == "choice":
-        given = student_answer.strip().upper()
-        correct = correct_answer.strip().upper()
-        is_correct = correct == given
-        answer.is_correct = is_correct
-        answer.ai_score = answer.max_score if is_correct else 0
-        result.update({
-            "is_correct": is_correct,
-            "correct_answer": correct_answer,
-            "explanation": explanation,
-            "earned_score": answer.ai_score,
-        })
-    elif answer.question_type == "fill":
-        # 简单比对或 AI 评分
-        config = (await db.execute(
-            select(AssessmentConfig).where(AssessmentConfig.id == session.config_id)
-        )).scalar_one()
-        if q:
-            use_ai_grading = bool(getattr(config, "agent_id", None))
-            if use_ai_grading:
-                try:
-                    grading = await _ai_grade_answer(db, config, q, student_answer, answer.max_score)
-                    answer.ai_score = grading["score"]
-                    answer.is_correct = grading["is_correct"]
-                    answer.ai_feedback = grading["feedback"]
-                    result.update({
-                        "is_correct": grading["is_correct"],
-                        "earned_score": grading["score"],
-                        "ai_feedback": grading["feedback"],
-                        "correct_answer": correct_answer,
-                    })
-                except Exception as e:
-                    logger.error(f"AI 评分失败 answer_id={answer_id}: {e}")
-                    # 简单文本比对兜底
-                    is_correct = student_answer.strip().lower() == correct_answer.strip().lower()
-                    answer.is_correct = is_correct
-                    answer.ai_score = answer.max_score if is_correct else 0
-                    result.update({"is_correct": is_correct, "earned_score": answer.ai_score, "correct_answer": correct_answer})
-            else:
-                # 未配置评分智能体时，填空题回退到文本比对，避免正确答案被误判为 0 分
-                is_correct = student_answer.strip().lower() == correct_answer.strip().lower()
-                answer.is_correct = is_correct
-                answer.ai_score = answer.max_score if is_correct else 0
-                result.update({"is_correct": is_correct, "earned_score": answer.ai_score, "correct_answer": correct_answer})
-        else:
-            # snapshot 模式，简单比对
-            is_correct = student_answer.strip().lower() == correct_answer.strip().lower()
-            answer.is_correct = is_correct
-            answer.ai_score = answer.max_score if is_correct else 0
-            result.update({"is_correct": is_correct, "earned_score": answer.ai_score, "correct_answer": correct_answer, "explanation": explanation})
-    else:
-        # short_answer: 仅保存
-        pass
-
-    # ─── 自适应追加逻辑 ───
-    answer_is_adaptive = bool(getattr(answer, "is_adaptive", False))
-    answer_knowledge_point = getattr(answer, "knowledge_point", None)
-    if answer_is_adaptive and answer_knowledge_point:
-        kp = answer_knowledge_point
-        config = (await db.execute(
-            select(AssessmentConfig).where(AssessmentConfig.id == session.config_id)
-        )).scalar_one()
-
-        # 加载该知识点的自适应配置
-        aq_result = await db.execute(
-            select(AssessmentQuestion).where(
-                and_(
-                    AssessmentQuestion.config_id == session.config_id,
-                    AssessmentQuestion.mode == "adaptive",
-                    AssessmentQuestion.knowledge_point == kp,
-                )
-            )
-        )
-        aq = aq_result.scalar_one_or_none()
-        ac = {}
-        if aq and aq.adaptive_config:
-            with suppress(Exception):
-                ac = json.loads(aq.adaptive_config)
-        mastery_streak = ac.get("mastery_streak", 2)
-        max_attempts = ac.get("max_attempts", 5)
-
-        # 统计该知识点的尝试情况
-        kp_answers_result = await db.execute(
-            select(AssessmentAnswer).options(selectinload(AssessmentAnswer.question)).where(
-                and_(
-                    AssessmentAnswer.session_id == session_id,
-                    AssessmentAnswer.knowledge_point == kp,
-                    AssessmentAnswer.student_answer.isnot(None),
-                )
-            ).order_by(AssessmentAnswer.attempt_seq.asc())
-        )
-        kp_answers = list(kp_answers_result.scalars().all())
-
-        # 计算连续答对次数（从最后往前数）
-        consecutive_correct = 0
-        for a in reversed(kp_answers):
-            if a.is_correct:
-                consecutive_correct += 1
-            else:
-                break
-
-        total_attempts = len(kp_answers)
-
-        if consecutive_correct >= mastery_streak:
-            result["mastery_status"] = "mastered"
-        elif not answer.is_correct and total_attempts < max_attempts:
-            # 答错且未达上限 → AI 追加新题
-            result["mastery_status"] = "practicing"
-            try:
-                history = []
-                for a in kp_answers:
-                    if a.question_snapshot:
-                        try:
-                            s = json.loads(a.question_snapshot)
-                            history.append(s.get("content", ""))
-                        except Exception:
-                            pass
-                    elif a.question and a.question.content:
-                        history.append(a.question.content)
-
-                snapshot = await _ai_generate_realtime_question(
-                    db, config, kp, answer.question_type, answer.max_score,
-                    prompt_hint=ac.get("prompt_hint", ""),
-                    history=history,
-                )
-                new_answer = AssessmentAnswer(
-                    session_id=session_id,
-                    question_id=aq.id if aq else None,
-                    question_snapshot=json.dumps(snapshot, ensure_ascii=False),
-                    question_type=snapshot.get("question_type", answer.question_type),
-                    max_score=answer.max_score,
-                    knowledge_point=kp,
-                    is_adaptive=True,
-                    attempt_seq=total_attempts + 1,
-                )
-                db.add(new_answer)
-                await db.flush()
-                result["next_question"] = {
-                    "answer_id": new_answer.id,
-                    "question_type": new_answer.question_type,
-                    "content": snapshot.get("content", ""),
-                    "options": snapshot.get("options"),
-                    "score": new_answer.max_score,
-                    "is_adaptive": True,
-                    "knowledge_point": kp,
-                    "attempt_seq": new_answer.attempt_seq,
-                }
-            except Exception as e:
-                logger.error(f"自适应追加出题失败 kp={kp}: {e}")
-                result["mastery_status"] = "error"
-        elif total_attempts >= max_attempts:
-            result["mastery_status"] = "max_attempts_reached"
-        else:
-            result["mastery_status"] = "practicing"
+    result.update(await _grade_answer(db, session, answer, student_answer, correct_answer, explanation))
+    await _append_adaptive_question(db, session, answer, result)
 
     await db.commit()
     return result

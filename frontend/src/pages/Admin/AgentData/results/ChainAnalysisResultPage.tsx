@@ -3,7 +3,7 @@
  */
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, Hash, Lightbulb, Loader2, Target, Users } from "lucide-react";
-import * as echarts from "echarts";
+import { echarts } from "@/lib/echarts";
 import dayjs from "dayjs";
 import SharedResultLayout from "./SharedResultLayout";
 import { useAnalysisDetail } from "./hooks/useAnalysisDetail";

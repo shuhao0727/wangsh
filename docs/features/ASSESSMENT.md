@@ -283,7 +283,7 @@ API 统一挂在 `backend/app/api/endpoints/assessment/` 下，完整路径前�
 - `backend/app/api/endpoints/assessment/`
 - `backend/app/services/assessment/`
 - `frontend/src/services/assessment/`
-- [hot_agent.md](assessment/hot_agent.md) - 学生热点问题分析 Agent Prompt
+- [hot_agent.md](assessment/hot_agent.md) - 热点问题归类 Agent（回应 / 生成性 / 无关）
 - [chain_agent.md](assessment/chain_agent.md) - 学生问题链分析 Agent Prompt
 
 ---
@@ -292,10 +292,10 @@ API 统一挂在 `backend/app/api/endpoints/assessment/` 下，完整路径前�
 
 本模块使用两个独立的 AI Agent 进行学习数据分析：
 
-### A1. 热点问题分析 Agent (hot_agent.md)
-- **职责**：识别学生高频提问、共性困惑和知识盲区
-- **输入**：课程会话数据、学生提问记录
-- **输出**：热点问题排序、困难点分析、教学建议
+### A1. 热点问题归类 Agent (hot_agent.md)
+- **职责**：逐条判断学生提问是在回应某个教师提问 Tn，还是与本课有关但教师没问过的生成性问题，或无关
+- **输入**：教学设计 / 任务单、教师提问 T1…Tn、学生提问记录
+- **输出**：逐条类别、细分与判断依据；计数和分阶段由程序完成，不输出教学建议
 - **详细文档**：[assessment/hot_agent.md](assessment/hot_agent.md)
 
 ### A2. 问题链分析 Agent (chain_agent.md)

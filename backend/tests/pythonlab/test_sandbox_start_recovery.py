@@ -310,7 +310,8 @@ def test_new_container_keeps_existing_network_and_dap_contract(docker_env, mode)
     assert f'wangsh.pythonlab.runtime-mode={mode}' in cmd
     if mode == 'debug':
         assert '--network' not in cmd
-        assert cmd[cmd.index('-p')+1] == '5678'
+        # 调试端口只绑定回环地址，避免暴露到全部网卡被未授权直连
+        assert cmd[cmd.index('-p')+1] == '127.0.0.1:5678:5678'
         assert result['dap_port'] == 45678
         assert '--listen 0.0.0.0:5678' in cmd[-1]
     else:

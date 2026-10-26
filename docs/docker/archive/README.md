@@ -180,3 +180,9 @@
 - [2026-10-09-comprehensive-remediation-plan.md](2026-10-09-comprehensive-remediation-plan.md) - 全面完善计划的历史安排和执行声明。
 - [2026-10-09-verification-report.md](2026-10-09-verification-report.md) - 六轮审计条目的当时复核与反证。
 - [2026-10-10-file-organization-findings.md](2026-10-10-file-organization-findings.md) - 旧文件扫描候选清单，68 条口径不等同当前已确认缺陷。
+
+### 2026-10-26 代码审查与瘦身
+
+- [2026-10-26-code-audit-report.md](2026-10-26-code-audit-report.md) - 五阶段效率、复杂度、拆分与瘦身改动的总账和验证证据；改动未提交时的快照，当前行为见各功能 owner 文档。
+- [2026-10-26-verification-summary.md](2026-10-26-verification-summary.md) - 全量验证总结：真实 Docker/PG/浏览器实测结果、4 类缺陷修复、三次"假通过"的验证方法论复盘、140 项环境假象的甄别记录。
+- [2026-10-26-verification-summary.md](2026-10-26-verification-summary.md) - 真实 Docker / PostgreSQL / 浏览器全量验证总结，含 100+ 张截图与 4 类缺陷的修复证据。

@@ -14,6 +14,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from starlette.concurrency import run_in_threadpool
 
+from app.api.endpoints.xbk.import_errors import (is_constraint_violation, record_import_identity,
+                                               row_attributed_error, row_errors)
 from app.api.endpoints.xbk.import_snapshots import (
     prepare_import_row, require_xlsx_format, validate_import_parent_snapshots,
 )
@@ -205,10 +207,6 @@ def _validate_required_columns(df: pd.DataFrame, required: List[str]) -> None:
         raise HTTPException(status_code=422, detail=f"缺少必要列: {', '.join(missing)}")
 
 
-def _row_errors(idx: int, messages: List[str]) -> Dict[str, Any]:
-    return {"row": idx, "errors": messages}
-
-
 def _drop_empty_rows(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
         return df
@@ -251,7 +249,7 @@ async def _filter_selection_references(db, valid, row_numbers, errors, *, lock=F
     accepted, accepted_rows, accepted_kept = [], [], []
     for index, (item, row_number, messages) in enumerate(zip(valid, row_numbers, reference_errors)):
         if messages:
-            errors.append(_row_errors(row_number, messages))
+            errors.append(row_errors(row_number, messages))
         else:
             accepted.append(item)
             accepted_rows.append(row_number)
@@ -274,25 +272,6 @@ def _validate_import_values(scope, values, fields):
             label = labels.get(error["loc"][0], str(error["loc"][0]))
             messages.append(f"{label}: {error['msg']}")
     return values, messages
-
-
-def _record_import_identity(scope, values, key_fields, row_number, seen_keys):
-    # Identity collisions are fatal even in skip-invalid mode: selecting the
-    # first or last row would silently lose a different student/course.
-    if all(values.get(field) is not None for field in key_fields):
-        key = tuple(values[field] for field in key_fields)
-        if key in seen_keys:
-            identity = "学号" if scope == "students" else "业务编号"
-            advice = (
-                "学生学号必须在同一学期跨班级、跨年级唯一，不能使用班内序号。"
-                if scope == "students" else "请核对并去除重复业务记录后重试。"
-            )
-            raise HTTPException(status_code=422, detail=(
-                f"第{row_number}行与第{seen_keys[key]}行的{identity}重复（同学年、学期）。"
-                "已阻止整份文件导入，避免后面的记录覆盖前面的记录；"
-                f"{advice}"
-            ))
-        seen_keys[key] = row_number
 
 
 async def _prepare_import(
@@ -327,9 +306,9 @@ async def _prepare_import(
         )
         if period is not None:
             periods.add(period)
-        _record_import_identity(scope, values, key_fields, row_number, seen_keys)
+        record_import_identity(scope, values, key_fields, row_number, seen_keys)
         if messages:
-            errors.append(_row_errors(row_number, messages))
+            errors.append(row_errors(row_number, messages))
         else:
             valid.append((values, preview))
             valid_row_numbers.append(row_number)
@@ -347,7 +326,7 @@ async def _prepare_import(
         scope, valid, valid_row_numbers, db, grade_flags,
         selected_grade=_normalize_str(grade),
     )
-    return int(df.shape[0]), list(df.columns), valid, errors
+    return int(df.shape[0]), list(df.columns), valid, errors, valid_row_numbers
 
 
 async def _validate_student_identities(scope: str, valid: list, db: AsyncSession) -> None:
@@ -384,7 +363,7 @@ async def preview_import(
     db: AsyncSession = Depends(get_db),
     _: Dict[str, Any] = Depends(require_admin),
 ) -> Dict[str, Any]:
-    total, columns, valid, errors = await _prepare_import(scope, year, term, grade, file, db)
+    total, columns, valid, errors, _row_numbers = await _prepare_import(scope, year, term, grade, file, db)
     await _validate_student_identities(scope, valid, db)
     return {
         "total_rows": total,
@@ -420,12 +399,23 @@ async def _guard_import_parent(db, scope, current, values):
     await guard(db, current, values)
 
 
-async def _apply_valid_import_rows(db, scope, model, key_fields, valid):
+async def _apply_selection_rows(db, valid, row_numbers):
+    """写入选课行；父记录在执行途中消失时转成带行号的 422。"""
+    mutations = [SelectionMutation(values, replace_existing=True) for values, _ in valid]
+    try:
+        decision = await apply_selection_mutations(db, mutations)
+    except HTTPException as exc:
+        # 预检之后、写入之前父记录被并发删除：手工写入保持 404，
+        # 导入按文档约定转成带行号的无效行（严格模式 422），
+        # 否则整份文件会以 404 结束，用户拿不到是哪一行的问题。
+        raise row_attributed_error(exc, valid, row_numbers) from exc
+    return len(valid), decision.inserted, decision.updated
+
+
+async def _apply_valid_import_rows(db, scope, model, key_fields, valid, row_numbers=None):
     keys = list({tuple(values[field] for field in key_fields) for values, _ in valid})
     if scope == "selections":
-        mutations = [SelectionMutation(values, replace_existing=True) for values, _ in valid]
-        decision = await apply_selection_mutations(db, mutations)
-        return len(valid), decision.inserted, decision.updated
+        return await _apply_selection_rows(db, valid, row_numbers)
     locked = await lock_key_rows(db, model, key_fields, keys)
     parent_by_key = {tuple(getattr(row, field) for field in key_fields): row for row in locked}
     await _validate_student_identities(scope, valid, db)
@@ -449,9 +439,9 @@ async def _apply_valid_import_rows(db, scope, model, key_fields, valid):
     return len(valid), inserted, updated
 
 
-async def _commit_import_rows(db, scope, model, key_fields, valid):
+async def _commit_import_rows(db, scope, model, key_fields, valid, row_numbers=None):
     try:
-        result = await _apply_valid_import_rows(db, scope, model, key_fields, valid)
+        result = await _apply_valid_import_rows(db, scope, model, key_fields, valid, row_numbers)
         await db.commit()
         return result
     except asyncio.CancelledError:
@@ -459,10 +449,18 @@ async def _commit_import_rows(db, scope, model, key_fields, valid):
         raise
     except IntegrityError as exc:
         await db.rollback()
+        # 只有可预期的完整性约束冲突才回 409（用户刷新即可重试）；
+        # 触发器、连接中断等未知故障继续抛给全局处理返回 500，
+        # 避免把内部诊断信息带进响应，也不让真正的服务故障伪装成“数据冲突”。
+        if not is_constraint_violation(exc):
+            raise
         if is_active_selection_unique_violation(exc):
             raise HTTPException(status_code=409,
                                 detail="导入失败：学生在本学期已有有效选课，请刷新后重试") from exc
-        raise
+        raise HTTPException(
+            status_code=409,
+            detail="导入失败：数据与库中现有记录冲突（唯一、外键或检查约束），已回滚，请刷新后重试",
+        ) from exc
     except SQLAlchemyError:
         await db.rollback()
         raise
@@ -483,7 +481,7 @@ async def import_data(
     _: Dict[str, Any] = Depends(require_admin),
 ) -> Dict[str, Any]:
     try:
-        total, _, valid, errors = await _prepare_import(scope, year, term, grade, file, db)
+        total, _, valid, errors, row_numbers = await _prepare_import(scope, year, term, grade, file, db)
         if errors and not skip_invalid:
             raise HTTPException(status_code=422, detail=errors[0])
     except asyncio.CancelledError:
@@ -498,7 +496,9 @@ async def import_data(
         raise
     model, _, _, _, key_fields = _import_spec(scope)
     if valid:
-        processed, inserted, updated = await _commit_import_rows(db, scope, model, key_fields, valid)
+        processed, inserted, updated = await _commit_import_rows(
+            db, scope, model, key_fields, valid, row_numbers,
+        )
     else:
         processed = inserted = updated = 0
         if scope == "selections":

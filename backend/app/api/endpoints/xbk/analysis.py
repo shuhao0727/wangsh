@@ -131,7 +131,6 @@ async def get_summary(
     }
 
 
-@router.get("/course-stats")
 def _group_selected_buckets(rows) -> dict[str, set[tuple[Optional[str], str]]]:
     """按课程聚合实际产生选课的 (年级, 班级) 分桶。"""
     buckets: dict[str, set[tuple[Optional[str], str]]] = {}
@@ -204,6 +203,7 @@ async def _class_scope(
     return sum(class_counts.values()), buckets
 
 
+@router.get("/course-stats")
 async def course_stats(
     year: Optional[AcademicYear] = Query(None),
     term: Optional[str] = Query(None),

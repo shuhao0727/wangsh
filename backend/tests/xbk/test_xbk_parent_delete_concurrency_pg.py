@@ -350,7 +350,8 @@ def test_bulk_cannot_delete_parents_inserted_after_its_cascade(scope):
                 async with AsyncSession(engine, expire_on_commit=False) as db:
                     for parent_scope, row in (
                         ("students", {"班级": "Class 2", "学号": "S2", "姓名": "Bob", "年级": "G1"}),
-                        ("courses", {"课程代码": "C2", "课程名称": "New course", "年级": "G1"}),
+                        ("courses", {"课程代码": "C2", "课程名称": "New course", "年级": "G1",
+                                     "各班限报人数": "30"}),
                         ("selections", {"学号": "S2", "课程代码": "C2", "年级": "G1"}),
                     ):
                         file = csv_file([row])
@@ -376,7 +377,9 @@ def test_deleted_parent_import_strict_vs_skip_keeps_row_attribution(skip):
         async with database() as (engine, admin, schema):
             ids = await seed(engine)
             async with AsyncSession(engine) as db:
-                db.add(XbkStudent(year=YEAR, term=TERM, student_no="S2", name="Bob", class_name="Class 2"))
+                # 课程按年级开设，学生需带年级才能通过年级范围校验
+                db.add(XbkStudent(year=YEAR, term=TERM, student_no="S2", name="Bob",
+                                  class_name="Class 2", grade="G1"))
                 await db.commit()
             async with AsyncSession(engine, expire_on_commit=False) as db:
                 await remove(db, "soft-student", ids)
@@ -443,9 +446,12 @@ def test_parent_lock_order_spans_batches_and_reverse_file_rows():
         async with database() as (engine, admin, schema):
             # Reverse IDs relative to natural-key/file order, across the 500-row boundary.
             async with AsyncSession(engine) as db:
+                # 本用例验证的是加锁顺序（跨 500 行边界分两批）。学生保持无年级、
+                # 课程也不限年级且限额足够，让年级范围与容量校验不干扰加锁批次。
                 db.add_all([XbkStudent(year=YEAR, term=TERM, student_no=f"S{i:04}",
-                                      name=f"Student {i}", class_name="Class 1") for i in range(502, 0, -1)])
-                db.add(XbkCourse(year=YEAR, term=TERM, course_code="C1", course_name="Course", quota=1))
+                                      name=f"Student {i}", class_name="Class 1")
+                            for i in range(502, 0, -1)])
+                db.add(XbkCourse(year=YEAR, term=TERM, course_code="C1", course_name="Course", quota=502))
                 await db.commit()
             locked_ids = {"xbk_students": [], "xbk_courses": [], "xbk_selections": []}
             tables = []
@@ -473,7 +479,10 @@ def test_parent_lock_order_spans_batches_and_reverse_file_rows():
                 await file.close()
             assert len(locked_ids["xbk_students"]) == 502
             assert locked_ids["xbk_students"] == sorted(locked_ids["xbk_students"])
-            assert tables == ["xbk_students", "xbk_students", "xbk_courses"]
+            # 两阶段设计：先按学号/班级发现（普通 select，不加锁），再统一对学生加一次锁，
+            # 最后锁课程。发现阶段不加锁可避免边发现边加锁造成的死锁风险，
+            # 因此学生表只出现一次。
+            assert tables == ["xbk_students", "xbk_courses"]
             assert len(await assert_no_orphans(engine)) == 502
     asyncio.run(case())
 

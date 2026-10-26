@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any, AsyncGenerator, Dict
+from typing import Any, Dict, Optional
 
 import httpx
 from loguru import logger
@@ -23,8 +23,12 @@ async def call_llm(
     agent_model: str = "",
     response_format: str = "json",
     timeout: float = 180.0,
+    temperature: Optional[float] = None,
 ) -> Dict[str, Any]:
     """调用 LLM（支持 Dify / OpenAI 兼容 / DeepSeek 等），返回解析后的 dict。
+
+    temperature 为 None 时不下发，保持各接口默认值。减少判定的随机性需显式传 0，
+    但并非所有上游都严格执行该参数。
 
     若 response_format == "json" 则自动从回复中提取 JSON 块（支持修补尾部截断）。
     """
@@ -36,7 +40,9 @@ async def call_llm(
         if agent_type == "dify":
             answer = await _call_dify(api_endpoint, api_key, prompt, timeout)
         else:
-            answer = await _call_openai_compatible(api_endpoint, api_key, prompt, agent_model, timeout, agent_type)
+            answer = await _call_openai_compatible(
+                api_endpoint, api_key, prompt, agent_model, timeout, agent_type, temperature=temperature,
+            )
 
         if response_format == "json":
             return _extract_json(answer)
@@ -44,33 +50,6 @@ async def call_llm(
     except Exception:
         logger.exception("LLM 调用失败")
         return {}
-
-
-async def call_llm_stream(
-    *,
-    prompt: str,
-    api_endpoint: str,
-    api_key: str,
-    agent_type: str = "",
-    agent_model: str = "",
-    timeout: float = 180.0,
-) -> AsyncGenerator[str, None]:
-    """流式调用 LLM，yield 文本块。"""
-    if not api_key or not prompt.strip():
-        return
-
-    try:
-        if agent_type == "dify":
-            async for chunk in _call_dify_stream(api_endpoint, api_key, prompt, timeout):
-                yield chunk
-        else:
-            async for chunk in _call_openai_compatible_stream(api_endpoint, api_key, prompt, agent_model, timeout, agent_type):
-                yield chunk
-    except Exception:
-        logger.exception("LLM 流式调用失败")
-
-
-# ── helpers ────────────────────────────────────────
 
 
 async def _call_dify(endpoint: str, api_key: str, prompt: str, timeout: float) -> str:
@@ -105,6 +84,11 @@ def _anthropic_messages_url(base: str) -> str:
     return f"{base}/v1/messages"
 
 
+def _temperature_payload(temperature: Optional[float]) -> Dict[str, Any]:
+    """None 时不下发，保持各接口默认值；显式传入才合并进请求体。"""
+    return {} if temperature is None else {"temperature": temperature}
+
+
 async def _call_openai_compatible(
     endpoint: str,
     api_key: str,
@@ -112,6 +96,7 @@ async def _call_openai_compatible(
     model: str,
     timeout: float,
     agent_type: str = "",
+    temperature: Optional[float] = None,
 ) -> str:
     base = endpoint.rstrip("/")
 
@@ -135,6 +120,7 @@ async def _call_openai_compatible(
             "model": model or "deepseek-chat",
             "messages": [{"role": "user", "content": prompt}],
             "stream": False,
+            **_temperature_payload(temperature),
         }
         if "deepseek" in (model or "").lower() or "gpt" in (model or "").lower():
             payload["response_format"] = {"type": "json_object"}
@@ -150,81 +136,6 @@ async def _call_openai_compatible(
             return body.get("choices", [{}])[0].get("message", {}).get("content", "")
         logger.error(f"LLM failed ({resp.status_code}): {resp.text[:300]}")
         return ""
-
-
-async def _call_dify_stream(endpoint: str, api_key: str, prompt: str, timeout: float) -> AsyncGenerator[str, None]:
-    base = endpoint.rstrip("/")
-    url = f"{base}/v1/chat-messages" if "/v1" not in base else f"{base}/chat-messages"
-    payload = {"query": prompt, "user": "analysis_agent", "response_mode": "streaming", "inputs": {}}
-    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        async with client.stream("POST", url, json=payload, headers=headers) as resp:
-            if resp.status_code != 200:
-                logger.error(f"Dify stream failed: {resp.status_code}")
-                return
-            async for line in resp.aiter_lines():
-                if line.startswith("data:"):
-                    try:
-                        data = json.loads(line[5:].strip())
-                        if data.get("event") == "message" and data.get("answer"):
-                            yield data["answer"]
-                    except Exception:
-                        pass
-
-
-async def _call_openai_compatible_stream(
-    endpoint: str,
-    api_key: str,
-    prompt: str,
-    model: str,
-    timeout: float,
-    agent_type: str = "",
-) -> AsyncGenerator[str, None]:
-    base = endpoint.rstrip("/")
-    is_anthropic = _is_anthropic_endpoint(base, agent_type)
-    if is_anthropic:
-        url = _anthropic_messages_url(base)
-        payload: Dict[str, Any] = {
-            "model": model or "claude-3-5-sonnet-latest",
-            "max_tokens": 4096,
-            "messages": [{"role": "user", "content": prompt}],
-            "stream": True,
-        }
-        headers = {"x-api-key": api_key, "anthropic-version": "2023-06-01", "content-type": "application/json"}
-    else:
-        if "/v1" in base:
-            url = f"{base}/chat/completions"
-        else:
-            url = f"{base}/v1/chat/completions"
-        payload = {
-            "model": model or "deepseek-chat",
-            "messages": [{"role": "user", "content": prompt}],
-            "stream": True,
-        }
-        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        async with client.stream("POST", url, json=payload, headers=headers) as resp:
-            if resp.status_code != 200:
-                logger.error(f"LLM stream failed: {resp.status_code}")
-                return
-            async for line in resp.aiter_lines():
-                if line.startswith("data: "):
-                    data_str = line[6:]
-                    if data_str == "[DONE]":
-                        return
-                    try:
-                        data = json.loads(data_str)
-                        if is_anthropic:
-                            if data.get("type") == "content_block_delta":
-                                text = (data.get("delta") or {}).get("text", "")
-                                if text:
-                                    yield text
-                            continue
-                        delta = data.get("choices", [{}])[0].get("delta", {}).get("content", "")
-                        if delta:
-                            yield delta
-                    except Exception:
-                        pass
 
 
 def _extract_json(text: str) -> Dict[str, Any]:

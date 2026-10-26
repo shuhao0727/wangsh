@@ -149,6 +149,16 @@ ORDER BY tablename, indexname;
 > 复核结论（2026-10-21）：下列条目为早期分析结论，逐条核对当前模型、迁移与实际查询后，
 > **均无需新增索引**。已补齐或确认不需要的条目直接记录结论，不再作为待办。
 
+#### 2026-10-26 复核新增
+
+- **ClassroomPlanItem.activity_id — 已实施**：`20261026_0001` 新增
+  `ix_znt_classroom_plan_items_activity_id`。代码中有 5 处按 `activity_id` 过滤计划项，
+  该外键此前无索引，数据量增长后会退化为全表扫描。本地已验证升级/降级/再升级，
+  并用 `EXPLAIN` 确认查询走该索引。
+- 其余外键缺索引的列（如 `znt_assessment_answers.question_id`、
+  `znt_student_profiles.discussion_session_id`、`znt_classroom_activities.analysis_agent_id`）
+  经核对**当前没有查询把它们当过滤条件**，暂不新增；数据量增长或出现新查询时再评估。
+
 #### 高优先级
 
 1. **GroupDiscussionSession.created_at** — **不需要**。现有查询按 `session_date` +

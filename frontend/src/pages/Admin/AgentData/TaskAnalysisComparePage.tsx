@@ -5,7 +5,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { ArrowLeft, Loader2 } from "lucide-react";
-import * as echarts from "echarts";
+import { echarts } from "@/lib/echarts";
 import dayjs from "dayjs";
 import { Button } from "@/components/ui/button";
 import { showMessage } from "@/lib/toast";

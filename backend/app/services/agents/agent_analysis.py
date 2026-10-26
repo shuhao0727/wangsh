@@ -3,7 +3,6 @@
 提供热门问题分析和学生对话链分析功能
 """
 
-import json
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any, AsyncGenerator
@@ -11,8 +10,8 @@ from typing import Optional, List, Dict, Any, AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, text
 
-from app.core.http_client import get_http_client
 from app.models.core import User
+from app.services.agents.llm_agent_base import call_llm
 from app.services.agents.agent_analysis_helpers import (
     _dedupe_question_freq,
     _group_chain_rows,
@@ -176,43 +175,21 @@ async def _call_llm_analysis(
         if custom_prompt and custom_prompt.strip():
             prompt += "\n\n【教师补充分析要求】\n" + custom_prompt.strip()
 
-        if agent_type == "dify":
-            # Dify blocking mode
-            base = api_endpoint.rstrip("/")
-            url = f"{base}/v1/chat-messages" if "/v1" not in base else f"{base}/chat-messages"
-            payload = {"query": prompt, "user": "task_analysis", "response_mode": "blocking", "inputs": {}}
-            headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-            client = get_http_client()
-            resp = await client.post(url, json=payload, headers=headers, timeout=120)
-            if resp.status_code == 200:
-                body = resp.json()
-                answer = body.get("answer", "")
-            else:
-                logger.error(f"Dify LLM failed: {resp.status_code}")
-                return {}
-        else:
-            # OpenAI-compatible (DeepSeek, OpenAI, etc.)
-            base = api_endpoint.rstrip("/")
-            if "/v1" in base:
-                url = f"{base}/chat/completions"
-            else:
-                url = f"{base}/v1/chat/completions"
-            payload = {"model": agent_model or "deepseek-chat", "messages": [{"role": "user", "content": prompt}], "stream": False}
-            headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-            client = get_http_client()
-            resp = await client.post(url, json=payload, headers=headers, timeout=120)
-            if resp.status_code == 200:
-                body = resp.json()
-                answer = body.get("choices", [{}])[0].get("message", {}).get("content", "")
-            else:
-                logger.error(f"LLM failed: {resp.status_code} {resp.text[:200]}")
-                return {}
+        # 统一走 llm_agent_base.call_llm：此前这里手写了第二套 Dify / OpenAI 兼容请求，
+        # 与统一入口重复，导致超时、代理与解析策略只在其中一处生效。
+        result = await call_llm(
+            prompt=prompt,
+            api_endpoint=api_endpoint,
+            api_key=api_key,
+            agent_type=agent_type,
+            agent_model=agent_model,
+            response_format="json",
+            timeout=120.0,
+        )
+        if result:
+            return result
+        return {}
 
-        json_start = answer.find("{")
-        json_end = answer.rfind("}") + 1
-        if json_start >= 0 and json_end > json_start:
-            return json.loads(answer[json_start:json_end])
-        return {"covered": [], "uncovered": [], "raw": answer}
     except Exception as e:
         logger.error(f"LLM analysis error: {e}", exc_info=True)
         return {}

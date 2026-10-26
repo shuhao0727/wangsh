@@ -4,7 +4,6 @@ import re
 from functools import partial
 from io import BytesIO
 from zipfile import ZipFile
-from typing import Optional, Tuple
 
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
@@ -124,24 +123,6 @@ def apply_table_style(
             c.border = THIN_BORDER
             c.alignment = body_align
             c.fill = fill
-
-
-def set_print_a4_landscape(ws, print_title_rows: Optional[Tuple[int, int]] = None) -> None:
-    ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
-    ws.page_setup.paperSize = ws.PAPERSIZE_A4
-    ws.page_setup.fitToWidth = 1
-    ws.page_setup.fitToHeight = 0
-    ws.sheet_properties.pageSetUpPr.fitToPage = True
-    ws.page_margins.left = 0.3
-    ws.page_margins.right = 0.3
-    ws.page_margins.top = 0.35
-    ws.page_margins.bottom = 0.35
-    ws.page_margins.header = 0.2
-    ws.page_margins.footer = 0.2
-    ws.print_options.horizontalCentered = True
-    ws.print_options.gridLines = False
-    if print_title_rows:
-        ws.print_title_rows = f"{print_title_rows[0]}:{print_title_rows[1]}"
 
 
 def safe_sheet_name(name: str) -> str:

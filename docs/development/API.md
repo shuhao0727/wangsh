@@ -487,7 +487,7 @@ PythonLab WS 接入补充（2026-09-09）：terminal/DAP 在业务缓存、termi
 | GET | `/ai-agents/usage/filter-options` | 获取使用记录筛选选项 | 管理员 |
 | GET | `/ai-agents/analysis/hot-questions` | 热门问题分析 | 管理员 |
 | GET | `/ai-agents/analysis/hot-questions/{analysis_id}` | 热点问题分析详情 | 管理员 |
-| POST | `/ai-agents/analysis/hot-questions/stream` | 创建热点问题深度分析（SSE） | 管理员 |
+| POST | `/ai-agents/analysis/hot-questions/stream` | 创建热点问题分析并逐条归类（SSE） | 管理员 |
 | DELETE | `/ai-agents/analysis/hot-questions/{analysis_id}` | 删除热点问题分析记录 | 管理员 |
 | GET | `/ai-agents/analysis/student-chains` | 学生问题链分析 | 管理员 |
 | GET | `/ai-agents/analysis/student-chains/{analysis_id}` | 学生问题链分析详情 | 管理员 |
@@ -585,7 +585,10 @@ PythonLab WS 接入补充（2026-09-09）：terminal/DAP 在业务缓存、termi
 - `hot_v2` 的学生事件输出 `teacher_anchor_id`、`teacher_anchor_question`、`teacher_anchor_score`、`teacher_anchor_confidence`、`teacher_anchor_match_type`、`teacher_anchor_reason` 和 `trigger_delay_seconds`。关联分数固定按时间接近 `0.55`、语义词重合 `0.30`、同一会话 `0.15` 计算，置信度阈值为 `high >= 0.70`、`medium >= 0.45`；最多容忍学生问题早于教师问题 120 秒，但会降低时间分。`summary.teacher_anchor_coverage` 是关联覆盖率，不是教学效果或因果证明。
 - `hot_v2.analysis_audit` 是结构化统计口径审计信息，包含 `audit_version`、`raw_event_count`、`raw_student_event_count`、`valid_question_count`、`excluded_event_count`、`teacher_anchor_denominator`、`teacher_anchor_match_count`、`teacher_anchor_coverage`、`teacher_anchor_confidence_total`、`teacher_anchor_statistics_consistent` 和 `warnings`。新结果应以该字段为准判断统计是否自洽；旧结果可能缺少该字段，客户端必须显示“未记录”而不能伪造审计结论。
 - `themes` 额外返回 `hotness_components`、`hotness_explanation` 和 `score_basis`；`timeline_buckets`、`course_hotspot_sequence` 保存最可信教师锚点的 ID、分数、置信度和原因。对外的 `teacher_questions` / `teacher_mainline` 只保留稳定字段 `id`、`message_id`、`time`、`question`、`source`、`user_name`，不暴露匹配用的内部词项。
-- `POST /ai-agents/analysis/hot-questions/stream` 与 `POST /ai-agents/analysis/student-chains/stream` 支持 `analysis_agent_id` 与 `prompt_template_id`。后端会先生成确定性结构化证据，再调用所选分析诊断智能体生成并保存 `deep_analysis`；同时返回 `analysis_agent` 与 `deep_analysis_status` 标记智能体名称、模型、完成或跳过原因。未配置 API Endpoint/API Key 时不会丢失基础结构化结果。
+- `POST /ai-agents/analysis/hot-questions/stream` 与 `POST /ai-agents/analysis/student-chains/stream` 支持 `analysis_agent_id` 与 `prompt_template_id`。后端会先生成确定性结构化证据，再调用所选分析智能体；未配置 API Endpoint/API Key 时不会丢失基础结构化结果。
+  - 热点问题：智能体按教学设计与教师提问 T1…Tn 逐条归类学生提问（回应型 / 生成性 / 无关及细分），结果保存在 `question_classification`，状态在 `classification_status`（`completed` / `partial` / `empty` / `skipped`）。计数由程序完成；不再生成 `deep_analysis` 教学诊断。合同见 [热点问题归类 Agent](../features/assessment/hot_agent.md)。
+  - 学生问题链：仍调用诊断智能体生成并保存 `deep_analysis`，以 `deep_analysis_status` 标记完成或跳过原因。
+  - 两者都返回 `analysis_agent` 标记智能体名称、模型与状态。
 - legacy `GET/DELETE /ai-agents/task-analysis/{analysis_id}` 只接受
   `task_analyses.id`，不会再用裸整数 ID 跨热点/问题链表猜测记录。热点和学生问题链
   必须使用各自 typed 详情/删除端点；typed 删除只在完整快照唯一匹配时清理 legacy
