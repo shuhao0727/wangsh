@@ -248,6 +248,29 @@ function withinRepository(target) {
   return target === realRepoRoot || target.startsWith(`${realRepoRoot}${path.sep}`);
 }
 
+// 一次性取回全部被忽略路径，避免每个链接各起一个 git 进程。
+let ignoredPathsCache = null;
+
+function ignoredPaths() {
+  if (ignoredPathsCache) return ignoredPathsCache;
+  const output = execFileSync(
+    "git",
+    ["ls-files", "-z", "--others", "--ignored", "--exclude-standard", "--directory"],
+    { cwd: repoRoot, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
+  );
+  ignoredPathsCache = output
+    .split("\0")
+    .filter(Boolean)
+    .map((entry) => path.resolve(repoRoot, entry.replace(/\/$/, "")));
+  return ignoredPathsCache;
+}
+
+function isGitIgnored(absoluteTarget) {
+  return ignoredPaths().some(
+    (ignored) => absoluteTarget === ignored || absoluteTarget.startsWith(`${ignored}${path.sep}`),
+  );
+}
+
 function audit() {
   const files = listMarkdownFiles();
   const errors = [];
@@ -290,6 +313,13 @@ function audit() {
       const realResolved = fs.realpathSync(resolved);
       if (!withinRepository(realResolved)) {
         errors.push(`${file}: link target is outside repository ${raw}`);
+        continue;
+      }
+
+      // 链接目标若是被 git 忽略的文件（如 .claude/ 下的本地规则），本地能看到而
+      // CI 的干净检出里不存在，必须在本地就拦下，否则只有推送后才会失败。
+      if (isGitIgnored(realResolved)) {
+        errors.push(`${file}: link target is not tracked by git ${raw}`);
         continue;
       }
 

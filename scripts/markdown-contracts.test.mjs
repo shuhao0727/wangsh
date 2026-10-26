@@ -131,6 +131,22 @@ test("rejects symlink links that escape the repository", () => {
   assert.match(result.stderr, /outside repository/);
 });
 
+test("rejects links to files excluded by gitignore", () => {
+  // 本地存在但被忽略的文件（如 .claude/ 下的规则）在 CI 干净检出里不存在，
+  // 若不在此拦截，只有推送后才会失败。
+  const result = runFixture(
+    "# Candidate\n\n> 状态：active\n> Owner：docs\n\n[rules](local-rules.md)\n",
+    ["11 files / 4 links / 0 missing"],
+    (fixtureRoot) => {
+      writeFixtureFile(fixtureRoot, "docs/docker/plans/local-rules.md", "# Local\n");
+      writeFixtureFile(fixtureRoot, "docs/docker/plans/.gitignore", "local-rules.md\n");
+    },
+  );
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /not tracked by git/);
+});
+
 test("requires lifecycle metadata in the document preamble", () => {
   const result = runFixture(
     "# Candidate\n\n```yaml\nstatus: active\nowner: docs\n```\n",
