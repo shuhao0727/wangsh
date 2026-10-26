@@ -82,6 +82,10 @@ jobs:
       POSTGRES_DB: wangsh_ci
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
+      # 并发与迁移测试只在显式提供专用测试库时运行，否则 pytest.skip。
+      # 之前这里没有设置，约 230 个并发/迁移用例在 CI 里从未执行过；
+      # 测试自身会校验库名匹配 test/ci 且驱动为 asyncpg，防止误连生产库。
+      TEST_DATABASE_URL: postgresql+asyncpg://postgres:postgres@127.0.0.1:55433/wangsh_ci
       SECRET_KEY: ci-secret-key-that-is-long-enough-for-tests
       SUPER_ADMIN_PASSWORD: ci-admin-password
       AGENT_API_KEY_ENCRYPTION_KEY: MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=
