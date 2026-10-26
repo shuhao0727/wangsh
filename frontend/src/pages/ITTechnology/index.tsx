@@ -225,7 +225,7 @@ const ITTechnologyPage: React.FC = () => {
       <div className="it-technology-page w-full flex-1 mx-auto px-[var(--ws-space-3)] py-[var(--ws-space-4)] md:px-[var(--ws-space-4)]" style={{ maxWidth: "var(--ws-shell-max-width)" }}>
         <div className="grid grid-cols-1 gap-x-[var(--ws-space-5)] gap-y-[var(--ws-space-2)] sm:grid-cols-2">
           {[1,2,3,4].map(i => (
-            <div key={i} className="flex min-h-[76px] items-center gap-[var(--ws-space-2)] p-[var(--ws-space-2)]">
+            <div key={i} className="flex min-h-20 items-center gap-[var(--ws-space-2)] p-[var(--ws-space-2)]">
               <Skeleton className="h-9 w-9 shrink-0 rounded-md" />
               <div className="flex-1 space-y-[var(--ws-space-2)]">
                 <Skeleton className="h-5 w-1/3" />
