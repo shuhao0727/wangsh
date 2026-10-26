@@ -96,6 +96,8 @@ const createCompareFormState = (
   prompt: "",
 });
 
+import DiscussionToolbar from "./DiscussionToolbar";
+
 const GroupDiscussionAdminTab: React.FC = () => {
   const queryClient = useQueryClient();
   const [deletingSessionId, setDeletingSessionId] = useState<number | null>(null);
@@ -795,109 +797,36 @@ const GroupDiscussionAdminTab: React.FC = () => {
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col">
-      <div
-        className="ws-admin-filter-bar mb-0 flex flex-wrap items-center gap-2"
-        role="toolbar"
-        aria-label="小组讨论工具栏"
-      >
-        <form
-          className="flex min-w-0 flex-1 flex-wrap items-center gap-2"
-          role="search"
-          aria-label="小组讨论筛选"
-          onSubmit={(event) => {
-            event.preventDefault();
-            setPage(1);
-            void refetchSessions();
-          }}
-        >
-          <div className="flex h-[var(--ws-control-height)] shrink-0 items-center gap-1 rounded-sm border border-border-secondary bg-surface px-1.5">
-            <Input
-              type="date"
-              aria-label="开始日期"
-              className="h-[34px] w-[132px] border-0 bg-transparent px-1 shadow-none focus-visible:ring-0"
-              value={dateRange[0]}
-              onChange={(e) => setDateRange([e.target.value, dateRange[1]])}
-            />
-            <span className="shrink-0 text-xs text-text-tertiary">至</span>
-            <Input
-              type="date"
-              aria-label="结束日期"
-              className="h-[34px] w-[132px] border-0 bg-transparent px-1 shadow-none focus-visible:ring-0"
-              value={dateRange[1]}
-              onChange={(e) => setDateRange([dateRange[0], e.target.value])}
-            />
-          </div>
-          <Input
-            aria-label="关键词"
-            className="h-[var(--ws-control-height)] min-w-[180px] flex-1"
-            value={keyword}
-            onChange={(e) => setKeyword(e.target.value)}
-            placeholder="搜索班级、组号或组名"
-          />
-          <Select
-            value={selectedAgentId ? String(selectedAgentId) : "__none__"}
-            onValueChange={(value) => setSelectedAgentId(value === "__none__" ? null : Number(value))}
-          >
-            <SelectTrigger aria-label="分析智能体" className="h-[var(--ws-control-height)] w-[150px] shrink-0 text-sm">
-              <SelectValue placeholder="智能体" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__none__">不指定智能体</SelectItem>
-              {(agents || []).map((agent) => (
-                <SelectItem key={agent.id} value={String(agent.id)}>
-                  {agent.agent_name || agent.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button
-            className="shrink-0"
-            type="submit"
-            disabled={isLoading}
-          >
-            {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            查询
-          </Button>
-        </form>
-
-        <div className="ml-auto flex shrink-0 items-center gap-1">
-          {total > 0 ? (
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-8 shrink-0"
-              disabled={exportLoading}
-              onClick={handleExportExcel}
-            >
-              {exportLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-              导出
-            </Button>
-          ) : null}
-          <label className="flex h-8 shrink-0 items-center gap-2 px-2 text-xs text-text-secondary">
-            <span>学生端弹窗</span>
-            <Switch
-              aria-label="切换学生端弹窗可见性"
-              checked={frontendVisible}
-              disabled={frontendVisibleLoading}
-              onCheckedChange={async (checked) => {
-                setFrontendVisibleLoading(true);
-                try {
-                  const res = await groupDiscussionApi.setPublicConfig({ enabled: checked });
-                  if (!res.success) {
-                    showMessage.error(res.message || "设置失败");
-                    return;
-                  }
-                  void queryClient.invalidateQueries({ queryKey: queryKeys.discussion.publicConfig() });
-                  showMessage.success(`学生端小组讨论已${res.data.enabled ? "开启" : "关闭"}`);
-                } finally {
-                  setFrontendVisibleLoading(false);
-                }
-              }}
-            />
-            {frontendVisibleLoading ? <Loader2 className="h-4 w-4 animate-spin text-text-tertiary" /> : null}
-          </label>
-        </div>
-      </div>
+      <DiscussionToolbar
+        dateRange={dateRange}
+        keyword={keyword}
+        onKeywordChange={setKeyword}
+        agents={agents}
+        selectedAgentId={selectedAgentId}
+        onAgentChange={setSelectedAgentId}
+        isLoading={isLoading}
+        exportLoading={exportLoading}
+        onExport={handleExportExcel}
+        frontendVisible={frontendVisible}
+        onFrontendVisibleChange={async (enabled) => {
+          setFrontendVisibleLoading(true);
+          try {
+            const res = await groupDiscussionApi.setPublicConfig({ enabled });
+            if (!res.success) {
+              showMessage.error(res.message || "设置失败");
+              return;
+            }
+            void queryClient.invalidateQueries({ queryKey: queryKeys.discussion.publicConfig() });
+            showMessage.success(`学生端小组讨论已${res.data.enabled ? "开启" : "关闭"}`);
+          } finally {
+            setFrontendVisibleLoading(false);
+          }
+        }}
+        frontendVisibleLoading={frontendVisibleLoading}
+        onDateRangeChange={(range) => { setDateRange(range); setPage(1); void refetchSessions(); }}
+        onResetPage={() => { setPage(1); void refetchSessions(); }}
+        total={total}
+      />
 
       {selectedSessionIds.length > 0 ? (
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border-secondary py-2">

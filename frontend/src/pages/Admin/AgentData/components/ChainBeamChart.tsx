@@ -7,7 +7,7 @@
  * 教师提问用红色竖虚线标记
  */
 import React, { useEffect, useMemo, useRef } from "react";
-import * as echarts from "echarts";
+import { echarts } from "@/lib/echarts";
 import dayjs from "dayjs";
 import { getAgentChartTheme } from "./chartTheme";
 import { escapeHtml, shortText } from "../normalize";

@@ -131,11 +131,17 @@ const InformaticsReaderPage: React.FC = () => {
   const [docExpandedKeys, setDocExpandedKeys] = useState<string[]>([]);
   const [outlineExpandedKeys, setOutlineExpandedKeys] = useState<string[]>([]);
 
+  // 目录是否可能被后端上限截断（仅在未搜索时提示）
+  const [truncated, setTruncated] = useState(false);
+
   const loadList = useCallback(async () => {
     setListLoading(true);
     try {
+      // 后端 limit 上限为 100；拿满 100 条说明可能还有更多未返回，
+      // 明确提示用户使用搜索，避免"目录看起来完整"造成误解。
       const res = await publicTypstNotesApi.list({ limit: 100, search: debouncedSearch.trim() || undefined });
       setItems(res || []);
+      setTruncated((res?.length ?? 0) >= 100 && !debouncedSearch.trim());
       if (res?.length && !isMobile) {
         setSelectedId((prev) => prev ?? res[0].id);
       }
@@ -537,6 +543,11 @@ const InformaticsReaderPage: React.FC = () => {
           {renderOutline()}
         </TabsContent>
       </Tabs>
+      {truncated ? (
+        <p className="shrink-0 border-t border-border-secondary px-4 py-2 text-xs text-text-tertiary">
+          目录最多显示 100 篇，还有更多笔记未列出。可用搜索定位具体笔记。
+        </p>
+      ) : null}
     </div>
   );
 

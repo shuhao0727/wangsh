@@ -6,7 +6,7 @@ import re
 import logging
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -179,17 +179,6 @@ _CLUSTER_GENERIC_TERMS = frozenset({
     "区别", "关系", "原理", "本质", "对比", "更好", "合理", "判断", "评价",
     "帮我", "请", "一下", "还是", "或者", "以及", "关于", "这个", "那个",
 })
-
-
-def cluster_terms(event: "ConversationEvent") -> Tuple[str, ...]:
-    """聚类专用词集：去掉通用提问词后的词法词 + 语义别名。
-
-    与 ``_event_terms`` 的区别：``_event_terms`` 用于展示（保留全部原词），
-    本函数用于相似度判定（剔除不区分知识点的提问方式词）。
-    """
-    lexical = tuple(term for term in event.terms if term not in _CLUSTER_GENERIC_TERMS)
-    semantic = _semantic_labels(event)
-    return (*lexical, *semantic)
 
 
 def _semantic_labels(event: "ConversationEvent") -> Tuple[str, ...]:

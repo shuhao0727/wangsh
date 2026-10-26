@@ -258,7 +258,9 @@ class DockerProvider(DockerMountMixin, SandboxProvider):
             if runtime_mode == "debug":
                 # NET_BIND_SERVICE needed for debugpy to bind to its port
                 cmd.extend(["--cap-add", "NET_BIND_SERVICE"])
-                cmd.extend(["-p", f"{self.debugpy_port}"])
+                # 只绑定回环地址：暴露到全部网卡时，任何能访问服务器端口的人都能直连
+                # DAP 调试端口执行代码、读取学生源码，且不经过登录校验。
+                cmd.extend(["-p", f"127.0.0.1:{self.debugpy_port}:{self.debugpy_port}"])
             else:
                 # Plain mode: fully isolate network to prevent student code from accessing external services
                 cmd.extend(["--network", "none"])

@@ -799,32 +799,42 @@ tr:hover td {
 .home-hero-blob-2 { width: 400px; height: 400px; bottom: -100px; left: -100px; background: rgba(124,58,237,0.15); }
 .home-hero-blob-3 { width: 300px; height: 300px; top: 40%; left: 50%; background: rgba(255,255,255,0.05); }
 
-/* Module pills */
+/* Embedded home navigation */
 .home-hero-module-pill {
   display: inline-flex; align-items: center; gap: 6px;
-  padding: 10px 20px; border-radius: 9999px;
+  padding: 10px 20px;
   font-size: 14px; font-weight: 500; white-space: nowrap;
-  background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.85);
-  backdrop-filter: blur(8px);
-  border: none; cursor: pointer;
-  transition: all 0.2s;
-}
-.home-hero-module-pill:hover {
-  background: rgba(255,255,255,0.2); color: #fff;
-  transform: translateY(-1px);
+  color: color-mix(in srgb, var(--primary-foreground) 85%, transparent);
 }
 
-/* Tool links — larger glass pills for Dify, NAS etc. */
+.home-hero-module-pill,
+.home-hero-tool-link {
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  border: none; cursor: pointer;
+  transition: color 0.2s;
+}
+
+/* Embedded external tools */
 .home-hero-tool-link {
   display: inline-flex; align-items: center; gap: 8px;
-  padding: 10px 24px; border-radius: 9999px;
+  padding: 10px 24px;
   font-size: 15px; font-weight: 500;
   text-decoration: none;
-  background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.7);
-  backdrop-filter: blur(8px);
-  transition: all 0.2s;
+  color: color-mix(in srgb, var(--primary-foreground) 70%, transparent);
 }
+
+.home-hero-module-pill:hover,
 .home-hero-tool-link:hover {
-  background: rgba(255,255,255,0.16); color: #fff;
-  transform: translateY(-1px);
+  color: var(--primary-foreground);
+  text-decoration: underline;
+  text-underline-offset: 0.3em;
+}
+
+.home-hero-module-pill:focus-visible,
+.home-hero-tool-link:focus-visible {
+  outline: 2px solid var(--primary-foreground);
+  outline-offset: 2px;
 }

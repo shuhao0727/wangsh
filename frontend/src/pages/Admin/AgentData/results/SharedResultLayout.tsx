@@ -16,9 +16,10 @@ interface SharedResultLayoutProps {
   exportOptions?: ExportOption[];
   children: React.ReactNode;
   summaryCards?: React.ReactNode;
+  showTaskSheet?: boolean;
 }
 
-const SharedResultLayout: React.FC<SharedResultLayoutProps> = ({ detail, onDownload, exportOptions, children, summaryCards }) => {
+const SharedResultLayout: React.FC<SharedResultLayoutProps> = ({ detail, onDownload, exportOptions, children, summaryCards, showTaskSheet = true }) => {
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -69,11 +70,11 @@ const SharedResultLayout: React.FC<SharedResultLayoutProps> = ({ detail, onDownl
 
     <div className="flex-1 overflow-y-auto">
       <div className="ws-task-result-content">
-        {detail.task_sheet ? <TaskSheetCollapsible taskSheet={detail.task_sheet} /> : (
+        {showTaskSheet && (detail.task_sheet ? <TaskSheetCollapsible taskSheet={detail.task_sheet} /> : (
           <div className="ws-task-result-task-sheet mb-4 border border-dashed bg-surface-2/60 px-4 py-3 text-xs text-text-tertiary text-center">
             未提供任务单内容
           </div>
-        )}
+        ))}
         {summaryCards && (
           <div className="ws-task-result-summary mb-5">
             {summaryCards}

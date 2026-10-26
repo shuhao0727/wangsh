@@ -16,6 +16,7 @@ import { Download } from "lucide-react";
 import SearchBar from "./SearchBar";
 import DetailModal from "./DetailModal";
 import { getAgentDataColumns } from "./columns";
+import { PREVIEW_USAGE_RECORDS } from "./usageRecordPreview";
 import { AdminTablePanel } from "@components/Admin";
 import EmptyState from "@components/Common/EmptyState";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -43,14 +44,29 @@ const UsageRecordPanel: React.FC<{ onFilterChange?: (params: SearchFilterParams)
   const {
     data: agentListData,
     isLoading,
+    isError,
+    isSuccess,
+    isFetching,
+    refetch,
   } = useAgentDataList({
     searchParams,
     page: currentPage,
     pageSize,
   });
 
-  const data = useMemo(() => agentListData?.items ?? [], [agentListData?.items]);
-  const total = agentListData?.total ?? 0;
+  const apiItems = useMemo(() => agentListData?.items ?? [], [agentListData?.items]);
+  const hasActiveFilters = Object.entries(searchParams).some(
+    ([key, value]) => !["page", "page_size"].includes(key) && value != null && String(value).trim() !== "",
+  );
+  const isPreviewData =
+    import.meta.env.DEV &&
+    isSuccess &&
+    !isFetching &&
+    apiItems.length === 0 &&
+    currentPage === 1 &&
+    !hasActiveFilters;
+  const data = useMemo(() => (isPreviewData ? PREVIEW_USAGE_RECORDS : apiItems), [apiItems, isPreviewData]);
+  const total = isPreviewData ? PREVIEW_USAGE_RECORDS.length : (agentListData?.total ?? 0);
 
   const columns = useMemo(
     () =>
@@ -120,10 +136,11 @@ const UsageRecordPanel: React.FC<{ onFilterChange?: (params: SearchFilterParams)
           <div className="flex items-center justify-center">
             <Checkbox
               checked={allChecked}
+              disabled={isPreviewData}
               onCheckedChange={(checked) => {
                 setSelectedRowKeys(checked === true ? data.map((item) => item.id) : []);
               }}
-              aria-label="选择当前页全部记录"
+              aria-label={isPreviewData ? "开发预览记录不可导出" : "选择当前页全部记录"}
             />
           </div>
         ),
@@ -131,6 +148,7 @@ const UsageRecordPanel: React.FC<{ onFilterChange?: (params: SearchFilterParams)
           <div className="flex items-center justify-center">
             <Checkbox
               checked={selectedRowKeys.includes(row.original.id)}
+              disabled={isPreviewData}
               onCheckedChange={(checked) => {
                 setSelectedRowKeys((prev) =>
                   checked === true
@@ -163,7 +181,7 @@ const UsageRecordPanel: React.FC<{ onFilterChange?: (params: SearchFilterParams)
         },
       })),
     ],
-    [allChecked, columns, data, selectedRowKeys],
+    [allChecked, columns, data, isPreviewData, selectedRowKeys],
   );
 
   const table = useReactTable({
@@ -174,6 +192,11 @@ const UsageRecordPanel: React.FC<{ onFilterChange?: (params: SearchFilterParams)
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      {isPreviewData ? (
+        <div className="px-4 pt-2 text-xs text-text-tertiary">
+          当前显示开发预览记录，仅用于检查详情排版，不会写入真实数据。
+        </div>
+      ) : null}
       <SearchBar
         searchParams={searchParams}
         onSearch={handleSearch}
@@ -208,8 +231,11 @@ const UsageRecordPanel: React.FC<{ onFilterChange?: (params: SearchFilterParams)
             {!isLoading && data.length === 0 ? (
               <div className="ws-usage-empty-overlay">
                 <EmptyState
-                  title="暂无使用记录"
-                  description="可以调整筛选条件，或等待学生使用智能体后查看。"
+                  variant={isError ? "error" : hasActiveFilters ? "no-results" : "no-data"}
+                  title={isError ? "使用记录加载失败" : hasActiveFilters ? "未找到使用记录" : "暂无使用记录"}
+                  description={isError ? "请求未能完成，请稍后重试。" : hasActiveFilters ? "可以调整筛选条件或关键词。" : "等待学生使用智能体后即可查看。"}
+                  actionLabel={isError ? "重试" : undefined}
+                  onAction={isError ? () => void refetch() : undefined}
                   className="ws-usage-empty-state"
                 />
               </div>

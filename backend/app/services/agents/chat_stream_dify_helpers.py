@@ -4,7 +4,7 @@ import asyncio
 import json
 from contextlib import suppress
 from copy import deepcopy
-from typing import Any, AsyncGenerator, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 import httpx
 
@@ -201,12 +201,6 @@ def _update_dify_terminal_state(event_block: str, state: Dict[str, Any]) -> None
     if _is_dify_terminal(event_type):
         state["saw_terminal_event"] = True
         state["terminal_event_type"] = event_type
-
-
-async def _nonempty_chunks(chunks):
-    async for chunk in chunks:
-        if chunk:
-            yield chunk
 
 
 async def _lease_checked_chunks(chunks, lease):

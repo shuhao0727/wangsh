@@ -61,7 +61,7 @@
 
 ### 评估系统 Prompt Owner (`features/assessment/`)
 
-- [features/assessment/hot_agent.md](features/assessment/hot_agent.md) - 热点问题教学诊断智能体指令
+- [features/assessment/hot_agent.md](features/assessment/hot_agent.md) - 热点问题归类智能体指令
 - [features/assessment/chain_agent.md](features/assessment/chain_agent.md) - 学生问题链认知诊断智能体指令
 
 ## 安全、隐私与数据管理 (`security/`, `compliance/`)

@@ -776,7 +776,7 @@ def test_selection_grade_snapshot_is_kept_when_file_omits_grade():
     result = execute(scope="selections", rows=[row], db=db, skip_invalid=False)
     assert result["processed"] == 1
     # 未提供年级时不写入 grade，避免静默清空历史快照。
-    total, _, valid, errors = asyncio.run(imports._prepare_import(
+    total, _, valid, errors, _row_numbers = asyncio.run(imports._prepare_import(
         "selections", None, None, None, upload([row]), db,
     ))
     assert errors == [] and total == 1

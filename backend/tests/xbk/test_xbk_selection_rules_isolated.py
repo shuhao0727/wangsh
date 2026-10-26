@@ -408,7 +408,8 @@ def test_selection_import_maps_only_named_active_unique_conflict_to_409(monkeypa
     values = payload("S1", "C1").model_dump()
 
     async def prepared(*_args, **_kwargs):
-        return 1, list(values), [(values, values)], []
+        # 第 5 项是有效行号，供执行阶段把父记录缺失定位到具体行
+        return 1, list(values), [(values, values)], [], [2]
 
     async def no_identity_check(*_args, **_kwargs):
         return None

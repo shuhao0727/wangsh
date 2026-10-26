@@ -138,26 +138,6 @@ def _model_display_name(model_id: Optional[str]) -> Optional[str]:
     return name
 
 
-def _build_dify_progress_log(user_query: str, model_id: Optional[str]) -> str:
-    model_name = _model_display_name(model_id) or "未指定模型"
-    steps = [
-        ("接收用户消息", f"“{user_query[:60]}”"),
-        ("意图识别", "分析意图、抽取关键实体"),
-        ("选择工具", "检索资料、网页浏览、结构化知识库"),
-        ("检索资料", "命中相关文档 5 条，摘要生成"),
-        ("调用模型", f"使用 {model_name} 进行推理与生成"),
-        ("生成草稿", "组织答案结构、引用来源"),
-        ("反思改进", "一致性检查、补充细节、输出最终答案"),
-    ]
-    durations = [0.3, 0.5, 0.4, 0.8, 0.7, 0.6, 0.5]
-    lines = []
-    cumulative = 0.0
-    for i, ((title, detail), d) in enumerate(zip(steps, durations), start=1):
-        cumulative += d
-        lines.append(f"步骤 {i}/{len(steps)} ▸ {title}（耗时 ~{d:.1f}s，累计 ~{cumulative:.1f}s）\n- {detail}")
-    return "\n".join(lines)
-
-
 def _build_provider_context(agent: AIAgent) -> _AgentProviderContext:
     from app.services.agents.providers import detect_flags
 

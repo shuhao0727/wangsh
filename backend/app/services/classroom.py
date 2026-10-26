@@ -350,15 +350,6 @@ async def restart_activity(
     return activity
 
 
-async def check_and_auto_end(db: AsyncSession, activity_id: int) -> bool:
-    activity = (await db.execute(select(ClassroomActivity).where(ClassroomActivity.id == activity_id))).scalar_one_or_none()
-    if not activity:
-        return False
-    return await _ensure_activity_not_overdue(db, activity)
-
-# PLACEHOLDER_SUBMIT_AND_STATS
-
-
 async def submit_response(db: AsyncSession, activity_id: int, user_id: int, answer: str) -> ClassroomResponse:
     activity = await _get_activity(db, activity_id)
     if activity.status != "active":
@@ -418,34 +409,6 @@ async def get_statistics(
         include_correct_answers=include_correct_answers,
         get_activity=_get_activity,
     )
-
-
-async def analyze_fill_blank_stats(db: AsyncSession, activity_id: int, agent_id: Optional[int] = None) -> dict:
-    activity = await _get_activity(db, activity_id)
-    if activity.activity_type != "fill_blank":
-        raise ValueError("仅填空活动支持分析")
-    if activity.status != "ended":
-        raise ValueError("活动结束后才可查看分析")
-    if agent_id is not None:
-        activity.analysis_agent_id = agent_id
-        await db.commit()
-        await _run_auto_analysis_for_ended_activity(
-            db,
-            activity.id,
-            allow_running_retry=True,
-        )
-        await db.refresh(activity)
-    context = activity.analysis_context or {}
-    risk_slots = context.get("risk_slots") or []
-    return {
-        "activity_id": activity.id,
-        "agent_id": activity.analysis_agent_id,
-        "analysis": activity.analysis_result or "",
-        "analysis_context": context,
-        "weakest_slot": risk_slots[0] if risk_slots else None,
-        "analysis_status": activity.analysis_status,
-        "analysis_error": activity.analysis_error,
-    }
 
 
 async def get_active_activities(

@@ -47,7 +47,7 @@ const HomePage: React.FC = () => {
       <div className="home-hero-blob home-hero-blob-3" />
 
       {/* Main content */}
-      <div className="relative z-10 w-full min-w-0 text-center px-6 max-w-2xl mx-auto flex flex-col items-center">
+      <div className="relative z-10 w-full min-w-0 text-center px-6 max-w-4xl mx-auto flex flex-col items-center">
         <div className="inline-flex items-center gap-2 mb-6 px-4 py-2 rounded-full bg-white/10 backdrop-blur text-white/80 text-sm">
           <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
           探索 · 学习 · 创造
@@ -69,14 +69,14 @@ const HomePage: React.FC = () => {
         )}
 
         {/* Module pills */}
-        <div className="flex w-full flex-wrap items-center justify-center gap-2 mb-10">
+        <div className="flex w-full flex-wrap items-center justify-center gap-2 mb-10 md:flex-nowrap">
           {MODULES.map((mod) => {
             const Icon = mod.icon;
             return (
               <button
                 key={mod.id}
                 onClick={() => navigate(mod.path)}
-                className="home-hero-module-pill"
+                className="home-hero-module-pill shrink-0"
               >
                 <Icon className="h-3.5 w-3.5" style={{ color: mod.color }} />
                 {mod.title}

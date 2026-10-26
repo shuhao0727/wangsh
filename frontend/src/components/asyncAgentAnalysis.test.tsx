@@ -25,12 +25,15 @@ vi.mock("@services/znt/api", () => ({
   },
 }));
 
-vi.mock("echarts", () => ({
-  init: vi.fn(() => ({
-    setOption: vi.fn(),
-    resize: vi.fn(),
-    dispose: vi.fn(),
-  })),
+// 图表库已改为按需封装 @/lib/echarts，mock 需指向封装模块
+vi.mock("@/lib/echarts", () => ({
+  echarts: {
+    init: vi.fn(() => ({
+      setOption: vi.fn(),
+      resize: vi.fn(),
+      dispose: vi.fn(),
+    })),
+  },
 }));
 
 vi.mock("@components/Admin", () => ({

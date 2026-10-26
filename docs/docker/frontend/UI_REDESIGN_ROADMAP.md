@@ -2,7 +2,7 @@
 
 > 状态：active
 > Owner：frontend
-> 最近复核：2026-10-20
+> 最近复核：2026-10-24
 > 参考规范：[EMBEDDED_UI_STYLE_GUIDE.md](EMBEDDED_UI_STYLE_GUIDE.md)
 > 页面清单来源：[UI-PAGES.md](UI-PAGES.md) 与 `frontend/src/App.tsx`
 
@@ -61,7 +61,7 @@
 | 24 | `/task-analysis/new` | `TaskAnalysisNewPage` | 四步向导 | **待用户确认** | 步骤导航、表单密度、主次操作和错误状态；已检查桌面与 390px 窄屏 |
 | 25 | `/task-analysis/compare` | `TaskAnalysisComparePage` | 对比分析 | **待用户确认** | 课次筛选、对比区域、结果表和导出操作；错误状态保持嵌入式头部与连续背景 |
 | 26 | `/task-analysis/:analysisId` | `TaskAnalysisResultPage` | 结果分发页 | **待用户确认** | 结果入口、加载、错误和返回路径；共享结果布局已取消渐变和重复卡片层级 |
-| 27 | `/task-analysis/hot/:analysisId` | `HotAnalysisResultPage` | 热点分析 | **待用户确认** | 指标摘要、问题列表、详情和返回操作；复用共享结果工作区 |
+| 27 | `/task-analysis/hot/:analysisId` | `HotAnalysisResultPage` | 热点分析 | **待用户确认** | 基础信息与连续时间柱线图，保留空时段、教师时间标记和按时段查看原问；说明折叠，已用模拟数据检查桌面与窄屏，真实课堂记录待验收 |
 | 28 | `/task-analysis/chains/:analysisId` | `ChainAnalysisResultPage` | 问题链分析 | **待用户确认** | 链路视图、筛选、详情和导出操作；复用共享结果工作区 |
 
 ### 第四批：后台概览与公共内容页
@@ -71,10 +71,10 @@
 | 29 | `/admin/dashboard` | `AdminDashboardPage` | 仪表盘 | **待用户确认** | 指标、快捷入口、图表和工作区间距；状态区、服务检查和标题栏已连续化 |
 | 30 | `/articles` | `ArticlesPage` | 公共列表 | **待用户确认** | 搜索、分类、文章列表、分页和空状态；清除筛选、分页操作补充无障碍名称 |
 | 31 | `/articles/:slug` | `ArticleDetailPage` | 公共详情 | **待用户确认** | 标题、元信息、正文和返回/相关推荐关系 |
-| 32 | `/home` | `HomePage` | 首页 | **保持现状** | 用户认为原有首页效果合适；撤回本批首页改版并沿用原设计 |
+| 32 | `/home` | `HomePage` | 首页 | **待用户确认** | 五个模块在桌面同排、窄屏自动换行；模块与 Dify AI、NAS 入口均采用透明无边框的嵌入式样式，保留悬停与键盘焦点反馈 |
 | 33 | `/informatics` | `InformaticsPage` | 公共列表 | **待用户确认** | 笔记筛选、卡片/列表、分页和阅读入口 |
 | 34 | `/informatics/:id` | `InformaticsDetailPage` | PDF 阅读器 | **待用户确认（专用布局）** | 阅读区、目录 Sheet、工具栏和移动端边界；当前无有效已发布笔记可验正文 |
-| 35 | `/it-technology` | `ITTechnologyPage` | 学习入口 | **待用户确认** | 模块卡片、进度、入口按钮和内容层次 |
+| 35 | `/it-technology` | `ITTechnologyPage` | 学习入口 | **待用户确认** | 桌面两列、窄屏单列的无边框嵌入式入口；弱化图标底色，以间距区分分组，保留进度与禁用状态 |
 | 36 | `/it-technology/games` | `GamesRepoPage` | 资源库浏览 | **待用户确认** | 搜索、分类、下载入口和空状态；当前资源库为空 |
 | 37 | `/it-technology/python-lab(/:id)` | `ITTechnologyPythonLabPage` | 代码实验室 | **待用户确认（专用布局）** | 编辑器、运行控制、面板、调试和真实点击可靠性 |
 | 38 | `/personal-programs` | `PersonalProgramsPage` | 公共列表 | **待用户确认** | 节目卡片、筛选、详情入口和状态 |

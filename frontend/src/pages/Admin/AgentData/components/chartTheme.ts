@@ -93,6 +93,7 @@ export const getAgentChartTheme = () => {
     uncoveredShadow: alphaColor(danger, 0.3, FALLBACKS.dangerShadow),
     primary,
     accent,
+    info: readCssVar("--ws-color-info", FALLBACKS.info),
     primarySoft,
     primaryBand: alphaColor(primary, 0.07, FALLBACKS.primarySoft),
     primaryBrush: alphaColor(primary, 0.08, FALLBACKS.primarySoft),

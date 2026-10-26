@@ -27,7 +27,7 @@ class ClassroomPlanItem(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     plan_id = Column(Integer, ForeignKey("znt_classroom_plans.id", ondelete="CASCADE"), nullable=False, index=True)
-    activity_id = Column(Integer, ForeignKey("znt_classroom_activities.id", ondelete="CASCADE"), nullable=False)
+    activity_id = Column(Integer, ForeignKey("znt_classroom_activities.id", ondelete="CASCADE"), nullable=False, index=True)
     order_index = Column(Integer, nullable=False, default=0, comment="排列顺序")
     status = Column(String(20), nullable=False, default="pending", comment="状态: pending/active/ended")
 

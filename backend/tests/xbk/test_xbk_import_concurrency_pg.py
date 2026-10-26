@@ -19,7 +19,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.api.endpoints.xbk.import_export import import_data
-from app.models import XbkStudent
+from app.models import XbkCourse, XbkSelection, XbkStudent
 
 
 def dedicated_url():
@@ -62,7 +62,10 @@ class PostgresImportConcurrency(unittest.IsolatedAsyncioTestCase):
         self.addAsyncCleanup(self.engine.dispose)
         self.Session = async_sessionmaker(self.engine, expire_on_commit=False)
         async with self.engine.begin() as conn:
+            # 导入学生时还会关联校验课程与选课，三条表都要在隔离 schema 内建好
             await conn.run_sync(lambda c: XbkStudent.__table__.create(c))
+            await conn.run_sync(lambda c: XbkCourse.__table__.create(c))
+            await conn.run_sync(lambda c: XbkSelection.__table__.create(c))
 
     async def drop_schema(self):
         async with self.admin.begin() as conn:

@@ -57,9 +57,7 @@ from .analysis_helpers import (  # noqa: F401  有意回导，非未使用导入
     _agent_public_payload,
     _resolve_analysis_agent_credentials,
     _compact_teacher_questions,
-    _prepare_hot_deep_analysis_input,
     _prepare_chain_deep_analysis_input,
-    _hot_deep_analysis_has_content,
     _chain_deep_analysis_has_content,
     _hot_list_item,
     _chain_list_item,
@@ -429,10 +427,11 @@ async def get_hot_analysis(
     if not r:
         raise HTTPException(status_code=404, detail="记录不存在")
 
-    # 写入缓存（TTL 1小时）
-    await cache.set(cache_key, r, expire_seconds=3600)
+    payload = HotQuestionAnalysisRecord.model_validate(r).model_dump(mode="json")
+    # 只缓存纯数据：ORM 对象经 json 序列化会变成空对象，读回后无法通过响应校验。
+    await cache.set(cache_key, payload, expire_seconds=3600)
 
-    return r
+    return payload
 
 
 @router.delete("/analysis/hot-questions/{analysis_id}")
@@ -499,10 +498,11 @@ async def get_chain_analysis(
     if not r:
         raise HTTPException(status_code=404, detail="记录不存在")
 
-    # 写入缓存（TTL 1小时）
-    await cache.set(cache_key, r, expire_seconds=3600)
+    payload = StudentChainAnalysisRecord.model_validate(r).model_dump(mode="json")
+    # 只缓存纯数据：ORM 对象经 json 序列化会变成空对象，读回后无法通过响应校验。
+    await cache.set(cache_key, payload, expire_seconds=3600)
 
-    return r
+    return payload
 
 
 @router.delete("/analysis/student-chains/{analysis_id}")

@@ -37,18 +37,6 @@ def _title_year_range(year: str, year_start: Optional[int], year_end: Optional[i
     return ys, ye
 
 
-def _parse_int(value: object) -> Optional[int]:
-    if value is None:
-        return None
-    s = str(value).strip()
-    if not s:
-        return None
-    try:
-        return int(float(s))
-    except Exception:
-        return None
-
-
 def _get_course_code_limits(ws) -> List[str]:
     codes: List[str] = []
     for row in ws.iter_rows(min_row=3, values_only=True):

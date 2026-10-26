@@ -1,11 +1,7 @@
 """课堂互动 - 学生端 API"""
 
-import asyncio
-import json
-import uuid
 from fastapi import Request, APIRouter, Depends, HTTPException
-from fastapi.responses import StreamingResponse
-from app.core.stream_session import session_checked_stream
+from app.core.sse import sse_response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.database import get_db
@@ -63,32 +59,9 @@ async def student_stream(
     request: Request,
     current_user: UserInfo = Depends(require_student_sse),
 ):
-    sub_id = str(uuid.uuid4())
-    channel = _student_stream_channel(current_user)
-
-    async def gen():
-        q = await svc.subscribe(channel, sub_id)
-        try:
-            yield f"data: {json.dumps({'type': 'connected'})}\n\n"
-            while True:
-                try:
-                    event = await asyncio.wait_for(q.get(), timeout=15)
-                    yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
-                except asyncio.TimeoutError:
-                    yield ":keepalive\n\n"
-                except asyncio.CancelledError:
-                    break
-        finally:
-            await svc.unsubscribe(channel, sub_id)
-
-    return StreamingResponse(
-        session_checked_stream(gen(), request),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache, no-transform",
-            "X-Accel-Buffering": "no",
-            "Connection": "keep-alive",
-        },
+    return sse_response(
+        request, _student_stream_channel(current_user),
+        subscribe_fn=svc.subscribe, unsubscribe_fn=svc.unsubscribe,
     )
 
 

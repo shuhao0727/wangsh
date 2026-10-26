@@ -223,13 +223,14 @@ const ITTechnologyPage: React.FC = () => {
   if (loading) {
     return (
       <div className="it-technology-page w-full flex-1 mx-auto px-[var(--ws-space-3)] py-[var(--ws-space-4)] md:px-[var(--ws-space-4)]" style={{ maxWidth: "var(--ws-shell-max-width)" }}>
-        <div className="grid gap-[var(--ws-layout-gap)]" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
+        <div className="grid grid-cols-1 gap-x-[var(--ws-space-5)] gap-y-[var(--ws-space-2)] sm:grid-cols-2">
           {[1,2,3,4].map(i => (
-            <div key={i} className="rounded-xl p-[var(--ws-panel-padding)] bg-surface-2 space-y-[var(--ws-space-2)]">
-              <Skeleton className="h-10 w-10 rounded-lg" />
-              <Skeleton className="h-5 w-1/2" />
-              <Skeleton className="h-4 w-11/12" />
-              <Skeleton className="h-4 w-8/12" />
+            <div key={i} className="flex min-h-20 items-center gap-[var(--ws-space-2)] p-[var(--ws-space-2)]">
+              <Skeleton className="h-9 w-9 shrink-0 rounded-md" />
+              <div className="flex-1 space-y-[var(--ws-space-2)]">
+                <Skeleton className="h-5 w-1/3" />
+                <Skeleton className="h-4 w-2/3" />
+              </div>
             </div>
           ))}
         </div>
@@ -299,23 +300,19 @@ const ITTechnologyPage: React.FC = () => {
               <EmptyState description="暂无可用应用，请联系管理员在后台开启。" />
             </div>
           ) : (
-            <div className="space-y-[var(--ws-space-3)]">
+            <div className="space-y-[var(--ws-space-5)]">
               {utilityApps.length > 0 && (
-                <div className="grid grid-cols-1 gap-x-[var(--ws-space-3)] sm:grid-cols-2 lg:grid-cols-3">
+                <div className="grid grid-cols-1 gap-x-[var(--ws-space-5)] gap-y-[var(--ws-space-2)] sm:grid-cols-2">
                   {utilityApps.map(renderCard)}
                 </div>
               )}
               {learningApps.length > 0 && (
-                <>
-                  <div className="flex items-center gap-3">
-                    <div className="h-px flex-1 bg-border" />
-                    <span className="text-xs font-medium uppercase tracking-wider text-text-tertiary whitespace-nowrap">AI 学习系列</span>
-                    <div className="h-px flex-1 bg-border" />
-                  </div>
-                  <div className="grid grid-cols-1 gap-x-[var(--ws-space-3)] sm:grid-cols-2 lg:grid-cols-3">
+                <section className="space-y-[var(--ws-space-2)]" aria-labelledby="it-learning-heading">
+                  <h2 id="it-learning-heading" className="px-[var(--ws-space-2)] text-xs font-medium text-text-tertiary">AI 学习系列</h2>
+                  <div className="grid grid-cols-1 gap-x-[var(--ws-space-5)] gap-y-[var(--ws-space-2)] sm:grid-cols-2">
                     {learningApps.map(renderCard)}
                   </div>
-                </>
+                </section>
               )}
             </div>
           )}
