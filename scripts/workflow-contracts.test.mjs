@@ -15,6 +15,8 @@ import test from "node:test";
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const repoRoot = new URL("..", import.meta.url);
 const sourceVersion = JSON.parse(read("frontend/package.json")).version;
+// 漂移用例需要一个与当前版本不同、格式合法的版本号；写死具体值会在版本升级时失效
+const driftVersion = `${sourceVersion}-drift`;
 
 const requiredReleaseImages = [
   "wangsh-backend",
@@ -1338,12 +1340,12 @@ test("verify-release-set accepts one full SemVer for application and image tag",
 
 test("verify-release-set rejects application, frontend, image-tag, and release version drift", () => {
   const cases = [
-    { releaseSet: makeReleaseSet(), envOverrides: { APP_VERSION: "2.2.0" } },
-    { releaseSet: makeReleaseSet(), envOverrides: { REACT_APP_VERSION: "2.2.0" } },
+    { releaseSet: makeReleaseSet(), envOverrides: { APP_VERSION: driftVersion } },
+    { releaseSet: makeReleaseSet(), envOverrides: { REACT_APP_VERSION: driftVersion } },
     { releaseSet: makeReleaseSet(), envOverrides: { IMAGE_TAG: "2.1" } },
-    { releaseSet: makeReleaseSet(), envOverrides: { IMAGE_TAG: "2.2.0" } },
+    { releaseSet: makeReleaseSet(), envOverrides: { IMAGE_TAG: driftVersion } },
     { releaseSet: makeReleaseSet({ version: "2.1.1" }) },
-    { releaseSet: makeReleaseSet({ version: "2.2.0" }) },
+    { releaseSet: makeReleaseSet({ version: driftVersion }) },
   ];
 
   for (const testCase of cases) {
