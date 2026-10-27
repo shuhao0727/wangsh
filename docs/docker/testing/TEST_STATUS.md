@@ -19,7 +19,7 @@
 - **后端：** 全量 **3646 passed / 123 skipped / 0 failed**（专用测试库 `wangsh_ci_test` + `alembic upgrade head`）；比基线少 1 是删除了 1 个只测死代码的用例。`tests/test_migration_preflight_guard_contract.py` **56 passed**。
 - **前端：** `vitest` **774 passed / 774**；`tsc --noEmit` 通过。
 - **治理：** `check_python_governance.py check --base-ref origin/main` 为 **errors=0 / warnings=37 / 361 files / 2100 functions**。
-- **文档门禁：** Markdown 合同检查为 `144 files / 676 links / 0 missing`，`git diff --check` 通过。
+- **文档门禁：** Markdown 合同检查为 `145 files / 676 links / 0 missing`，`git diff --check` 通过。
 - **迁移：** 新增 `20261026_0001_idx_classroom_plan_items_activity.py`，upgrade → downgrade → 再 upgrade 均成功，`EXPLAIN` 确认走 `Bitmap Index Scan`；索引名必须写字面量，常量会被预检判为“动态索引名”。
 - **性能实测：** 分类列表 5 个分类的 SQL 从 7 次降到 3 次；echarts 构建产物从 1,035,150 B 降到 584,082 B（省 43.6%）。
 - **已清理：** 测试库容器、临时测量脚本、`backend/.pytest_cache`、生产库中的测试分类。
