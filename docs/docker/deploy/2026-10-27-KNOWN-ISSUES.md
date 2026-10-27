@@ -5,9 +5,11 @@
 > 最近复核：2026-10-27
 > 用途：2.2.0 发布后**已知但暂不处理**的问题。不是缺陷清单的全部，只记录已确认、需要后续跟进的事项。
 
-## 一、`deploy.sh backup-db` 产出空文件（**严重，暂缓修复**）
+## 一、`deploy.sh backup-db` 产出空文件（**已修复**）
 
-**用户决定：先不修。** 但必须知道后果。
+> 2026-10-27 修复：去掉 `-f -`，并补上非空、归档可读、`pg_dump` 失败清理三道校验。
+> 三种模式实测产出 383K / 240K / 145K，端到端恢复验证 55 张表一致。
+> 以下保留原始分析与根因，供追溯。
 
 ### 现象
 
@@ -34,8 +36,9 @@ if backup_db; then : else handle_pre_downgrade_failure ... fi
 设计意图是"回滚前先备份，备份失败就中止"。但 `backup-db` **每次都返回 0**，
 这道保护完全失效——回滚（有破坏性）会在没有任何有效备份的情况下继续执行。
 
-另外 `restore-db` 遇到空文件报 `input file is too short`，**但退出码仍是 0**，
-自动化流程无法察觉恢复失败。
+另外 `restore-db` 遇到空文件时，`pg_restore` 只报 `input file is too short`，
+退出码本身是正确的（1），但错误信息看不出是备份文件本身坏了。
+2026-10-27 已补前置校验：空文件直接报 `${dump_path} is empty` 并以 1 退出。
 
 ### 临时替代方案
 
@@ -48,11 +51,11 @@ ls -lh 备份名.dump
 docker exec -i wangsh-postgres pg_restore --list < 备份名.dump | grep -c 'TABLE DATA'
 ```
 
-### 修复要点（做的时候）
+### 修复要点（已完成）
 
-1. 去掉 `-f -`，让 pg_dump 直接输出到 stdout
-2. 备份后校验文件非空，为空则非零退出
-3. `restore-db` 检查 `pg_restore` 退出码
+1. ✅ 去掉 `-f -`，让 pg_dump 直接输出到 stdout
+2. ✅ 备份后校验文件非空 + `pg_restore --list` 可读，失败则删文件并非零退出
+3. ✅ `pg_dump` 失败时清理残留文件并透传退出码；`restore-db` 增加空文件前置校验
 
 ## 二、本次部署使用的备份（有效）
 

@@ -901,12 +901,32 @@ PY
       data) out="${out_dir}/${db}_${ts}_data.dump" ;;
       *) echo "usage: $0 backup-db [full|schema|data]" >&2; exit 2 ;;
     esac
+    # 不传 -f -：自定义格式下 pg_dump 会把 '-' 当成容器内的文件名，
+    # 数据写进容器、stdout 为空，宿主上的备份因此是 0 字节。
+    dump_status=0
     if [ "${mode}" = "schema" ]; then
-      compose exec -T postgres pg_dump -U "${user}" -d "${db}" -Fc --schema-only -f - > "${out}"
+      compose exec -T postgres pg_dump -U "${user}" -d "${db}" -Fc --schema-only > "${out}" || dump_status=$?
     elif [ "${mode}" = "data" ]; then
-      compose exec -T postgres pg_dump -U "${user}" -d "${db}" -Fc --data-only -f - > "${out}"
+      compose exec -T postgres pg_dump -U "${user}" -d "${db}" -Fc --data-only > "${out}" || dump_status=$?
     else
-      compose exec -T postgres pg_dump -U "${user}" -d "${db}" -Fc -f - > "${out}"
+      compose exec -T postgres pg_dump -U "${user}" -d "${db}" -Fc > "${out}" || dump_status=$?
+    fi
+    if [ "${dump_status}" -ne 0 ]; then
+      rm -f "${out}"
+      echo "backup-db: pg_dump failed (status ${dump_status}), removed ${out}" >&2
+      exit "${dump_status}"
+    fi
+    # 备份必须可恢复：空文件或缺少归档头的文件一律判失败，
+    # 否则 rollback.sh 的"备份失败就中止"保护形同虚设。
+    if [ ! -s "${out}" ]; then
+      rm -f "${out}"
+      echo "backup-db: ${out} is empty, aborting" >&2
+      exit 1
+    fi
+    if ! compose exec -T postgres pg_restore --list < "${out}" > /dev/null 2>&1; then
+      rm -f "${out}"
+      echo "backup-db: ${out} is not a readable archive, aborting" >&2
+      exit 1
     fi
     echo "${out}"
     ;;
@@ -936,6 +956,12 @@ PY
     if [ "${confirm_restore}" != "true" ]; then
       echo "Refusing destructive restore. Re-run with --yes after confirming the target database." >&2
       exit 2
+    fi
+    # 空文件在 pg_restore 里只报 "input file is too short"，看不出是备份本身坏了，
+    # 这里提前拦下并给出可执行的提示。
+    if [ ! -s "${dump_path}" ]; then
+      echo "restore-db: ${dump_path} is empty; re-run backup-db or use a verified dump" >&2
+      exit 1
     fi
     db="$(env_value POSTGRES_DB)"
     db="${db:-wangsh_db}"
