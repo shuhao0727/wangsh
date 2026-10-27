@@ -274,8 +274,11 @@ def _metadata_issue(reason: str, row: Optional[int]=None) -> WorkbookIssue:
     return WorkbookIssue(METADATA_SHEET, row, None, None, reason)
 
 
-def _read_metadata_identity(ws: Worksheet, issues: list[WorkbookIssue]) -> tuple[str, str, str]:
-    keys = {normalize_cell(ws.cell(row=row, column=1).value): normalize_cell(ws.cell(row=row, column=2).value) for row in range(1, 6)}
+def _read_metadata_identity(rows: list[list[object]], issues: list[WorkbookIssue]) -> tuple[str, str, str]:
+    keys = {
+        normalize_cell(_snapshot_cell(rows, row, 1)): normalize_cell(_snapshot_cell(rows, row, 2))
+        for row in range(1, 6)
+    }
     if keys.get('格式') != WORKBOOK_FORMAT:
         issues.append(_metadata_issue('工作簿格式标识无效', 1))
     if keys.get('版本') != WORKBOOK_VERSION:
@@ -289,14 +292,44 @@ def _read_metadata_identity(ws: Worksheet, issues: list[WorkbookIssue]) -> tuple
     return (year, term, baseline_id)
 
 
-def _validate_metadata_header(ws: Worksheet, issues: list[WorkbookIssue]) -> None:
+def _snapshot_metadata_rows(ws: Worksheet) -> list[list[object]]:
+    """一次性读取元数据表全部单元格。
+
+    在 openpyxl 的 read_only 模式下，`ws.cell(row=r, column=c)` 每次调用都会
+    新建 `WorkSheetParser` 并从第 1 行重新解析整张 sheet XML，因此
+    「按行逐格读取」会退化成 O(行数²)：300 人工作簿需要约 240 万次
+    `parse_cell` 调用、约 6 秒；3000 人时约 13 分钟。
+    改为一次性快照后整体是 O(行数)，同样数据量降到毫秒级。
+    """
+    if not ws.max_row:
+        return []
+    return [
+        [cell.value for cell in row]
+        for row in ws.iter_rows(min_row=1, max_row=ws.max_row, max_col=8, values_only=False)
+    ]
+
+
+def _snapshot_cell(rows: list[list[object]], row: int, column: int) -> object:
+    """按 1-based 行列号从一个已读取的快照中取值（越界返回 None）。"""
+    row_index = row - 1
+    column_index = column - 1
+    if row_index < 0 or row_index >= len(rows):
+        return None
+    values = rows[row_index]
+    if column_index < 0 or column_index >= len(values):
+        return None
+    return values[column_index]
+
+
+def _validate_metadata_header(rows: list[list[object]], issues: list[WorkbookIssue]) -> None:
     expected_header = ['类型', '工作表', '年级', '班级', '学号/课程代码', '姓名/课程名称', '基线课程', '限额']
-    actual_header = [normalize_cell(ws.cell(row=7, column=col).value) for col in range(1, 9)]
+    actual_header = [normalize_cell(_snapshot_cell(rows, 7, col)) for col in range(1, 9)]
     if actual_header != expected_header:
         issues.append(_metadata_issue('工作簿元数据表头已被修改', 7))
 
 
-def _read_metadata_student(values: Sequence[object], row: int, issues: list[WorkbookIssue]) -> Optional[WorkbookStudent]:
+def _read_metadata_student(rows: list[list[object]], row: int, issues: list[WorkbookIssue]) -> Optional[WorkbookStudent]:
+    values = [normalize_cell(_snapshot_cell(rows, row, col)) for col in range(2, 8)]
     sheet, grade, class_name, student_no, name, baseline_course = values
     if not all((sheet, grade, class_name, student_no, name)):
         issues.append(_metadata_issue('学生基线信息不完整', row))
@@ -314,8 +347,10 @@ def _parse_metadata_quota(value: object) -> Optional[int]:
     return quota
 
 
-def _read_metadata_course(values: Sequence[object], row: int, issues: list[WorkbookIssue]) -> Optional[WorkbookCourse]:
-    code, name, quota = values[0], values[1], _parse_metadata_quota(values[3])
+def _read_metadata_course(rows: list[list[object]], row: int, issues: list[WorkbookIssue]) -> Optional[WorkbookCourse]:
+    code = normalize_cell(_snapshot_cell(rows, row, 5))
+    name = normalize_cell(_snapshot_cell(rows, row, 6))
+    quota = _parse_metadata_quota(_snapshot_cell(rows, row, 8))
     if quota is None:
         issues.append(_metadata_issue('课程限额无效', row))
     elif not code or not name:
@@ -325,23 +360,20 @@ def _read_metadata_course(values: Sequence[object], row: int, issues: list[Workb
     return None
 
 
-def _read_metadata_records(ws: Worksheet, issues: list[WorkbookIssue]) -> tuple[list[WorkbookStudent], list[WorkbookCourse]]:
+def _read_metadata_records(rows: list[list[object]], issues: list[WorkbookIssue]) -> tuple[list[WorkbookStudent], list[WorkbookCourse]]:
     students: list[WorkbookStudent] = []
     courses: list[WorkbookCourse] = []
-    # read_only 模式下 ws.cell() 每次重新解析整份 XML，逐格读 1800+ 行需数分钟；改为一次性遍历。
-    for row_index, raw in enumerate(ws.iter_rows(min_row=8, max_col=8, values_only=True), start=8):
-        padded = tuple(raw) + (None,) * (8 - len(raw))
-        kind = normalize_cell(padded[0])
-        if not kind: continue
+    for row in range(8, len(rows) + 1):
+        kind = normalize_cell(_snapshot_cell(rows, row, 1))
+        if not kind:
+            continue
         if kind == '学生':
-            student = _read_metadata_student([normalize_cell(v) for v in padded[1:7]], row_index, issues)
-            if student is not None: students.append(student)
+            student = _read_metadata_student(rows, row, issues)
+            if student is not None:
+                students.append(student)
             continue
         if kind == '课程':
-            course = _read_metadata_course(
-                [normalize_cell(padded[4]), normalize_cell(padded[5]), padded[6], padded[7]],
-                row_index, issues,
-            )
+            course = _read_metadata_course(rows, row, issues)
             if course is not None:
                 courses.append(course)
             continue
@@ -351,9 +383,11 @@ def _read_metadata_records(ws: Worksheet, issues: list[WorkbookIssue]) -> tuple[
 
 def _read_metadata(ws: Worksheet) -> tuple[str, str, str, list[WorkbookStudent], list[WorkbookCourse], list[WorkbookIssue]]:
     issues: list[WorkbookIssue] = []
-    year, term, baseline_id = _read_metadata_identity(ws, issues)
-    _validate_metadata_header(ws, issues)
-    students, courses = _read_metadata_records(ws, issues)
+    # 一次性快照：避免 read_only 模式下逐格 ws.cell() 触发的 O(行数²) 重复解析。
+    rows = _snapshot_metadata_rows(ws)
+    year, term, baseline_id = _read_metadata_identity(rows, issues)
+    _validate_metadata_header(rows, issues)
+    students, courses = _read_metadata_records(rows, issues)
     return (year, term, baseline_id, students, courses, issues)
 
 

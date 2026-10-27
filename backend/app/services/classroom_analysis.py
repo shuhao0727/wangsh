@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+import time
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone
 from typing import Optional
@@ -101,6 +103,16 @@ async def run_auto_analysis_for_ended_activity(
     raise ClassroomAnalysisRetryableError(activity.analysis_error)
 
 
+# 候选智能体上限：分析是串行尝试，每个失败都要等一次完整 LLM 往返（最坏 60s×重试）。
+# 不设上限时，一次「结束活动」可能横扫全表智能体，远超 Celery 的 300s soft limit，
+# 触发 autoretry 把整条 sweep 重跑 3 次。保留少量候选既够容错，又让总耗时有上界。
+MAX_CANDIDATE_AGENTS = 3
+
+# 整条候选 sweep 的总时间预算（秒）。低于 Celery soft_time_limit=300，
+# 保证超时由业务自己收口，并把已尝试的 agent 写进 analysis_error。
+CANDIDATE_SWEEP_BUDGET_SECONDS = 120
+
+
 async def list_candidate_agents(
     db: AsyncSession,
     preferred_id: Optional[int] = None,
@@ -110,6 +122,7 @@ async def list_candidate_agents(
         select(AIAgent.id)
         .where(AIAgent.is_active == True, AIAgent.is_deleted == False)
         .order_by(AIAgent.id.asc())
+        .limit(MAX_CANDIDATE_AGENTS)
     )
     all_ids = [row[0] for row in rows.all()]
     if preferred_id and preferred_id in all_ids:
@@ -240,13 +253,34 @@ async def _try_candidate_agents(
     from app.services.agents.chat_blocking import run_agent_chat_blocking
 
     errors: list[str] = []
+    # 整条候选 sweep 共用一份时间预算：单个 agent 的 60s×重试不能让整条链无限延长。
+    deadline = time.monotonic() + CANDIDATE_SWEEP_BUDGET_SECONDS
     for index, agent_id in enumerate(candidate_ids):
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            errors.append(f'sweep budget {CANDIDATE_SWEEP_BUDGET_SECONDS}s exhausted')
+            logger.warning('课堂分析候选 sweep 超出总预算，剩余 agent 不再尝试')
+            break
         try:
-            analysis_text = await run_agent_chat_blocking(
-                db,
-                agent_id=agent_id,
-                message=prompt,
+            analysis_text = await asyncio.wait_for(
+                run_agent_chat_blocking(
+                    db,
+                    agent_id=agent_id,
+                    message=prompt,
+                ),
+                timeout=remaining,
             )
+        except asyncio.TimeoutError:
+            await db.rollback()
+            activity = await get_activity_for_update(db, activity_id)
+            if not analysis_claim_is_current(activity, claimed_ended_at):
+                await db.commit()
+                return None
+            errors.append(f'agent#{agent_id}: sweep timeout ({remaining:.0f}s left)')
+            logger.warning('课堂分析 agent#{} 超出总预算', agent_id)
+            if index < len(candidate_ids) - 1:
+                await db.commit()
+            continue
         except Exception as exc:
             await db.rollback()
             activity = await get_activity_for_update(db, activity_id)

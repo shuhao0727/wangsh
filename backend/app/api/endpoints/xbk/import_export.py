@@ -24,7 +24,8 @@ from app.api.endpoints.xbk._common import (UNSELECTED_COURSE_CODES, apply_common
 from app.services.xbk.locking import lock_key_rows
 from app.services.xbk.selection_rules import (SelectionMutation, apply_selection_mutations,
                                               guard_course_change, guard_student_change,
-                                              is_active_selection_unique_violation)
+                                              is_active_selection_unique_violation,
+                                              prefetch_student_references)
 from app.core.deps import require_admin
 from app.db.database import get_db
 from app.models import XbkCourse, XbkSelection, XbkStudent
@@ -389,14 +390,16 @@ async def _execute_import_upsert(db, scope, model, statement, key_fields, update
         await db.execute(statement)
 
 
-async def _guard_import_parent(db, scope, current, values):
+async def _guard_import_parent(db, scope, current, values, references=None):
     if current is None:
         return
-    if scope == "courses" and "quota" not in values:
+    if scope == "students":
+        await guard_student_change(db, current, values, references=references)
+        return
+    if "quota" not in values:
         # 未提供限额时保留原值，守卫按库中原限额比较，不能当成 0 误判下调。
         values = {**values, "quota": current.quota}
-    guard = guard_student_change if scope == "students" else guard_course_change
-    await guard(db, current, values)
+    await guard_course_change(db, current, values)
 
 
 async def _apply_selection_rows(db, valid, row_numbers):
@@ -426,9 +429,18 @@ async def _apply_valid_import_rows(db, scope, model, key_fields, valid, row_numb
         existing.update(tuple(row) for row in (await db.execute(statement)).all())
     now = datetime.now(timezone.utc)
     inserted = updated = 0
-    for values, _ in sorted(valid, key=lambda item: tuple(item[0][field] for field in key_fields)):
+    # 一次性预取所有将被校验学生的选课关联，避免逐行 guard 各发一次查询。
+    if scope == "students":
+        existing_rows = [row for key, row in parent_by_key.items() if key in existing]
+        references_by_key = await prefetch_student_references(db, existing_rows)
+    else:
+        references_by_key = {}
+    ordered_valid = sorted(valid, key=lambda item: tuple(item[0][field] for field in key_fields))
+    for values, _ in ordered_valid:
         key = tuple(values[field] for field in key_fields)
-        await _guard_import_parent(db, scope, parent_by_key.get(key), values)
+        await _guard_import_parent(
+            db, scope, parent_by_key.get(key), values, references_by_key.get(key)
+        )
         updates = {field: value for field, value in values.items() if field not in key_fields}
         updates.update(is_deleted=False, updated_at=now)
         statement = insert(model).values(**values, is_deleted=False, created_at=now, updated_at=now)

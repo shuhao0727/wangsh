@@ -39,6 +39,18 @@ class _CrudDb:
 
     async def execute(self, statement):
         if "count(" in str(statement).lower():
+            # capacity 校验已从「逐桶 COUNT」改为「一条 GROUP BY 聚合」，
+            # 因此带 group by 的计数语句返回 (year, term, code, grade, class_name, count) 行，
+            # 而非单个标量；这里按假 db 里已登记的学生构造等价的聚合结果。
+            if "group by" in str(statement).lower():
+                buckets: dict[tuple, int] = {}
+                for student in self.parents.get("xbk_students", ()):
+                    key = (student.year, student.term, None, student.grade, student.class_name)
+                    buckets[key] = buckets.get(key, 0) + 1
+                return _ScalarResult([
+                    (key[0], key[1], key[2], key[3], key[4], used)
+                    for key, used in buckets.items()
+                ])
             return _ScalarResult(len(self.added))
         table = statement.get_final_froms()[0].name
         if table in self.parents:

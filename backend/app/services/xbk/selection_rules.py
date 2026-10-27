@@ -469,16 +469,31 @@ def _validate_final_student_positions(
         )
 
 
-async def _capacity_used(
+async def _capacity_used_batch(
     db: AsyncSession,
-    year: str,
-    term: str,
-    code: str,
-    grade: Optional[str],
-    class_name: str,
-) -> int:
+    keys: Sequence[tuple[str, str, str, Optional[str], str]],
+) -> dict[tuple[str, str, str, Optional[str], str], int]:
+    """一次 GROUP BY 查出全部 (学年,学期,课程,年级,班级) 桶的已用名额。
+
+    逐桶调用 COUNT 时往返次数等于受影响桶数（最坏 = 课程数 × 班级数，
+    26 班 × 20 课 = 520 次），每次都是带 JOIN 的计数查询。
+    合并成一条按 (year, term, course_code, grade, class_name) 分组的聚合查询后，
+    往返次数固定为 1，返回行数不超过桶数。
+    """
+    if not keys:
+        return {}
+    years = {key[0] for key in keys}
+    terms = {key[1] for key in keys}
+    codes = {key[2] for key in keys}
     statement = (
-        select(func.count(XbkSelection.id))
+        select(
+            XbkSelection.year,
+            XbkSelection.term,
+            XbkSelection.course_code,
+            XbkStudent.grade,
+            XbkStudent.class_name,
+            func.count(XbkSelection.id),
+        )
         .select_from(XbkSelection)
         .join(
             XbkStudent,
@@ -490,16 +505,24 @@ async def _capacity_used(
         )
         .where(
             XbkSelection.is_deleted.is_(False),
-            XbkSelection.year == year,
-            XbkSelection.term == term,
-            XbkSelection.course_code == code,
+            XbkSelection.year.in_(years),
+            XbkSelection.term.in_(terms),
+            XbkSelection.course_code.in_(codes),
             XbkStudent.is_deleted.is_(False),
-            _same_nullable(XbkStudent.grade, grade),
-            XbkStudent.class_name == class_name,
+        )
+        .group_by(
+            XbkSelection.year,
+            XbkSelection.term,
+            XbkSelection.course_code,
+            XbkStudent.grade,
+            XbkStudent.class_name,
         )
     )
-    used = (await db.execute(statement)).scalar_one()
-    return int(used or 0)
+    rows = (await db.execute(statement)).all()
+    counts: dict[tuple[str, str, str, Optional[str], str], int] = {}
+    for year, term, code, grade, class_name, used in rows:
+        counts[(year, term, code, grade, class_name)] = int(used or 0)
+    return counts
 
 
 async def _validate_capacities(
@@ -507,9 +530,13 @@ async def _validate_capacities(
     affected: Iterable[tuple[str, str, str, Optional[str], str]],
     courses: Mapping[tuple[str, str, str], XbkCourse],
 ) -> None:
-    for year, term, code, grade, class_name in sorted(affected, key=_roster_sort_key):
+    ordered = sorted(affected, key=_roster_sort_key)
+    if not ordered:
+        return
+    used_by_key = await _capacity_used_batch(db, ordered)
+    for year, term, code, grade, class_name in ordered:
         quota = int(courses[(year, term, code)].quota or 0)
-        used = await _capacity_used(db, year, term, code, grade, class_name)
+        used = used_by_key.get((year, term, code, grade, class_name), 0)
         if used > quota:
             raise HTTPException(
                 status_code=409,
@@ -640,13 +667,48 @@ async def _validate_student_destination_capacity(
             )
 
 
+async def prefetch_student_references(
+    db: AsyncSession,
+    rows: Sequence[XbkStudent],
+) -> dict[tuple[str, str, str], list[XbkSelection]]:
+    """一次 IN 查询预取一批学生的选课关联。
+
+    guard_student_change 原本对每名学生单独执行一次 _load_student_references，
+    导入 3000 行时就是 3000 次往返。这里按 (year, term) 分组批量取回后按
+    (year, term, student_no) 建索引，供 guard 复用；查询语义与逐条版本完全一致。
+    """
+    buckets: dict[tuple[str, str], set[str]] = {}
+    for row in rows:
+        buckets.setdefault((row.year, row.term), set()).add(row.student_no)
+    grouped: dict[tuple[str, str, str], list[XbkSelection]] = {}
+    for (year, term), student_nos in buckets.items():
+        numbers = sorted(student_nos)
+        for offset in range(0, len(numbers), 500):
+            chunk = numbers[offset : offset + 500]
+            result = await db.execute(
+                select(XbkSelection).where(
+                    XbkSelection.year == year,
+                    XbkSelection.term == term,
+                    XbkSelection.student_no.in_(chunk),
+                )
+            )
+            for selection in result.scalars().all():
+                grouped.setdefault(
+                    (selection.year, selection.term, selection.student_no), []
+                ).append(selection)
+    return grouped
+
+
 async def guard_student_change(
     db: AsyncSession,
     row: XbkStudent,
     values: Mapping[str, Any],
+    *,
+    references: Optional[Sequence[XbkSelection]] = None,
 ) -> None:
     """Reject unsafe student identity changes and capacity-breaking class moves."""
-    references = await _load_student_references(db, row)
+    if references is None:
+        references = await _load_student_references(db, row)
     if _student_natural_key_changed(row, values) and references:
         raise HTTPException(
             status_code=409,

@@ -22,6 +22,12 @@ from app.services.user_governance import (
 from .policy import assert_role_assignment_allowed, assert_users_mutable
 from .schemas import ImportUserResponse, UserImportResult
 
+# 导入上限：逐行导入的开销约为每行 7~10 次 DB 往返（savepoint + 咨询锁 + 校验 + upsert），
+# 且整段在一个事务内持有咨询锁直到最终 commit，期间会阻塞其他登录/登出。
+# 没有上限时，网关 16MB 的请求体可容纳约 10 万行 → 约 70~100 万次往返。
+MAX_USER_IMPORT_BYTES = 10 * 1024 * 1024
+MAX_USER_IMPORT_ROWS = 5000
+
 USER_IMPORT_HEADERS = ["学号", "姓名", "学年", "班级", "状态", "用户名", "角色"]
 USER_IMPORT_REQUIRED_FIELDS = ["学号", "姓名"]
 USER_IMPORT_TEMPLATE_ROWS = [
@@ -85,6 +91,22 @@ def parse_xlsx_rows(content: bytes) -> Tuple[List[str], Iterator[Dict[str, str]]
             yield parsed_row
 
     return [header for header in fieldnames if header], row_generator()
+
+
+def _limit_import_rows(
+    rows: Iterator[Dict[str, str]],
+    max_rows: int,
+) -> Iterator[Dict[str, str]]:
+    """在流式迭代中强制行数上限，避免无界文件把事务拖成长时间持锁。"""
+    count = 0
+    for row in rows:
+        count += 1
+        if count > max_rows:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=f"单次导入不能超过 {max_rows} 行",
+            )
+        yield row
 
 
 def parse_import_rows(
@@ -339,8 +361,15 @@ async def import_users(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="文件名不能为空",
             )
-        fieldnames, reader = parse_import_rows(file.filename, await file.read())
+        content = await file.read(MAX_USER_IMPORT_BYTES + 1)
+        if len(content) > MAX_USER_IMPORT_BYTES:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=f"导入文件不能超过 {MAX_USER_IMPORT_BYTES // (1024 * 1024)} MB",
+            )
+        fieldnames, raw_reader = parse_import_rows(file.filename, content)
         _validate_import_headers(fieldnames)
+        reader = _limit_import_rows(raw_reader, MAX_USER_IMPORT_ROWS)
         results, imported_count, updated_count = await _process_import_rows(
             db,
             reader,

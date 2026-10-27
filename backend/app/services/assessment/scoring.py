@@ -35,7 +35,12 @@ def _aggregate_knowledge_rates(answers) -> dict:
     """聚合已筛选答案的知识点得分率；知识点沿用关联题目字段。"""
     kp_data: dict[str, dict] = {}
     for a in answers:
-        kp = a.question.knowledge_point if a.question else None
+        # 关联题目优先；按列取回的行对象没有 question 属性，回退到行上的知识点列。
+        if hasattr(a, "question"):
+            question = a.question
+            kp = getattr(question, "knowledge_point", None) if question is not None else None
+        else:
+            kp = getattr(a, "knowledge_point", None)
         if not kp:
             continue
         if kp not in kp_data:

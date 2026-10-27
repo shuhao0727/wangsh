@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from io import BytesIO
-from typing import Optional
+from typing import Optional, Sequence
 
 from openpyxl import Workbook
 from sqlalchemy import select
@@ -27,16 +27,7 @@ STATUS_TEXT = {
 }
 
 
-async def _load_session_answers(db: AsyncSession, session_id: int) -> list[dict]:
-    """加载单个 session 的答题详情"""
-    result = await db.execute(
-        select(AssessmentSession)
-        .options(selectinload(AssessmentSession.answers).selectinload(AssessmentAnswer.question))
-        .where(AssessmentSession.id == session_id)
-    )
-    session = result.scalar_one_or_none()
-    if not session:
-        return []
+def _answer_details(session: AssessmentSession) -> list[dict]:
     details = []
     for a in session.answers:
         q = a.question
@@ -49,6 +40,48 @@ async def _load_session_answers(db: AsyncSession, session_id: int) -> list[dict]
             "max_score": a.max_score,
         })
     return details
+
+
+async def _load_session_answers(db: AsyncSession, session_id: int) -> list[dict]:
+    """加载单个 session 的答题详情"""
+    result = await db.execute(
+        select(AssessmentSession)
+        .options(selectinload(AssessmentSession.answers).selectinload(AssessmentAnswer.question))
+        .where(AssessmentSession.id == session_id)
+    )
+    session = result.scalar_one_or_none()
+    return _answer_details(session) if session else []
+
+
+async def _load_answers_for_sessions(
+    db: AsyncSession, session_ids: Sequence[int]
+) -> dict[int, list[dict]]:
+    """批量加载多个 session 的答题详情（一条 IN 查询 + selectinload）。
+
+    逐 session 调用 _load_session_answers 时，每次的 selectinload 会额外发出
+    2 条 SQL（answers 一条、question 一条），加主查询共 3 次往返/学生；
+    3000 名学生导出即约 9000 次往返。改为一次 IN 查询后往返数固定为 3。
+    """
+    if not session_ids:
+        return {}
+    result = await db.execute(
+        select(AssessmentSession)
+        .options(selectinload(AssessmentSession.answers).selectinload(AssessmentAnswer.question))
+        .where(AssessmentSession.id.in_(session_ids))
+    )
+    return {session.id: _answer_details(session) for session in result.scalars().all()}
+
+
+async def _load_profiles_for_sessions(
+    db: AsyncSession, session_ids: Sequence[int]
+) -> dict[int, AssessmentBasicProfile]:
+    """批量加载多个 session 的基础画像（一条 IN 查询）。"""
+    if not session_ids:
+        return {}
+    result = await db.execute(
+        select(AssessmentBasicProfile).where(AssessmentBasicProfile.session_id.in_(session_ids))
+    )
+    return {profile.session_id: profile for profile in result.scalars().all()}
 
 
 async def build_assessment_export_xlsx(
@@ -67,12 +100,13 @@ async def build_assessment_export_xlsx(
         time_field=time_field, start_date=start_date, end_date=end_date,
     )
 
-    # 先加载所有 session 的答题详情，确定最大题目数
+    # 先批量加载所有 session 的答题详情，确定最大题目数（避免每学生 3 次往返）
+    session_ids = [item["id"] for item in items if item.get("id")]
+    answers_by_session = await _load_answers_for_sessions(db, session_ids)
     all_answers: list[list[dict]] = []
     max_q = 0
     for item in items:
-        sid = item.get("id")
-        answers = await _load_session_answers(db, sid) if sid else []
+        answers = answers_by_session.get(item.get("id"), [])
         all_answers.append(answers)
         max_q = max(max_q, len(answers))
 
@@ -123,16 +157,18 @@ async def build_assessment_export_xlsx(
     kp_data: list[tuple[dict, dict[str, float]]] = []
     all_kp_keys: list[str] = []
     kp_key_set: set[str] = set()
+    graded_session_ids = [
+        item["id"] for item in items
+        if item.get("id") and item.get("status") in ("graded", "submitted")
+    ]
+    profiles_by_session = await _load_profiles_for_sessions(db, graded_session_ids)
     for item in items:
         sid = item.get("id")
         if not sid or item.get("status") not in ("graded", "submitted"):
             kp_data.append((item, {}))
             continue
         try:
-            bp_r = await db.execute(
-                select(AssessmentBasicProfile).where(AssessmentBasicProfile.session_id == sid)
-            )
-            profile = bp_r.scalar_one_or_none()
+            profile = profiles_by_session.get(sid)
             if profile and profile.knowledge_scores:
                 raw = json.loads(profile.knowledge_scores)
                 kp: dict[str, float] = {}

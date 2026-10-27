@@ -39,7 +39,9 @@ class ProfileGenerateRequest(BaseModel):
 class ProfileBatchGenerateRequest(BaseModel):
     """批量生成画像请求"""
     profile_type: ProfileType = Field("individual", description="画像类型")
-    user_ids: List[int] = Field(..., min_length=1, description="学生 ID 列表")
+    # 该接口在单次 HTTP 请求内逐学生串行调用 LLM（每个学生一次完整往返 + 一次 commit）。
+    # 无上限时前端 120s 超时必然先触发，而服务端协程仍会继续跑完并占用 DB 连接与 LLM 配额。
+    user_ids: List[int] = Field(..., min_length=1, max_length=50, description="学生 ID 列表（单次上限 50）")
     config_id: Optional[int] = Field(None, description="关联的测评配置")
     discussion_session_id: Optional[int] = Field(None, description="关联的小组讨论会话")
     agent_ids: Optional[List[int]] = Field(None, description="关联的智能体 ID 列表")

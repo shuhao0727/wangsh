@@ -1106,14 +1106,27 @@ async def _calc_knowledge_rates(
     db: AsyncSession, config_id: int, session_ids: list[int] | None = None
 ) -> dict:
     """计算各知识点平均得分率（返回百分比 0-100）"""
+    # 只取聚合所需的列（不实例化 ORM 对象、不加载 question 关联），
+    # 6000 名学生 × 25 题时，全量 ORM 实例约 7.5 万个、接近 75MB；
+    # 按列取回后同样计算只占几 MB，且往返次数仍为 1。
+    question = AssessmentQuestion
+    base = (
+        select(
+            AssessmentAnswer.session_id.label("session_id"),
+            question.knowledge_point.label("knowledge_point"),
+            AssessmentAnswer.attempt_seq.label("attempt_seq"),
+            AssessmentAnswer.is_adaptive.label("is_adaptive"),
+            AssessmentAnswer.id.label("id"),
+            AssessmentAnswer.ai_score.label("ai_score"),
+            AssessmentAnswer.max_score.label("max_score"),
+        )
+        .select_from(AssessmentAnswer)
+        .outerjoin(question, AssessmentAnswer.question_id == question.id)
+    )
     if session_ids is not None:
         if not session_ids:
             return {}
-        answers_result = await db.execute(
-            select(AssessmentAnswer)
-            .options(selectinload(AssessmentAnswer.question))
-            .where(AssessmentAnswer.session_id.in_(session_ids))
-        )
+        answers_result = await db.execute(base.where(AssessmentAnswer.session_id.in_(session_ids)))
     else:
         session_ids_q = (
             select(AssessmentSession.id)
@@ -1124,12 +1137,8 @@ async def _calc_knowledge_rates(
                 )
             )
         )
-        answers_result = await db.execute(
-            select(AssessmentAnswer)
-            .options(selectinload(AssessmentAnswer.question))
-            .where(AssessmentAnswer.session_id.in_(session_ids_q))
-        )
-    answers = list(answers_result.scalars().all())
+        answers_result = await db.execute(base.where(AssessmentAnswer.session_id.in_(session_ids_q)))
+    answers = list(answers_result.all())
 
     # 自适应题只算首次成绩
     answers = _first_attempt_per_kp(answers)
