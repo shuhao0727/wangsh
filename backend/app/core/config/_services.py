@@ -94,30 +94,48 @@ def _path_prefix_matches(prefix: str, path: str) -> bool:
     return path.startswith(prefix + "/")
 
 
-def matches_trusted_endpoint(url: str, entries: tuple) -> bool:
-    """URL 是否精确命中受信端点条目（只比对配置串，不做 DNS 解析）。"""
-    if not entries:
-        return False
+def _parse_trusted_candidate(url: str) -> Optional[Tuple[str, str, int, str]]:
+    """把待判定的 URL 解析成 (scheme, host, port, path)；任何不合规形态返回 None。
+
+    拆出来单独承担「解析 + 形态安全」，让 matches_trusted_endpoint 只做逐项比对，
+    两层各自的分支数都在复杂度阈值内。
+    """
     try:
         parsed = urlparse(url)
         host = (parsed.hostname or "").lower().rstrip(".")
         port = parsed.port
     except ValueError:
-        return False  # 端口非法等：不命中，交给后面的常规校验拒绝
+        # 端口非法等：不命中，交给后面的常规校验拒绝
+        return None
     if not host or parsed.username or parsed.password:
-        return False
+        return None
     path = parsed.path or "/"
     # 路径里出现 "." / ".." 段、反斜杠或百分号编码的 "."：httpx 发送前会做点段归一化，
     # 可能让 "/v1/../../other" 这类写法逃出前缀。命中判定按 fail-closed 直接不算命中。
     if "\\" in path or re.search(r"%2e", path, re.IGNORECASE):
-        return False
+        return None
     if any(seg in (".", "..") for seg in path.split("/")):
+        return None
+    return parsed.scheme, host, port, path.rstrip("/") or "/"
+
+
+def matches_trusted_endpoint(url: str, entries: tuple) -> bool:
+    """URL 是否精确命中受信端点条目（只比对配置串，不做 DNS 解析）。"""
+    if not entries:
         return False
+    candidate = _parse_trusted_candidate(url)
+    if candidate is None:
+        return False
+    scheme, host, port, path = candidate
     for entry in entries:
         # 四元组逐项严格比对：scheme 完全一致、host 完全相等、port 显式等值、path 前缀边界一致
-        if parsed.scheme == entry.scheme and host == entry.host and port == entry.port:
-            if _path_prefix_matches(entry.path_prefix, path.rstrip("/") or "/"):
-                return True
+        if (
+            scheme == entry.scheme
+            and host == entry.host
+            and port == entry.port
+            and _path_prefix_matches(entry.path_prefix, path)
+        ):
+            return True
     return False
 
 
