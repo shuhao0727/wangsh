@@ -50,7 +50,7 @@ ParseError 是否被捕获: False
 
 ---
 
-### P2：`row_generator` 里的 400 会被降级成行级 error
+### P2：`row_generator` 里的 400 会被降级成行级 error —— **主控判断有误，已纠正**
 
 **位置**：`_process_import_rows` 的 `except Exception as exc`
 
@@ -59,6 +59,50 @@ ParseError 是否被捕获: False
 **实际影响**：**很小**。因为实测所有截断都在 `load_workbook` 阶段就失败了，走不到迭代中途。这属于「防御性代码的行为与意图不完全一致」，不是现实缺陷。
 
 **是否影响 2.2.1**：否。记录待办即可。
+
+---
+
+#### ⚠️ 纠正（2026-10-28，经实测推翻）
+
+上面这段判断**前提是错的**。`_process_import_rows` 的实际结构是：
+
+```python
+for row_number, row in enumerate(reader, start=1):   # next() 在这一行抛
+    ...
+    try:                                              # try 从这里才开始
+        ...
+    except Exception as exc:
+```
+
+生成器异常在 `enumerate` 的 `next()` 调用中抛出，发生在**进入 `try` 之前**，
+不会进入 `except Exception`，会原样逃出到 `import_users` 的
+`except HTTPException: raise`。**状态码本来就是 400，没有被降级。**
+
+独立验证（Python 原生行为）：
+
+```python
+def gen():
+    yield 1
+    raise RuntimeError('boom')
+
+for i, x in enumerate(gen(), start=1):
+    try: pass
+    except Exception: pass        # ← 捕获不到，异常直接逃出整个 for
+```
+
+**但同一次验证发现了另一个真实问题**：`except HTTPException` 分支**没有 rollback**。
+文件级失败时 `_process_import_rows` 可能已经 flush 了前面若干行，
+直接调用方随后 commit 就会写入「报了错却入库了一半」的脏数据。
+
+实测中间态：
+- 95% 截断 sheet XML（读到 190 行后失败）：修复前 **190 行已 flush**
+- 超出 413 行数上限：修复前 **2 行已 flush**
+
+已修复（`bda288b`），修复后两者均为 0。HTTP 路径有 `get_db` 的
+`finally: rollback` 兜底，线上不会脏写；但 `import_users` 是可直接调用的
+服务函数，显式处理是为了不依赖调用方。
+
+**教训**：审查结论也要实测验证，不能只读代码就下判断。
 
 ---
 
