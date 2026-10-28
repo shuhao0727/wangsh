@@ -155,6 +155,52 @@ load_env_file() {
     print_success "环境文件加载完成: ${env_file}"
 }
 
+# 函数：校验环境文件里的必需变量
+#
+# .env.dev 不受版本控制（被 .gitignore 的 .env.* 规则忽略），
+# 从 .env.example 派生时漏抄几行不会有任何提示，只会在运行时以
+# 奇怪的方式失败：CORS_ORIGINS 解析报 SettingsError、DATABASE_URL 为空、
+# 密钥落到内置默认值。这里在加载后统一检查，缺项直接报错并指出怎么修。
+check_required_env() {
+    local env_file="$1"
+    local missing=()
+    local required=(
+        POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB
+        SECRET_KEY SUPER_ADMIN_USERNAME SUPER_ADMIN_PASSWORD
+        AGENT_API_KEY_ENCRYPTION_KEY CORS_ORIGINS
+    )
+
+    local key
+    for key in "${required[@]}"; do
+        local val
+        val="$(grep -E "^${key}=" "${env_file}" 2>/dev/null | head -1 | cut -d= -f2-)"
+        # 空白或空串都算缺失：配置层用 all([...]) 判断完整性，
+        # 空密码/空密钥会被当成「未配置」而静默回退默认值。
+        val="${val#"${val%%[![:space:]]*}"}"
+        val="${val%"${val##*[![:space:]]}"}"
+        if [ -z "${val}" ]; then
+            missing+=("${key}")
+        fi
+    done
+
+    if [ ${#missing[@]} -gt 0 ]; then
+        print_error "环境文件 ${env_file} 缺少必需变量（值为空也算缺失）:"
+        local miss
+        for miss in "${missing[@]}"; do
+            echo "    - ${miss}"
+        done
+        echo ""
+        echo "  这些变量在 docker-compose.dev.yml 里以 \${VAR} 直接引用，没有默认值。"
+        echo "  空白值会导致：DATABASE_URL 拼装失败、CORS_ORIGINS 解析报错、"
+        echo "  或密钥静默回退到内置默认值。"
+        echo ""
+        echo "  修法：对照 .env.example 补齐。.env.dev 不在 git 里，"
+        echo "  所以这处缺口只能在本机手动修复。"
+        exit 1
+    fi
+    print_success "必需环境变量校验通过（${#required[@]} 项）"
+}
+
 # 函数：检查命令是否存在
 check_command() {
     if ! command -v "$1" &> /dev/null; then
@@ -322,6 +368,7 @@ setup_environment() {
     # 开发环境优先加载 .env.dev
     if [ -f "${PROJECT_ROOT}/.env.dev" ]; then
         load_env_file "${PROJECT_ROOT}/.env.dev"
+        check_required_env "${PROJECT_ROOT}/.env.dev"
     elif [ -f "${PROJECT_ROOT}/.env" ]; then
         print_warning "未找到 .env.dev，使用 .env (生产配置?) 作为回退"
         load_env_file "${PROJECT_ROOT}/.env"

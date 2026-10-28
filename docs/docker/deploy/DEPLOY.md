@@ -990,6 +990,22 @@ ENV_FILE=.env.dev COMPOSE_FILE=docker-compose.dev.yml bash scripts/deploy.sh res
 
 生产环境按仓库根 `.env` + `docker-compose.yml` 的默认值执行即可。
 
+**`.env.dev` 不在版本控制里，缺项只能本机修。** `docker-compose.dev.yml` 用
+`${POSTGRES_USER}`、`${SECRET_KEY}` 这类写法直接引用环境变量且不给默认值，所以
+`.env.dev` 少一行不会在加载时报错，只会在运行时以很难定位的方式失败：
+
+| 缺失项 | 表现 |
+|---|---|
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | 容器内 `DATABASE_URL` 拼装为 `None`，后端启动即 `ValueError: DATABASE_URL 未配置` |
+| `CORS_ORIGINS` 写成逗号分隔 | pydantic-settings 先做 JSON 解码 → `SettingsError: error parsing value for field "CORS_ORIGINS"` |
+| `SECRET_KEY` / `SUPER_ADMIN_*` / `AGENT_API_KEY_ENCRYPTION_KEY` | 静默回退到配置层内置默认值：所有环境共用同一 JWT 密钥、首超管账号无法登录、智能体密钥未按预期加密 |
+
+注意配置层用 `all([...])` 判断完整性，**空值等同于未配置**——即使 dev 数据库是
+trust 认证、密码不参与校验，`POSTGRES_PASSWORD` 也必须填非空值。
+
+`bash start-dev.sh` 会在加载 `.env.dev` 后调用 `check_required_env`，缺项直接列出并退出，
+不会带着半套配置继续启动。
+
 ### 备份数据库
 
 ```bash
