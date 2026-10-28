@@ -27,7 +27,11 @@ x-common-env: &common-env
   POSTGRES_DB: ${POSTGRES_DB:-wangsh_db}
   POSTGRES_USER: ${POSTGRES_USER:-admin}
   POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
-  REDIS_HOST: redis
+  # 用容器名而非服务名：本栈的 backend 同时加入 docker_default 网络（为访问 Dify），
+  # 而 Dify 也有一个名为 redis 的服务。两者在同一网络上时，短名 "redis" 会被
+  # Dify 的 Redis 抢占，导致 backend 连到需要密码的 Dify Redis 并报
+  # "Authentication required"。用显式容器名 wangsh-redis-1 消除歧义。
+  REDIS_HOST: wangsh-redis-1
   REDIS_PORT: "6379"
   SUPER_ADMIN_USERNAME: ${SUPER_ADMIN_USERNAME:-admin}
   SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD:?SUPER_ADMIN_PASSWORD is required}
