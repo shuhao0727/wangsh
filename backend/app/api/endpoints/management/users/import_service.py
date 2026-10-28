@@ -440,6 +440,16 @@ async def import_users(
             errors=errors,
         )
     except HTTPException:
+        # 文件级错误（xlsx 迭代中途才发现损坏、超出 413 行数上限、表头缺失等）
+        # 必须整体失败：此时 _process_import_rows 可能已经 flush 了前面若干行，
+        # 若不清理事务，直接调用方（脚本 / 测试 / 任务）随后 commit 就会写入
+        # 「报了错却入库了一半」的脏数据。HTTP 路径的 get_db 也会兜底回滚，
+        # 这里显式处理是为了不依赖调用方。
+        # 逐行 error 走上面的 except Exception，不会进入本分支。
+        try:
+            await db.rollback()
+        except Exception:  # pragma: no cover - 回滚失败不应覆盖原始错误
+            pass
         raise
     except Exception as exc:
         await db.rollback()

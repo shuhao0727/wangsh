@@ -275,3 +275,120 @@ def test_role_value_is_case_insensitive_after_normalization():
         {"学号": "C2", "姓名": "教师", "角色": " Teacher "}
     )
     assert parsed_teacher["role_code"] == "teacher"
+
+
+# ---------------------------------------------------------------------------
+# 文件级错误必须整体失败：400/413 不能被降级成行级 error，也不能留下脏数据
+# ---------------------------------------------------------------------------
+
+
+class _LeakTrackingDb(_ImportDb):
+    """记录 rollback 是否被调用，用于断言「文件级错误后事务被清理」。"""
+
+    def __init__(self, existing_user=None):
+        super().__init__(existing_user=existing_user)
+        self.rollback_count = 0
+
+    async def rollback(self):
+        self.rollback_count += 1
+
+
+def _xlsx_with_truncated_sheet_xml(keep_fraction: float = 0.95) -> bytes:
+    """构造 zip 容器合法、但 sheet1.xml 被截断的真实 xlsx。
+
+    这类文件能通过 load_workbook，只有迭代到中途才抛异常，
+    正是 row_generator 里那段 400 归一化的目标场景。
+    """
+    import zipfile
+
+    from openpyxl import Workbook
+
+    buffer = io.BytesIO()
+    workbook = Workbook()
+    worksheet = workbook.active
+    worksheet.append(["学号", "姓名", "角色"])
+    for index in range(200):
+        worksheet.append([f"S{index:04d}", f"学生{index}", "student"])
+    workbook.save(buffer)
+
+    source = zipfile.ZipFile(io.BytesIO(buffer.getvalue()))
+    sheet_xml = source.read("xl/worksheets/sheet1.xml")
+    truncated = sheet_xml[: int(len(sheet_xml) * keep_fraction)]
+
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as target:
+        for item in source.infolist():
+            payload = source.read(item.filename)
+            if item.filename == "xl/worksheets/sheet1.xml":
+                payload = truncated
+            target.writestr(item, payload)
+    return output.getvalue()
+
+
+def test_corrupted_xlsx_mid_iteration_returns_400_and_writes_nothing():
+    """迭代中途发现损坏 → 400，且已 flush 的行必须被回滚，不能落库半份数据。"""
+    db = _LeakTrackingDb(existing_user=None)
+    upload = UploadFile(
+        filename="broken.xlsx",
+        file=io.BytesIO(_xlsx_with_truncated_sheet_xml()),
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(
+            users_api.import_users(
+                upload, {"id": 10, "role_code": "super_admin"}, db
+            )
+        )
+
+    assert exc_info.value.status_code == 400
+    assert "Excel" in exc_info.value.detail
+    # 关键：文件级错误不得提交任何行，且必须显式清理事务
+    assert db.commit_count == 0
+    assert db.rollback_count >= 1
+
+
+def test_row_limit_exceeded_returns_413_and_writes_nothing(monkeypatch):
+    """超出单次导入行数上限同样属于文件级错误：413，不得降级成行级 error。"""
+    monkeypatch.setattr(import_service, "MAX_USER_IMPORT_ROWS", 2)
+    db = _LeakTrackingDb(existing_user=None)
+    csv_content = (
+        "学号,姓名,角色\n"
+        "L-1,第一行,student\n"
+        "L-2,第二行,student\n"
+        "L-3,第三行,student\n"
+    ).encode("utf-8")
+    upload = UploadFile(filename="users.csv", file=io.BytesIO(csv_content))
+
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(
+            users_api.import_users(
+                upload, {"id": 10, "role_code": "super_admin"}, db
+            )
+        )
+
+    assert exc_info.value.status_code == 413
+    assert db.commit_count == 0
+    assert db.rollback_count >= 1
+
+
+def test_row_level_error_still_commits_without_failing_request():
+    """回归保护：逐行错误必须仍然是 200 + error_count，不能被上面的放行逻辑影响。"""
+    db = _LeakTrackingDb(existing_user=None)
+    csv_content = (
+        "学号,姓名,角色\n"
+        "OK-1,正常行,student\n"
+        "BAD-2,坏角色,not_a_role\n"
+    ).encode("utf-8")
+    upload = UploadFile(filename="users.csv", file=io.BytesIO(csv_content))
+
+    result = asyncio.run(
+        users_api.import_users(upload, {"id": 10, "role_code": "super_admin"}, db)
+    )
+
+    assert result.success is False
+    assert result.imported_count == 1
+    assert result.error_count == 1
+    assert result.errors[0].row_number == 2
+    # 行级错误照常提交，且不应触发整体 rollback
+    assert db.commit_count == 1
+    assert db.rollback_count == 0
