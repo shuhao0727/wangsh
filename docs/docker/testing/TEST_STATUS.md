@@ -117,7 +117,7 @@
 
 ## 2026-10-27~28 S1 致命级验证（7 项全部通过）
 
-- **文档门禁：** Markdown 合同检查为 `151 files / 700 links / 0 missing`。
+- **文档门禁：** Markdown 合同检查为 `151 files / 701 links / 0 missing`。
 
 - **范围：** 按 [S1~S7 验证计划](../archive/plans/2026-10-27-S1-S7-VERIFICATION-PLAN-V3.md)（已归档）执行 S1 致命级 7 项。
   规则：Docker 实例验证（D1/D2/D3）+ 双 Agent 交叉验证 + 主控复现争议结论。

@@ -12,6 +12,55 @@
 
 ---
 
+## v2.2.1：Dify 连续对话与评分修复、S4 缺陷（2026-10-28，待部署）
+
+### 修复
+
+- **AI 伙伴评分可用**：新增 `AGENT_TRUSTED_INTERNAL_ENDPOINTS` 受信内部端点白名单，
+  四元组严格匹配（scheme + host + 显式 port + path 前缀）。此前 SSRF 检查把 Docker 内网
+  `172.18.0.2` 判为私网，评分请求在发往 Dify 前就被拦（503）。`_is_disallowed_ip` 一行未改，
+  未命中白名单的目标继续全拒。
+- **Dify 连续对话上下文**：流式对话此前只把最后一条 user 消息当 query，多轮第二轮上下文全丢
+  （7 个应用连续追问全部失败）。本版做阶段一止血——把历史折叠进 query，双重上限
+  （最近 4 轮 / 3000 字符），超出从最早一轮整轮丢弃。评分路径保持无状态。
+- **用户唯一性**：双字段各命中不同用户时 `or_` 返回多行，`scalar_one_or_none()` 抛
+  `MultipleResultsFound` → 500。两处加 `.order_by(User.id).limit(1)`。
+- **用户导入**：非法 UTF-8 CSV 与损坏 xlsx 由 500 改为 400 并给出可操作提示；
+  非法角色值不再静默降级成 `student`，改为行级 error。
+- **移动端文章目录**：`SplitPanePage` 堆叠时 `gridTemplateRows` 只有一行却塞两个子元素，
+  目录面板被压成 0px 完全不可见。改为两行 + 左侧 40vh 限高可滚
+  （需 `alignSelf: start`，否则网格 stretch 会让内部列表仍滚不动）。
+- **网关合同测试**：`c3a845a` 把 server 级 `write` 改成 `0` 后合同测试仍要求 `30s`，
+  实测已失败。修正期望值并补反向断言。
+
+### 配置影响
+
+生产需要在 `.env` 增加：
+
+```bash
+AGENT_TRUSTED_INTERNAL_ENDPOINTS=http://docker-api-1:5001/v1
+```
+
+不配置则评分行为与修复前一致（仍 503）。白名单只放这一条，新增需走变更评审。
+
+### 已知局限
+
+- Dify 连续对话只做到阶段一：每次仍是全新 query、不带 `conversation_id`，
+  Dify 后台会话列表与统计会碎。终态方案见
+  [Dify 缺陷修复计划](plans/2026-10-28-DIFY-DEFECT-FIX-PLAN.md) 的阶段二。
+- 双字段冲突只提示 id 最小的那个字段，不是精确语义（代码注释已说明取舍）。
+- `docs/features/ASSESSMENT.md:74` 的 head 仍是过期的 `20261020_0001`，未在本版订正。
+
+### 验证
+
+- 本地门禁：根脚本 89 passed、文档合同 151 files / 700 links、版本一致性 2.2.1、
+  compose 生产与 dev 均通过、网关合同 PASS
+- 后端：`tests/users` 33 passed、`tests/ai_agents` 346 passed、`tests/ai_partner` 118 passed
+- 前端：`SplitPanePage.test.tsx` 4 passed、`tsc --noEmit` 通过
+- 服务器 L3 待验证：评分 200、连续对话追问、健康检查
+
+---
+
 ## v2.2.0：代码审查瘦身、热点归类与使用记录详情（2026-10-26 20:52 部署）
 
 六镜像已发布并部署到生产（`/api/v1/health` 返回 `"version":"2.2.0"`、`environment: production`）；
