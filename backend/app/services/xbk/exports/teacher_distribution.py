@@ -9,6 +9,7 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from sqlalchemy import Numeric, and_, case, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.concurrency import run_in_threadpool
 
 from app.utils.academic_year import split_academic_year
 from app.models import XbkCourse, XbkSelection, XbkStudent
@@ -358,13 +359,21 @@ async def build_teacher_distribution_xlsx(
             key=lambda r: (str(r.grade or ""), class_sort_key(str(r.class_name or "")), str(r.student_name or "")),
         )
 
-        _build_teacher_sheet(wb, c, rows, ys, ye, term, grade)
+        # openpyxl 建表是同步 CPU 操作；逐课放进线程池，工作簿在同一时刻
+        # 只被一个线程访问（串行 await），避免阻塞事件循环。
+        await run_in_threadpool(_build_teacher_sheet, wb, c, rows, ys, ye, term, grade)
 
     if not wb.sheetnames:
         ws = wb.create_sheet("暂无数据")
         ws.append(["当前筛选条件下暂无数据"])
         ws.column_dimensions["A"].width = 40
 
+    # 全表文本封存 + 序列化压缩是最重的一段，同样放进线程池
+    return await run_in_threadpool(_finalize_teacher_workbook, wb)
+
+
+def _finalize_teacher_workbook(wb) -> BytesIO:
+    """同步完成整本工作簿的文本封存与保存。"""
     force_text_workbook(wb)
 
     output = BytesIO()

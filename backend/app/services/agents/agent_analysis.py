@@ -20,6 +20,11 @@ from app.services.agents.agent_analysis_helpers import (
 
 logger = logging.getLogger(__name__)
 
+# 单次分析最多取材的学生提问条数。content 是 TEXT，数万条全文进内存后
+# combined = "\n".join(...) 还会再复制一份；按最近 5000 条截断足以支撑
+# 词云、去重与 LLM 对比，同时把内存与耗时钉在上限。
+MAX_ANALYSIS_QUESTIONS = 5000
+
 
 def _timestamp_value(value: Any) -> Optional[float]:
     if value is None:
@@ -233,7 +238,8 @@ async def stream_task_sheet_analysis(
           AND trim(c.content) != ''
           AND (CAST(:class_name AS TEXT) IS NULL OR u.class_name = CAST(:class_name AS TEXT))
           {archived_filter}
-        ORDER BY c.created_at ASC
+        ORDER BY c.created_at DESC
+        LIMIT :row_limit
         """
     )
     rows = (await db.execute(
@@ -243,8 +249,11 @@ async def stream_task_sheet_analysis(
             "start_at": effective_start,
             "end_at": effective_end,
             "class_name": class_name,
+            "row_limit": MAX_ANALYSIS_QUESTIONS,
         },
     )).mappings().all()
+    # SQL 只取最近 N 条，下游时间线/链路按时间升序更自然，这里恢复升序
+    rows = list(reversed(rows))
     all_questions_raw = [r.get("content", "") for r in rows]
     yield {
         "event": "partial_result",
@@ -369,7 +378,8 @@ async def analyze_task_sheet(
           AND trim(c.content) != ''
           AND (CAST(:class_name AS TEXT) IS NULL OR u.class_name = CAST(:class_name AS TEXT))
           {archived_filter}
-        ORDER BY c.created_at ASC
+        ORDER BY c.created_at DESC
+        LIMIT :row_limit
         """
     )
     rows = (await db.execute(
@@ -379,8 +389,11 @@ async def analyze_task_sheet(
             "start_at": effective_start,
             "end_at": effective_end,
             "class_name": class_name,
+            "row_limit": MAX_ANALYSIS_QUESTIONS,
         },
     )).mappings().all()
+    # SQL 只取最近 N 条，下游时间线/链路按时间升序更自然，这里恢复升序
+    rows = list(reversed(rows))
 
     all_questions_raw = [r.get("content", "") for r in rows]
 

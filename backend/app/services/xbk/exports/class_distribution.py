@@ -9,6 +9,7 @@ from openpyxl.cell.cell import MergedCell
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from sqlalchemy import Numeric, and_, case, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.concurrency import run_in_threadpool
 
 from app.utils.academic_year import split_academic_year
 from app.models import XbkCourse, XbkSelection, XbkStudent
@@ -214,7 +215,15 @@ async def build_class_distribution_xlsx(
     if class_name:
         stmt = stmt.where(XbkStudent.class_name == class_name)
     rows = (await db.execute(stmt)).all()
+    # 以下是纯 CPU 的 openpyxl 构建与保存，放进线程池避免阻塞事件循环
+    return await run_in_threadpool(
+        _build_class_distribution_workbook,
+        rows, year, term, grade, ys, ye,
+    )
 
+
+def _build_class_distribution_workbook(rows, year, term, grade, ys, ye) -> BytesIO:
+    """同步构建分发表工作簿（由 build_class_distribution_xlsx 放进线程池调用）。"""
     grouped: Dict[tuple[str, str], List[dict]] = {}
     for r in rows:
         key = (str(r.grade or "未知年级"), str(r.class_name or "未知班级"))

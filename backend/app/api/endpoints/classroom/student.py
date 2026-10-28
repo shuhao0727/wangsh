@@ -47,11 +47,9 @@ async def get_active_activities(
     class_name = normalize_class_name(current_user.get("class_name"))
     activities = await svc.get_active_activities(db, class_name=class_name)
     user_id = current_user.get("id")
-    result = []
-    for a in activities:
-        my_resp = await svc.get_user_response(db, a.id, user_id)
-        result.append(_to_student_view(a, my_resp))
-    return result
+    # 一次批量取回本人作答，避免每个活动一次数据库往返（N+1）
+    responses = await svc.get_user_responses(db, [a.id for a in activities], user_id)
+    return [_to_student_view(a, responses.get(a.id)) for a in activities]
 
 
 @router.get("/stream")

@@ -442,6 +442,27 @@ async def get_user_response(db: AsyncSession, activity_id: int, user_id: int) ->
     )).scalar_one_or_none()
 
 
+async def get_user_responses(
+    db: AsyncSession,
+    activity_ids: List[int],
+    user_id: int,
+) -> dict[int, ClassroomResponse]:
+    """一次取回某学生在多个活动下的作答，键为 activity_id。
+
+    学生端 /active 列表原本对每个活动各发一次查询（N+1），活动越多往返越多；
+    这里改成一次 IN 查询。
+    """
+    if not activity_ids:
+        return {}
+    rows = (await db.execute(
+        select(ClassroomResponse).where(
+            ClassroomResponse.activity_id.in_(activity_ids),
+            ClassroomResponse.user_id == user_id,
+        )
+    )).scalars().all()
+    return {r.activity_id: r for r in rows}
+
+
 def calc_remaining(activity: ClassroomActivity) -> Optional[int]:
     if activity.status != "active" or not activity.started_at or activity.time_limit <= 0:
         return None

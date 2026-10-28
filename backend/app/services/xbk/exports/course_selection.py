@@ -10,6 +10,7 @@ from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
 from sqlalchemy import Numeric, case, cast, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.concurrency import run_in_threadpool
 
 from app.utils.academic_year import normalize_academic_year, split_academic_year
 from app.models import XbkCourse, XbkSelection, XbkStudent
@@ -481,6 +482,20 @@ async def build_student_course_selection_xlsx(
     catalog = _create_catalog_sheet(wb, courses, normalized_year, term, year_start, year_end)
     valid_course_codes = _get_course_code_limits(catalog)
     occupancy = _count_baseline_occupancy(manifest_students)
+    # 班级 sheet 的 openpyxl 构建与最终 wb.save() 都是同步 CPU 操作，
+    # 放进线程池，避免单 worker 下阻塞事件循环。
+    await run_in_threadpool(_build_workbook_sheets, wb, ordered_classes, sheet_by_class,
+                            students_by_class, selections, manifest_courses, occupancy,
+                            valid_course_codes)
+    return await run_in_threadpool(
+        _finalize_export_workbook,
+        wb, normalized_year, term, manifest_students, manifest_courses,
+    )
+
+
+def _build_workbook_sheets(wb, ordered_classes, sheet_by_class, students_by_class,
+                           selections, manifest_courses, occupancy, valid_course_codes) -> None:
+    """同步渲染全部班级工作表（由 build_student_course_selection_xlsx 放进线程池调用）。"""
     for class_key in ordered_classes:
         _create_class_sheet(
             wb,
@@ -493,6 +508,3 @@ async def build_student_course_selection_xlsx(
             occupancy,
             valid_course_codes,
         )
-    return _finalize_export_workbook(
-        wb, normalized_year, term, manifest_students, manifest_courses
-    )
