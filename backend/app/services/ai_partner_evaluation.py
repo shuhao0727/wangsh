@@ -197,7 +197,9 @@ async def _safe_model_url(provider) -> str:
     if parsed.username or parsed.password or parsed.query or parsed.fragment:
         raise HTTPException(503, "评分智能体端点配置不安全")
     try:
-        await _assert_safe_endpoint_async(url)
+        # allow_trusted_internal：评分端点可能部署在内网（如 http://docker-api-1:5001/v1），
+        # 命中部署配置的受信白名单时短路放行；未命中仍按原 SSRF 规则全拒。
+        await _assert_safe_endpoint_async(url, allow_trusted_internal=True)
     except ValueError:
         raise HTTPException(503, "评分智能体端点未通过安全校验") from None
     return url
@@ -237,7 +239,20 @@ async def _model_response(provider, url: str, payload: dict) -> str:
                 raise HTTPException(
                     429, "模型服务限流，请稍后重试", headers={"Retry-After": "60"}
                 )
+            # 显式识别重定向：本客户端 follow_redirects=False，3xx 不会自动跳转。
+            # 单独分支只为让运维日志能区分「上游改了域名/路径」与「上游挂了」。
+            if response.status_code in (301, 302, 303, 307, 308):
+                logger.warning(
+                    "[ai-partner] 评分智能体端点返回重定向 {}，location={}；"
+                    "未跟随跳转，请检查端点配置是否变更",
+                    response.status_code,
+                    response.headers.get("location", "<无>"),
+                )
+                raise HTTPException(502, "评分智能体端点发生重定向，请检查配置")
             if response.status_code != 200:
+                logger.warning(
+                    "[ai-partner] 评分智能体响应异常状态码 {}", response.status_code
+                )
                 raise HTTPException(502, "AI评分模型暂不可用")
             content = bytearray()
             async for chunk in response.aiter_bytes():

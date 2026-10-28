@@ -5,6 +5,9 @@
 拒绝非 http(s) 协议、以及解析到内网/环回/链路本地/保留/云元数据
 （169.254.169.254）的端点；仅 OLLAMA 服务商显式放行本机 11434。
 
+另有一条**独立**的显式受信内部端点白名单（AGENT_TRUSTED_INTERNAL_ENDPOINTS）：
+命中白名单是短路放行，不修改任何内网判定规则；未命中的目标继续按原规则全拒。
+
 与调用方解耦：本模块不依赖任何服务商 schema，仅暴露校验函数与异常。
 """
 
@@ -13,6 +16,17 @@ import ipaddress
 import socket
 from typing import List, Optional, Tuple
 from urllib.parse import urlparse
+
+from loguru import logger
+
+# 条目声明与解析/匹配逻辑放在 app.core.config._services：Settings 构造期就要校验配置
+# （fail-fast），而配置层不能反向导入 app.services（会经 app.models 形成循环导入）。
+# 这里复用同一份实现，保证"启动期校验的规则"与"运行时匹配的规则"绝不漂移。
+from app.core.config._services import (
+    TrustedEndpoint,
+    matches_trusted_endpoint,
+    parse_trusted_endpoints,
+)
 
 
 class EndpointNotAllowedError(ValueError):
@@ -34,6 +48,38 @@ _LOCAL_OLLAMA_PORT = 11434
 def allows_local_ollama(host: str, port: Optional[int]) -> bool:
     """是否命中显式放行的本机 OLLAMA 端点（host ∈ {localhost, 127.0.0.1, ::1} 且 port == 11434）。"""
     return host in _LOCAL_OLLAMA_HOSTS and port == _LOCAL_OLLAMA_PORT
+
+
+# ==================== 显式受信内部端点白名单 ====================
+# TrustedEndpoint / parse_trusted_endpoints / matches_trusted_endpoint 在文件头部从
+# app.core.config._services 导入（那里实现，供 Settings 启动期校验复用）。
+
+_trusted_cache: Optional[Tuple[TrustedEndpoint, ...]] = None
+_trusted_cache_raw: Optional[str] = None
+
+
+def _trusted() -> Tuple[TrustedEndpoint, ...]:
+    """读取当前生效的白名单（按原始配置字符串缓存；配置变更或测试 monkeypatch 后自动重解析）。"""
+    global _trusted_cache, _trusted_cache_raw
+    from app.core.config import settings  # 延迟导入：避免 config → services 的初始化顺序耦合
+
+    raw = settings.AGENT_TRUSTED_INTERNAL_ENDPOINTS or ""
+    if _trusted_cache is None or _trusted_cache_raw != raw:
+        _trusted_cache = parse_trusted_endpoints(raw)
+        _trusted_cache_raw = raw
+        if _trusted_cache:
+            logger.info(
+                "[endpoint-security] 已启用受信内部端点白名单：{}",
+                ", ".join(e.describe() for e in _trusted_cache),
+            )
+    return _trusted_cache
+
+
+def reset_trusted_endpoint_cache() -> None:
+    """清空白名单解析缓存（测试用；生产无需调用）。"""
+    global _trusted_cache, _trusted_cache_raw
+    _trusted_cache = None
+    _trusted_cache_raw = None
 
 
 def _parse_endpoint(api_endpoint: str) -> Tuple[str, str, Optional[int]]:
@@ -122,7 +168,12 @@ def _assert_host_safe(host: str, resolved: List[ipaddress._BaseAddress]) -> None
             raise EndpointNotAllowedError("禁止访问内网/环回/保留地址端点")
 
 
-def _assert_safe_endpoint(api_endpoint: str, *, allow_local_ollama: bool = False) -> None:
+def _assert_safe_endpoint(
+    api_endpoint: str,
+    *,
+    allow_local_ollama: bool = False,
+    allow_trusted_internal: bool = False,
+) -> None:
     """
     SSRF 防护（同步版，供同步调用方/测试使用）：拒绝非 http(s) 协议、以及解析到
     内网/环回/链路本地/保留/云元数据（169.254.169.254）的端点。
@@ -131,21 +182,51 @@ def _assert_safe_endpoint(api_endpoint: str, *, allow_local_ollama: bool = False
     port == 11434 时直接放行（仅 OLLAMA 服务商传入该参数）。这些端点用于连接管理员
     配置的本机 Ollama；模型发现接口 admin-only，SSRF 攻击面只有管理员。
 
+    显式放行 2：`allow_trusted_internal=True` 且 URL 精确命中
+    `AGENT_TRUSTED_INTERNAL_ENDPOINTS` 白名单条目时短路放行，**不做 DNS 解析**。
+    这是"命中即放行"的短路，不是放宽内网判定：未命中白名单的目标仍按原规则全拒。
+
     残余 TOCTOU 风险：地址校验与后续 httpx 连接之间，DNS 仍可被 rebinding 切换到
     内网地址，本防护无法完全消除该窗口。缓解：端点 admin-only（管理员本就可访问
     内网/本机），且公网攻击者无法控制校验之后的连接目标。
+
+    白名单残余风险：host 为域名时不做 DNS 校验（这正是放行目的）。若内网 DNS 被篡改，
+    该域名可指向任意地址。缓解：白名单只能由部署配置写入（无任何 API 可改），
+    内网 DNS 由编排控制，建议只放一条并在变更时评审。
     """
+    # 白名单短路：必须在任何解析/DNS 之前，且只命中四元组精确匹配的目标
+    if allow_trusted_internal:
+        entries = _trusted()
+        if matches_trusted_endpoint(api_endpoint, entries):
+            logger.info(
+                "[endpoint-security] 命中受信内部端点白名单，跳过内网判定：{}",
+                api_endpoint,
+            )
+            return
     _scheme, host, port = _parse_endpoint(api_endpoint)
     if allow_local_ollama and allows_local_ollama(host, port):
         return
     _assert_host_safe(host, _resolve_host_addresses_sync(host))
 
 
-async def _assert_safe_endpoint_async(api_endpoint: str, *, allow_local_ollama: bool = False) -> None:
+async def _assert_safe_endpoint_async(
+    api_endpoint: str,
+    *,
+    allow_local_ollama: bool = False,
+    allow_trusted_internal: bool = False,
+) -> None:
     """
     SSRF 防护（异步版）：语义与同步版完全一致，但用 `loop.getaddrinfo` 解析，
     不阻塞事件循环（同步版走 `socket.getaddrinfo`，在 async 路径调用会卡住事件循环）。
     """
+    if allow_trusted_internal:
+        entries = _trusted()
+        if matches_trusted_endpoint(api_endpoint, entries):
+            logger.info(
+                "[endpoint-security] 命中受信内部端点白名单，跳过内网判定：{}",
+                api_endpoint,
+            )
+            return
     _scheme, host, port = _parse_endpoint(api_endpoint)
     if allow_local_ollama and allows_local_ollama(host, port):
         return

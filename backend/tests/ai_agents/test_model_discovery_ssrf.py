@@ -16,11 +16,15 @@ from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 
+from app.core.config import settings
 from app.schemas.agents import AIServiceProvider, ModelDiscoveryRequest
 from app.services.agents.endpoint_security import (
     EndpointNotAllowedError,
     _assert_safe_endpoint,
     _assert_safe_endpoint_async,
+    matches_trusted_endpoint,
+    parse_trusted_endpoints,
+    reset_trusted_endpoint_cache,
 )
 from app.services.agents.model_discovery import ModelDiscoveryService
 
@@ -204,3 +208,238 @@ def test_discover_by_agent_maps_ssrf_valueerror_to_400(monkeypatch):
     with pytest.raises(HTTPException) as excinfo:
         asyncio.run(model_discovery_api.discover_models_by_agent(7, db=object()))
     assert excinfo.value.status_code == 400
+
+
+# ==================== 受信内部端点白名单（AGENT_TRUSTED_INTERNAL_ENDPOINTS） ====================
+
+WHITELIST = "http://docker-api-1:5001/v1"
+
+
+@pytest.fixture
+def trusted_whitelist(monkeypatch):
+    """配置一条生产同款白名单：http://docker-api-1:5001/v1。"""
+    monkeypatch.setattr(settings, "AGENT_TRUSTED_INTERNAL_ENDPOINTS", WHITELIST)
+    reset_trusted_endpoint_cache()
+    yield
+    reset_trusted_endpoint_cache()
+
+
+@pytest.fixture
+def no_dns(monkeypatch):
+    """任何 DNS 解析都会直接失败：用于证明放行路径没有走 DNS。"""
+
+    def boom(*args, **kwargs):
+        raise AssertionError("命中白名单时不应发生 DNS 解析")
+
+    monkeypatch.setattr("socket.getaddrinfo", boom)
+    monkeypatch.setattr("asyncio.base_events.BaseEventLoop.getaddrinfo", boom)
+
+
+def test_whitelist_hit_short_circuits_without_dns(trusted_whitelist, no_dns):
+    # 同步 + 异步都必须短路放行，且完全不触发 getaddrinfo
+    _assert_safe_endpoint(f"{WHITELIST}/chat-messages", allow_trusted_internal=True)
+
+    async def check():
+        await _assert_safe_endpoint_async(
+            f"{WHITELIST}/chat-messages", allow_trusted_internal=True
+        )
+
+    asyncio.run(check())
+
+
+def test_whitelist_hit_requires_explicit_flag(trusted_whitelist):
+    # 白名单已配置，但调用方没传 allow_trusted_internal → 仍按原规则拒绝（内网）
+    with pytest.raises(EndpointNotAllowedError):
+        _assert_safe_endpoint(f"{WHITELIST}/chat-messages")
+
+
+def test_whitelist_empty_keeps_rejecting_internal(monkeypatch):
+    monkeypatch.setattr(settings, "AGENT_TRUSTED_INTERNAL_ENDPOINTS", "")
+    reset_trusted_endpoint_cache()
+    with pytest.raises(EndpointNotAllowedError):
+        _assert_safe_endpoint(f"{WHITELIST}/chat-messages", allow_trusted_internal=True)
+
+
+def test_whitelist_same_host_different_port_rejected():
+    entries = parse_trusted_endpoints(WHITELIST)
+    assert matches_trusted_endpoint("http://docker-api-1:5001/v1/chat", entries) is True
+    for url in (
+        "http://docker-api-1:5002/v1/chat",
+        "http://docker-api-1/v1/chat",  # 未写端口 = 80，不等于 5001
+        "https://docker-api-1:5001/v1/chat",  # scheme 不符
+    ):
+        assert matches_trusted_endpoint(url, entries) is False, url
+
+
+def test_whitelist_path_prefix_boundary():
+    entries = parse_trusted_endpoints(WHITELIST)
+    # 边界内放行
+    assert matches_trusted_endpoint("http://docker-api-1:5001/v1", entries) is True
+    assert matches_trusted_endpoint("http://docker-api-1:5001/v1/", entries) is True
+    assert matches_trusted_endpoint("http://docker-api-1:5001/v1/chat-messages", entries) is True
+    # 非 / 边界、点段逃逸、编码点段全部不算命中
+    for url in (
+        "http://docker-api-1:5001/v1x/chat",
+        "http://docker-api-1:5001/v10/chat",
+        "http://docker-api-1:5001/v1-admin",
+        "http://docker-api-1:5001/v1/../../admin",
+        "http://docker-api-1:5001/v1/%2e%2e/admin",
+        "http://docker-api-1:5001/",
+    ):
+        assert matches_trusted_endpoint(url, entries) is False, url
+
+
+def test_whitelist_rejects_lookalike_hosts():
+    entries = parse_trusted_endpoints(WHITELIST)
+    for url in (
+        "http://evil-docker-api-1:5001/v1/chat",
+        "http://docker-api-1.evil:5001/v1/chat",
+        "http://xdocker-api-1:5001/v1/chat",
+    ):
+        assert matches_trusted_endpoint(url, entries) is False, url
+    # host 大小写不敏感：大写写法应当命中
+    assert matches_trusted_endpoint("http://DOCKER-API-1:5001/v1/chat", entries) is True
+
+
+def test_whitelist_unlisted_private_ip_still_rejected(trusted_whitelist):
+    # 回归保护（最重要）：白名单只放行被点名的四元组，其他内网目标继续全拒
+    entries = parse_trusted_endpoints(WHITELIST)
+    assert matches_trusted_endpoint("http://172.18.0.2:5001/v1", entries) is False
+    with pytest.raises(EndpointNotAllowedError):
+        _assert_safe_endpoint("http://172.18.0.2:5001/v1", allow_trusted_internal=True)
+
+
+def test_whitelist_metadata_endpoint_still_rejected(trusted_whitelist):
+    entries = parse_trusted_endpoints(WHITELIST)
+    assert matches_trusted_endpoint("http://169.254.169.254/latest/meta-data", entries) is False
+    with pytest.raises(EndpointNotAllowedError):
+        _assert_safe_endpoint(
+            "http://169.254.169.254/latest/meta-data", allow_trusted_internal=True
+        )
+
+    async def check():
+        with pytest.raises(EndpointNotAllowedError):
+            await _assert_safe_endpoint_async(
+                "http://169.254.169.254/latest/meta-data", allow_trusted_internal=True
+            )
+
+    asyncio.run(check())
+
+
+def test_whitelist_mapped_ipv6_internal_still_rejected(trusted_whitelist):
+    with pytest.raises(EndpointNotAllowedError):
+        _assert_safe_endpoint(
+            "http://[::ffff:172.18.0.2]:5001/v1", allow_trusted_internal=True
+        )
+
+
+@pytest.mark.parametrize(
+    "bad_entry",
+    [
+        "http://*.example.com:5001/v1",              # 通配
+        "http://docker-api-1:5001/*",                # 通配路径
+        "http://10.0.0.0/8",                         # CIDR 且无端口
+        "http://docker-api-1/v1",                    # 漏写端口
+        "http://user:pw@docker-api-1:5001/v1",       # userinfo
+        "http://docker-api-1:5001/v1?x=1",           # query
+        "http://docker-api-1:5001/v1#frag",          # fragment
+        "ftp://docker-api-1:5001/v1",                # scheme 非法
+        "docker-api-1:5001/v1",                      # 无 scheme
+        "http://docker-api-1:99999/v1",              # 端口越界
+    ],
+)
+def test_whitelist_parse_fail_fast(bad_entry):
+    with pytest.raises(ValueError):
+        parse_trusted_endpoints(bad_entry)
+
+
+def test_whitelist_parse_multiple_and_empty():
+    assert parse_trusted_endpoints("") == ()
+    assert parse_trusted_endpoints("   ") == ()
+    entries = parse_trusted_endpoints(
+        "http://docker-api-1:5001/v1 , https://internal.local:8443/api/, "
+        "http://docker-api-1:5001/v1 "
+    )
+    assert len(entries) == 2  # 去重
+    assert entries[1].describe() == "https://internal.local:8443/api"  # 尾斜杠归一
+
+
+def test_whitelist_config_fail_fast_on_use(monkeypatch):
+    # 部署配置写错时，第一次使用即抛 ValueError（不会带病放行）
+    monkeypatch.setattr(
+        settings, "AGENT_TRUSTED_INTERNAL_ENDPOINTS", "http://docker-api-1/v1"
+    )
+    reset_trusted_endpoint_cache()
+    try:
+        with pytest.raises(ValueError):
+            _assert_safe_endpoint(
+                "http://docker-api-1:5001/v1", allow_trusted_internal=True
+            )
+    finally:
+        reset_trusted_endpoint_cache()
+
+
+def test_settings_fail_fast_at_startup_on_invalid_whitelist():
+    # 真正意义上的启动期校验：Settings 构造即失败，服务不会带着错误白名单起来
+    from pydantic import ValidationError
+
+    from app.core.config import Settings
+
+    for bad in ("http://docker-api-1/v1", "http://*.x:5001/v1", "http://10.0.0.0/8"):
+        with pytest.raises(ValidationError):
+            Settings(AGENT_TRUSTED_INTERNAL_ENDPOINTS=bad)
+    # 合法值可正常构造
+    assert Settings(
+        AGENT_TRUSTED_INTERNAL_ENDPOINTS="http://docker-api-1:5001/v1"
+    ).AGENT_TRUSTED_INTERNAL_ENDPOINTS == "http://docker-api-1:5001/v1"
+    # 空值 = 不启用
+    assert Settings(AGENT_TRUSTED_INTERNAL_ENDPOINTS="").AGENT_TRUSTED_INTERNAL_ENDPOINTS == ""
+
+
+# ---------- 评分链路接入 ----------
+
+def test_safe_model_url_allows_whitelisted_internal(trusted_whitelist, no_dns):
+    from app.services import ai_partner_evaluation as evaluation
+
+    provider = SimpleNamespace(chat_url=lambda: "http://docker-api-1:5001/v1/chat-messages")
+    assert asyncio.run(evaluation._safe_model_url(provider)) == (
+        "http://docker-api-1:5001/v1/chat-messages"
+    )
+
+
+def test_safe_model_url_rejects_unlisted_internal(trusted_whitelist):
+    from app.services import ai_partner_evaluation as evaluation
+
+    provider = SimpleNamespace(chat_url=lambda: "http://172.18.0.2:5001/v1/chat-messages")
+    with pytest.raises(HTTPException) as excinfo:
+        asyncio.run(evaluation._safe_model_url(provider))
+    assert excinfo.value.status_code == 503
+
+
+def test_model_response_maps_redirect_to_502(monkeypatch):
+    import httpx as httpx_mod
+    from app.services import ai_partner_evaluation as evaluation
+
+    def handler(request):
+        return httpx_mod.Response(307, headers={"location": "http://new-host/v1/chat-messages"})
+
+    transport = httpx_mod.MockTransport(handler)
+    original = httpx_mod.AsyncClient
+    # 只替换传输层，保留 follow_redirects=False 的客户端语义
+    monkeypatch.setattr(
+        evaluation.httpx,
+        "AsyncClient",
+        lambda **kwargs: original(transport=transport, **kwargs),
+    )
+
+    async def check():
+        provider = SimpleNamespace(build_headers=lambda: {})
+        with pytest.raises(HTTPException) as excinfo:
+            await evaluation._model_response(
+                provider, "http://8.8.8.8/v1/chat-messages", {}
+            )
+        return excinfo.value
+
+    exc = asyncio.run(check())
+    assert exc.status_code == 502
+    assert "重定向" in exc.detail
