@@ -131,11 +131,20 @@ v2.1.6                      2026-10-20
 | 3 | `fakeredis` / `lupa` 补进 `requirements-dev.txt` | 本地跑测试的便利性 |
 | 4 | `row_generator` 的异常语义（区分 400 与行级 error） | 防御代码与意图不一致 |
 
-### 需要用户决定
+### 已处理
 
-| # | 项 |
-|---|---|
-| 5 | GitHub Release v2.2.0 是否补建？还是 2.2.1 发布时一并说明？ |
+| # | 项 | 处理结果 |
+|---|---|---|
+| P1 | `ParseError` 未捕获 | ✅ 已修（`bc7b4eb`），实测 zip 完好 + XML 损坏 → 400 |
+| P3 | `fakeredis[lua]` 缺失 | ✅ 已补进 `requirements-dev.txt`（`037dc86`），版本与容器实测一致 |
+| P4 | `ASSESSMENT.md` head 过期 | ✅ 已订正为 `20261026_0001`（`bc7b4eb`） |
+| P5 | GitHub Release v2.2.0 缺失 | ✅ 已补建（2026-10-28），内容取自 RELEASE_NOTES 与部署记录 |
+
+### 仍待处理
+
+| # | 项 | 说明 |
+|---|---|---|
+| P2 | `row_generator` 异常语义 | 已派 Agent 处理中；实际影响很小（实测所有截断都在 load_workbook 阶段失败） |
 
 ---
 
