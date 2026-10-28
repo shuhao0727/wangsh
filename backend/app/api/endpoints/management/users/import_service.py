@@ -10,6 +10,8 @@ from fastapi import HTTPException, UploadFile, status
 from fastapi.responses import StreamingResponse
 from openpyxl import Workbook, load_workbook
 from openpyxl.utils.exceptions import InvalidFileException
+# zip 容器完好、内部 sheet XML 损坏时 openpyxl 抛 ParseError（不是 ValueError/OSError 子类）
+from xml.etree.ElementTree import ParseError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -40,8 +42,18 @@ USER_IMPORT_TEMPLATE_ROWS = [
 ]
 
 # 损坏/伪造的 xlsx 会以这些异常形态出现：BadZipFile（非 zip 容器）、
-# InvalidFileException（openpyxl 明确拒绝）、KeyError/OSError（缺 workbook 部件或 IO 异常）。
-XLSX_PARSE_ERRORS = (zipfile.BadZipFile, InvalidFileException, OSError, KeyError, ValueError)
+# InvalidFileException（openpyxl 明确拒绝）、KeyError/OSError（缺 workbook 部件或 IO 异常）、
+# ParseError（zip 容器完好但内部 XML 损坏——这一类最隐蔽：BadZipFile 拦不住，
+# 只有解析 sheet XML 时才会暴露。实测构造「zip 正常 + sheet1.xml 是坏 XML」即复现）。
+# 注意 ParseError 既不是 ValueError 也不是 OSError 的子类，必须显式列出。
+XLSX_PARSE_ERRORS = (
+    zipfile.BadZipFile,
+    InvalidFileException,
+    OSError,
+    KeyError,
+    ValueError,
+    ParseError,
+)
 
 
 def normalize_cell_value(value: Any) -> str:
