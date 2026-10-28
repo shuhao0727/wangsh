@@ -415,10 +415,12 @@ async def _apply_selection_rows(db, valid, row_numbers):
     return len(valid), decision.inserted, decision.updated
 
 
-async def _apply_valid_import_rows(db, scope, model, key_fields, valid, row_numbers=None):
-    keys = list({tuple(values[field] for field in key_fields) for values, _ in valid})
-    if scope == "selections":
-        return await _apply_selection_rows(db, valid, row_numbers)
+async def _prepare_import_context(db, scope, model, key_fields, valid, keys):
+    """加锁、预取父行与学生选课关联，返回逐行写入所需的上下文。
+
+    拆出来单独承担「准备阶段」，让 _apply_valid_import_rows 的主循环
+    只剩写入一件事，两段各自的复杂度都在治理阈值内。
+    """
     locked = await lock_key_rows(db, model, key_fields, keys)
     parent_by_key = {tuple(getattr(row, field) for field in key_fields): row for row in locked}
     await _validate_student_identities(scope, valid, db)
@@ -427,14 +429,24 @@ async def _apply_valid_import_rows(db, scope, model, key_fields, valid, row_numb
     for offset in range(0, len(keys), 500):
         statement = select(*key_columns).where(tuple_(*key_columns).in_(keys[offset:offset + 500]))
         existing.update(tuple(row) for row in (await db.execute(statement)).all())
-    now = datetime.now(timezone.utc)
-    inserted = updated = 0
     # 一次性预取所有将被校验学生的选课关联，避免逐行 guard 各发一次查询。
     if scope == "students":
         existing_rows = [row for key, row in parent_by_key.items() if key in existing]
         references_by_key = await prefetch_student_references(db, existing_rows)
     else:
         references_by_key = {}
+    return parent_by_key, existing, references_by_key
+
+
+async def _apply_valid_import_rows(db, scope, model, key_fields, valid, row_numbers=None):
+    keys = list({tuple(values[field] for field in key_fields) for values, _ in valid})
+    if scope == "selections":
+        return await _apply_selection_rows(db, valid, row_numbers)
+    parent_by_key, existing, references_by_key = await _prepare_import_context(
+        db, scope, model, key_fields, valid, keys
+    )
+    now = datetime.now(timezone.utc)
+    inserted = updated = 0
     ordered_valid = sorted(valid, key=lambda item: tuple(item[0][field] for field in key_fields))
     for values, _ in ordered_valid:
         key = tuple(values[field] for field in key_fields)
@@ -518,6 +530,28 @@ async def import_data(
     return {"total_rows": total, "processed": processed, "inserted": inserted,
             "updated": updated, "skipped": len(errors), "invalid": len(errors),
             "errors": errors[:50]}
+
+
+def _write_export_workbook(
+    df: pd.DataFrame,
+    diagnostics_df: Optional[pd.DataFrame],
+) -> io.BytesIO:
+    """同步生成导出工作簿（openpyxl 写盘 + 逐 sheet 样式）。
+
+    openpyxl 的写入与样式全为 CPU 密集的同步调用（3000 行实测约 0.18s，
+    更大的表线性增长），直接放在 async 路由里会阻塞事件循环，因此由调用方
+    放进线程池执行。
+    """
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="data")
+        if diagnostics_df is not None:
+            diagnostics_df.to_excel(writer, index=False, sheet_name="diagnostics")
+        for ws in writer.book.worksheets:
+            _style_worksheet(ws)
+            force_text_cells(ws)
+    output.seek(0)
+    return output
 
 
 @router.get("/export")
@@ -822,15 +856,8 @@ async def export_data(
     else:
         raise HTTPException(status_code=422, detail=f"不支持的导出范围: {scope}")
 
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine="openpyxl") as writer:
-        df.to_excel(writer, index=False, sheet_name="data")
-        if diagnostics_df is not None:
-            diagnostics_df.to_excel(writer, index=False, sheet_name="diagnostics")
-        for ws in writer.book.worksheets:
-            _style_worksheet(ws)
-            force_text_cells(ws)
-    output.seek(0)
+    # Excel 生成是同步 CPU 操作，放进线程池，避免单 worker 下阻塞事件循环
+    output = await run_in_threadpool(_write_export_workbook, df, diagnostics_df)
 
     filename = f"xbk_{scope}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
     headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
