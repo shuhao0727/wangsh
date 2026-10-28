@@ -2,10 +2,10 @@
 
 ## 生产发布目录与运行身份
 
-服务器使用独立发布目录保留原仓库和生产配置差异。当前目录见 `TEST_STATUS.md`；运维前先核对容器的 Compose working_dir/config_files 标签和实际 Image ID。后续操作从当前发布目录执行：
+服务器使用独立发布目录保留原仓库和生产配置差异。当前生产版本为 2.2.0（2026-10-26 20:52 部署），当前目录见 `TEST_STATUS.md`；运维前先核对容器的 Compose working_dir/config_files 标签和实际 Image ID。后续操作从当前发布目录执行：
 
 ```bash
-cd /home/shuhao/wangsh-releases/2.1.8/source
+cd /home/shuhao/wangsh-releases/2.2.0/source   # 目录名随版本号；实际目录以 TEST_STATUS.md 记录为准
 docker compose --env-file .env -p wangsh -f docker-compose.production.yml ps
 COMPOSE_PROJECT_NAME=wangsh ENV_FILE=.env COMPOSE_FILE=docker-compose.production.yml bash scripts/health-check-detailed.sh
 ```
@@ -14,7 +14,7 @@ COMPOSE_PROJECT_NAME=wangsh ENV_FILE=.env COMPOSE_FILE=docker-compose.production
 
 backend 与 PythonLab worker 使用同一 `1000:1000` 身份，并保留 socket 补充组。已有 root 属主工作区须先停写、配对备份与逐对象元数据盘点，再按必要清单原位调整；不得递归修改整个 data、删除业务锁、重写 journal 或扩大私有模式。
 
-此发布目录的 `scripts/deploy.sh` 相比归档源只增加显式 `REGISTRY_INSPECT_PREFIX`，用于 manifest 查询前缀；生产入口设置 `REGISTRY_INSPECT_PREFIX=docker.1ms.run`。它不改变 release-set/Compose 镜像名，registry 与本地 digest 仍须逐一严格匹配；不自动 fallback，不据镜像已缓存跳过核验。该现场适配尚未作为源码改动提交到 Git。
+生产发布目录的 `scripts/deploy.sh` 与仓库脚本一致，没有额外的 manifest 查询前缀或其他现场适配；此前记录的 `REGISTRY_INSPECT_PREFIX=docker.1ms.run` 在服务器和仓库中均不存在，已按实测删除。registry 与本地 digest 仍须逐一严格匹配，不自动 fallback，不据镜像已缓存跳过核验。
 
 
 ## Redis 连接工厂基础（未发布）
@@ -264,13 +264,13 @@ bash scripts/deploy.sh deploy
 `scripts/check-version-consistency.mjs` 阻止版本漂移：
 
 ```bash
-APP_VERSION=2.1.6
-IMAGE_TAG=2.1.6
-REACT_APP_VERSION=2.1.6
+APP_VERSION=2.2.0
+IMAGE_TAG=2.2.0
+REACT_APP_VERSION=2.2.0
 IMAGE_REPOSITORY_PREFIX=shuhao07
 ```
 
-`frontend/package.json` 的 `version` 是完整 SemVer（如 `2.1.6`）的权威源；
+`frontend/package.json` 的 `version` 是完整 SemVer（如 `2.2.0`）的权威源；
 `IMAGE_TAG`、release-set、`APP_VERSION`、`VERSION`（如配置）和 `REACT_APP_VERSION`
 必须使用同一个完整版本号。`check-version-consistency.mjs` 与 `verify-release-set` 均按完全一致
 校验，避免补丁版本复用旧镜像标签或同标签镜像漂移。
@@ -308,7 +308,7 @@ IMAGE_REPOSITORY_PREFIX=shuhao07
 
 既有手工构建/推送的候选不能仅凭版本 tag 或健康接口进入生产。应独立核对镜像中的打包源码；前端须按相同构建参数重新构建并逐项比较静态文件哈希。确认源码、平台与 registry digest 后生成完整 release-set，再通过正常的清单、本地 RepoDigest、生产配置、配对备份与恢复验证门禁。发布记录必须标明实际构建路径，不得将未执行的标准 workflow 记为构建来源。
 
-### KNN 采集版本迁移
+### KNN 采集版本迁移（历史记录，2.1.6 起）
 
 `2.1.6` 包含 Alembic `20261020_0001`，在 `f1a2b3c4d5e6` 之后新增采集批次、名单与答案版本三张表，不回填既有业务数据。后续服务器部署前按本指南备份并核对迁移状态；应用启动的 `upgrade head` 会创建三表。降级会删除 KNN 数据，回滚有新答卷时应使用配对备份恢复，不能视为无损降级。功能与权限见 [KNN 采集](../../features/KNN_SURVEY.md)。
 
@@ -360,13 +360,13 @@ DEBIAN_MIRROR=http://deb.debian.org/debian
 DEBIAN_SECURITY_MIRROR=http://deb.debian.org/debian-security
 ```
 
-构建的镜像列表：
-- `shuhao07/wangsh-backend:2.1.6` - 后端 FastAPI 服务
-- `shuhao07/wangsh-frontend:2.1.6` - 前端静态文件
-- `shuhao07/wangsh-gateway:2.1.6` - Caddy 网关
-- `shuhao07/wangsh-typst-worker:2.1.6` - Typst PDF 编译 worker
-- `shuhao07/wangsh-pythonlab-worker:2.1.6` - PythonLab 调试 worker
-- `shuhao07/pythonlab-sandbox:2.1.6` - PythonLab 沙箱镜像
+构建的镜像列表（以当前版本 2.2.0 为例；实际标签由 `frontend/package.json` 的 `version` 统一决定）：
+- `shuhao07/wangsh-backend:2.2.0` - 后端 FastAPI 服务
+- `shuhao07/wangsh-frontend:2.2.0` - 前端静态文件
+- `shuhao07/wangsh-gateway:2.2.0` - Caddy 网关
+- `shuhao07/wangsh-typst-worker:2.2.0` - Typst PDF 编译 worker
+- `shuhao07/wangsh-pythonlab-worker:2.2.0` - PythonLab 调试 worker
+- `shuhao07/pythonlab-sandbox:2.2.0` - PythonLab 沙箱镜像
 
 ### 2. 本地生产模拟验证
 
@@ -384,7 +384,7 @@ SIM_RUN_PROD_SMOKE=true SIM_CLEANUP=true bash scripts/deploy.sh simulate
 默认模拟参数：
 
 ```bash
-SIM_VERSION=2.1.6
+SIM_VERSION=2.2.0
 SIM_IMAGE_REPOSITORY_PREFIX=shuhao07
 SIM_WEB_PORT=16608
 SIM_RUN_PROD_SMOKE=false
@@ -452,9 +452,9 @@ bash scripts/deploy.sh push
 
 ```bash
 # 确认 .env 使用生产配置
-APP_VERSION=2.1.6
-IMAGE_TAG=2.1.6
-REACT_APP_VERSION=2.1.6
+APP_VERSION=2.2.0
+IMAGE_TAG=2.2.0
+REACT_APP_VERSION=2.2.0
 IMAGE_REPOSITORY_PREFIX=shuhao07
 
 # 将发布 workflow 生成的 release-set.txt 放到仓库根目录。
@@ -548,9 +548,9 @@ docker compose -f docker-compose.dev.yml down
 
 ### 版本配置
 ```bash
-APP_VERSION=2.1.6          # 应用版本号
-IMAGE_TAG=2.1.6             # Docker 镜像标签（完整 SemVer，与 package.json 完全一致）
-REACT_APP_VERSION=2.1.6     # 前端版本号
+APP_VERSION=2.2.0          # 应用版本号
+IMAGE_TAG=2.2.0             # Docker 镜像标签（完整 SemVer，与 package.json 完全一致）
+REACT_APP_VERSION=2.2.0     # 前端版本号
 IMAGE_REPOSITORY_PREFIX=shuhao07  # Docker Hub 镜像命名空间
 ```
 
@@ -870,7 +870,8 @@ PythonLab 更新后，旧运行容器若缺少模式标签或资源/镜像/网�
 
 `bootstrap_db.py --initial-only` 只用于真正空库的首次初始化：它仅创建受维护迁移链之前的 legacy baseline，并以 `VARCHAR(64)` 创建空的 `alembic_version`，不会 stamp。创建前会从独立 metadata 副本排除迁移管理的索引（包括迁移原生 SQL 定义），由所属 migration 按依赖顺序创建扩展和索引；不得在 bootstrap 中临时建扩展或先建再删这些索引。 XBK baseline 副本使用迁移前的整数年份，并排除后续学年检查约束；原 migration 负责转换到 `VARCHAR(9)` 并建立约束，不能把当前 ORM 字段形态提前当作旧基线。失败后已提交 baseline 的专用模拟库不能再次当成空库；保留诊断并使用新的专用空库重验，不绕过非空保护。随后必须执行完整 `alembic upgrade head`，再由普通 `bootstrap_db.py` 补兼容字段和视图。不要在全新空库上绕过 bootstrap 直接执行 Alembic；历史 revision 中存在超过 32 字符的标识。对于已有标准 `VARCHAR(32)` 版本表的历史库，Alembic online 环境会在迁移事务前幂等扩容为 `VARCHAR(64)`。已有业务表但缺失 `alembic_version` 的数据库仍会被拒绝，避免把历史库误标记为最新。
 
-当前 head `20261020_0001_knn_collection` 位于 legacy baseline 索引恢复之后；
+当前 head 为 `20261026_0001`（`20261026_0001_idx_classroom_plan_items_activity`，
+位于 legacy baseline 索引恢复之后）；
 `20260711_0002_restore_legacy_baseline_indexes` 会幂等恢复 legacy baseline
 路径可能跳过的 3 个 XBK `grade` 索引和 2 个文章样式索引。空库升级验收必须查询
 `pg_indexes` 确认这 5 个索引存在，不能只以 `alembic current` 到达 head 作为成功依据。
@@ -905,7 +906,7 @@ docker compose exec -T postgres sh -c \
 # 1. 使用统一回滚入口；要求输入 yes；
 #    默认先停止数据库写服务建立无写入窗口，再备份并回退一个 Alembic revision；
 #    --image-tag 指定旧版本镜像执行 downgrade，脚本会先断言旧镜像包含目标 revision
-OLD_VERSION=1.5.10
+OLD_VERSION=2.1.8   # 回滚目标版本（示例：从 2.2.0 回退到 2.1.8），按实际归档版本替换
 bash scripts/rollback.sh rollback -1 --image-tag "${OLD_VERSION}"
 
 # 2. 回滚完成后 backend 和两个 worker 保持停止；
@@ -1164,8 +1165,12 @@ docker compose logs backend | grep ERROR
 生产候选 `gateway/Caddyfile` 使用 Caddy 2.8.4 原生能力，不依赖未验证的第三方限速模块：
 
 - 请求头上限 `64KB`，超限由 Caddy 返回 `431`；
-- Caddy server 读取请求头、读取请求体、写响应和空闲连接分别设置 `5s`、`30s`、`30s`、`2m`；
+- Caddy server 读取请求头、读取请求体、写响应和空闲连接分别设置 `5s`、`30s`、`0`、`2m`。
+  **写响应必须显式为 `0`**：server 级 `write` 是整个连接的绝对写截止时间（Caddy v2 默认 `30s`，
+  省略仍生效且优先于 transport 的 `write_timeout`），30s 会切断后端每 15s 发 keepalive 的
+  SSE 长连接（`ERR_INCOMPLETE_CHUNKED_ENCODING`）。长连接空闲回收交给 `idle 2m`；
 - 反代 dial、等待上游响应头、读取上游响应、写入上游请求分别设置 `5s`、`30s`、`60s`、`30s`；
+- 5 个 SSE 端点（`@api_stream`）单独把 `read_timeout`/`write_timeout` 置 `0`，由后端 keepalive 维持；
 - 上游 keep-alive 空闲时间设置为 `30s`。
 
 本配置不伪造通用 IP 限速或并发限速。Caddy 2.8.4 当前镜像未启用已验证的第三方限速模块；公网部署如需要 IP/租户限速、并发配额、WAF 和慢连接清理，必须由受信任的 WAF/LB/API Gateway 提供并在发布验收中记录证据。隔离验证不得接触正常端口，使用独立 Docker 网络和宿主端口。

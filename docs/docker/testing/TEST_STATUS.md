@@ -2,7 +2,7 @@
 
 > 状态：active
 > Owner：testing
-> 当前版本：生产正式 2.1.8；源码、镜像与运行身份见本页发布记录
+> 当前版本：生产正式 2.2.0（2026-10-26 20:52 部署）；2.2.1 待发布
 > 最近更新：2026-10-28
 > 说明：本文件是当前测试事实的唯一汇总入口；阶段报告只引用本页，不复制新基线。
 
@@ -23,7 +23,7 @@
   - 路径 B（裸 `alembic upgrade head`）：同样全通过，表集合 `IDENTICAL_TABLE_SETS`、视图定义逐字相同。
   - **结论：`DEPLOY.md:871`「不要在空库裸跑 Alembic（历史 revision 标识超 32 字符）」需订正**——
     `alembic_compat` 已自动扩到 `VARCHAR(64)`，最长 revision 47 字符，实测两路列宽均 64，无截断。
-    同段「当前 head 20261020_0001_knn_collection」也已过时。
+    同段「当前 head 20261020_0001_knn_collection」也已过时（2026-10-28 已订正为 `20261026_0001`）。
   - **形态差异（待评估）：** 路径 A 的 `alembic_version` **无主键**（`bootstrap_db.py:219` 用
     `CREATE TABLE IF NOT EXISTS` 不带 PRIMARY KEY），路径 B 有 `alembic_version_pkc`；索引数 224 vs 225。
     功能都能跑通，但生产路径 A 的版本表缺唯一约束。
@@ -117,7 +117,7 @@
 
 ## 2026-10-27~28 S1 致命级验证（7 项全部通过）
 
-- **文档门禁：** Markdown 合同检查为 `151 files / 696 links / 0 missing`。
+- **文档门禁：** Markdown 合同检查为 `151 files / 700 links / 0 missing`。
 
 - **范围：** 按 [S1~S7 验证计划](../archive/plans/2026-10-27-S1-S7-VERIFICATION-PLAN-V3.md)（已归档）执行 S1 致命级 7 项。
   规则：Docker 实例验证（D1/D2/D3）+ 双 Agent 交叉验证 + 主控复现争议结论。

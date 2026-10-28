@@ -2,9 +2,11 @@
 
 > 状态：active
 > Owner：release-ops
-> 最近复核：2026-10-26
+> 最近复核：2026-10-28
 > 用途：本次待部署改动的部署前检查项。通用流程见 [DEPLOY.md](DEPLOY.md)，本文只列本次特有的风险点。
-> **当前状态：已推送，尚未部署。** 部署需人工执行。
+> **当前状态：已推送并已部署。** 2026-10-26 20:52 部署到生产（六镜像切到 2.2.0，迁移执行到
+> `20261026_0001`，数据 321 用户 / 3 文章 / 9 智能体与部署前一致）。本文保留为本次部署的
+> 准备记录；发布后遗留项见 [遗留待办（2026-10-27）](2026-10-27-KNOWN-ISSUES.md)。
 
 ## 一、本次改动概况
 
@@ -54,6 +56,9 @@ bash scripts/migrate-db.sh current
 # 部署前备份（55 MB，很快）
 bash scripts/deploy.sh backup-db
 ```
+
+> 注：本次部署时 `backup-db` 的 `pg_dump -Fc -f -` 缺陷尚未发现，脚本正常退出但产出 0 字节文件；
+> 该缺陷已于 2026-10-27 修复并补了非空校验，详见[遗留待办](2026-10-27-KNOWN-ISSUES.md)第一节。
 
 ### 2. 版本号（已确定：2.2.0）
 
@@ -119,8 +124,13 @@ git revert --no-commit 76cb9c3 02805bc 4ea3d69 448aa98 cd868f8
 迁移 `20261026_0001` 的 downgrade 只会删除索引，不影响数据。若只回退迁移：
 
 ```bash
-bash scripts/migrate-db.sh downgrade 20261020_0001
+# rollback.sh 会先停止 backend / typst-worker / pythonlab-worker 建立无写入窗口，
+# 备份后回退到指定 revision；完成后写服务保持停止，需按 DEPLOY.md 部署旧 release-set 再开放流量。
+bash scripts/rollback.sh rollback 20261020_0001
 ```
+
+> 注：`scripts/migrate-db.sh` 只提供 `upgrade` / `current` / `history` / `heads`，**没有 `downgrade` 子命令**；
+> 历史上本清单写的 `migrate-db.sh downgrade` 从未可用，2026-10-28 已订正为上面的统一回滚入口。
 
 热点归类无数据库结构变更，回退代码即可。
 

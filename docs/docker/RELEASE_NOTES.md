@@ -2,7 +2,7 @@
 
 > 状态：active
 > Owner：release-ops
-> 最近复核：2026-10-26
+> 最近复核：2026-10-28
 > 归档条件：当前未发布内容进入正式版本记录，且后续发布记录替代其当前指导作用
 >
 > 目标：集中记录每次发布的关键变更、配置影响、构建/部署步骤、验证结果与回滚点。
@@ -12,7 +12,52 @@
 
 ---
 
+## v2.2.0：代码审查瘦身、热点归类与使用记录详情（2026-10-26 20:52 部署）
+
+六镜像已发布并部署到生产（`/api/v1/health` 返回 `"version":"2.2.0"`、`environment: production`）；
+源码标签 `2.2.0` 指向 `62d3976`（发布提交 `af8caec`）。部署准备与风险见
+[部署准备清单（2026-10-26）](deploy/2026-10-26-DEPLOY-CHECKLIST.md)，发布后遗留项见
+[遗留待办（2026-10-27）](deploy/2026-10-27-KNOWN-ISSUES.md)。
+
+### 代码审查与瘦身（`cd868f8`）
+
+- 删除 10 个零引用函数（`check_and_auto_end`、`analyze_fill_blank_stats`、`_build_dify_progress_log`、`_nonempty_chunks`、`call_llm_stream`、`cluster_terms`、`_parse_int`、`set_print_a4_landscape`、`_call_dify_stream`、`_call_openai_compatible_stream`），`llm_agent_base.py` 250→175 行；本批改动（含热点归类）累计 69 个文件，其中已跟踪部分净删 1,983 行。
+- 三份重复的 LLM 调用合并为统一 `call_llm()`，抽出 `core/sse.py` 与 `xbk/import_errors.py`。
+- 复杂度：`submit_answer` 复杂度 40→4、行数 222→44（抽出 `question_picker.py`）；前端 `Xbk/index.tsx` 1997→1279（抽出 `columns.tsx`、`XbkFilterBar.tsx`），GroupDiscussion 抽出 `DiscussionToolbar.tsx`。
+- 性能：分类列表 SQL 7→3 次；echarts 改为按需注册，构建产物 1,035,150 B→584,082 B（省 43.6%）。
+- 回归修复：echarts 按需注册先后漏 `RadarChart`/`RadarComponent` 与 `SVGRenderer`（雷达图空白、`var(--ws-*)` 失效导致全图全黑）；Reader 截断提示误放进目录大纲 Tab。
+
+### 热点问题按教师提问逐条归类（`4ea3d69`）
+
+即下文“未发布变更：热点问题改为按教师提问逐条归类（2026-10-24）”与
+“热点结果页简化为时间视图（2026-10-24）”两节所描述的内容，本次随 2.2.0 发布上线；
+多轮投票（默认 3 轮、上限 5 轮、一致率不足 2/3 标为待确认）也在发布代码中
+（`hot_agent.py` 的 `VOTE_ROUNDS` / `merge_votes`）。
+另修复验证中发现的教师提问编号重复（自动识别与手填各占一个 Tn）与分析详情接口 500
+（ORM 对象写入 Redis 后无法通过响应校验）。
+
+### 使用记录详情与入口嵌入式样式（`02805bc`、`76cb9c3`）
+
+- 智能体使用记录详情：学生/智能体信息并排、窄屏纵向；对话按问答分段，回答支持 GFM Markdown；加载失败可回退到记录中保存的问答；空态区分加载失败/无搜索结果/暂无数据。
+- 首页五个模块入口同排、信息技术入口两列，去掉胶囊底色、边框与阴影；加载骨架同步新布局。`76cb9c3` 把骨架屏硬编码像素改为 Tailwind 刻度以通过 ui-audit 门禁。
+
+### 数据库与 CI
+
+- 新增迁移 `20261026_0001`（`20261026_0001_idx_classroom_plan_items_activity`）：为 `znt_classroom_plan_items.activity_id` 建索引，服务 `ON DELETE CASCADE` 级联路径，60k 行基准 1.722ms→0.662ms。生产该表为 0 行，建索引毫秒级完成。升级后 head 为 `20261026_0001`。
+- `448aa98` 让 CI 真正执行并发/迁移/token 轮换/KNN 采集等 118 个此前一律 skip 的用例（开启 `TEST_DATABASE_URL` 后 260 passed / 61 skipped）。
+- 版本号六处配置同步到 2.2.0；`workflow-contracts.test.mjs` 漂移用例改为由当前版本派生 `${sourceVersion}-drift`，不再硬编码版本号。
+
+### 验证与部署
+
+- 发布前：后端 3646 passed / 123 skipped / 0 failed（专用测试库 + `alembic upgrade head`）、前端 779 passed、`tsc` 与治理 errors=0 通过；`ci-quality`（`0f2df61`）与 `markdown-quality`（`62d3976`）通过。
+- 部署（2026-10-26 20:52，192.168.5.3）：六镜像全部切到 2.2.0 且 digest 与 Docker Hub 一致；迁移执行到 `20261026_0001`，索引已建成；数据 321 用户 / 3 文章 / 9 智能体与部署前一致；首页、信息技术、使用记录三页实测无溢出、无 console 错误；服务器旧镜像已清理。
+
+> 待补：2.2.0 的 release-set 文件名与 SHA-256、六镜像 digest 对照表、部署前备份与离机证据目录，
+> 本轮未能从仓库记录与本地 `.codex/releases/`（只到 2.1.6）中核实，不在本文补写。
+> 另：仓库有 git tag `2.2.0`，但 GitHub Releases 中没有 v2.2.0 发布页（`gh release view v2.2.0` 为 not found）。
+
 ## 未发布变更：热点问题改为按教师提问逐条归类（2026-10-24）
+> 已随 v2.2.0 发布（2026-10-26 部署），本节保留发布前的原始记录。
 
 - 热点问题的分析智能体改为逐条归类：结合教学设计与教师提问 T1…Tn，把每个学生提问判为回应型（理解追问、尝试应用、调试求助、核对确认，并指明回应哪个 Tn）、生成性（原理深挖、迁移拓展、新的困惑——与本课有关但不在回应任何教师提问）或无关，每条附一句判断依据。
 - 原热点教学诊断（Bloom 分层、主题诊断、教学建议、执行摘要）不再生成；计数、分阶段与分桶全部由程序完成，不让模型数数。学生问题按每批 60 条分批调用，单批失败计入“未归类”，不猜测修补。
@@ -20,6 +65,8 @@
 - 新增 `question_classification` / `classification_status` 结果字段；无数据库迁移。合同见 [热点问题归类 Agent](../features/assessment/hot_agent.md)。后端与前端测试通过，真实课堂数据与 LLM 实际归类质量待验收；尚未发布或部署。
 
 ## 未发布变更：热点结果页简化为时间视图（2026-10-24）
+> 已随 v2.2.0 发布。该时间视图随后在 `4ea3d69` 中扩展为按类别堆叠并新增「按教师提问分阶段」，
+> 本节保留扩展前的原始记录。
 
 - 热点分析结果页改为紧凑基础信息与一张连续时间图：柱形展示有效学生提问，折线展示其中的迁移、延伸问题，教师提问在独立时间轨道标记。保留原统计粒度和空时段，缺失分类或数量明确显示未知。
 - 支持悬停查看统计、点击时段查看原问，以及仅查看生成性问题；旧记录仅有典型摘要时明确提示。说明、审计和任务单默认折叠，词云、评分、排行和长篇诊断退出主视图，HTML、Markdown 导出同步为时间统计表。
