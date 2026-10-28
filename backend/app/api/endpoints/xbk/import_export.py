@@ -41,6 +41,17 @@ from ._import_parsing import (
     read_excel_rows,
     validate_import_header,
 )
+# 列映射与表头规整抽到 import_columns（只依赖 DataFrame 形状，不碰 DB）。
+# 回导成下划线名，保持本文件与测试的既有引用路径不变。
+from .import_columns import (
+    courses_mapping as _courses_mapping,
+    drop_empty_rows as _drop_empty_rows,
+    import_spec as _import_spec,
+    remap_columns as _remap_columns,
+    selections_mapping as _selections_mapping,
+    students_mapping as _students_mapping,
+    validate_required_columns as _validate_required_columns,
+)
 
 router = APIRouter()
 
@@ -141,81 +152,11 @@ def _normalize_selection_course_code(value: Any) -> str:
     return code if code else "未选"
 
 
-def _remap_columns(df: pd.DataFrame, mapping: Dict[str, List[str]]) -> pd.DataFrame:
-    aliases = {
-        _normalize_col_name(name): canonical
-        for canonical, names in mapping.items()
-        for name in [canonical, *names]
-    }
-    renamed = [aliases.get(_normalize_col_name(c), _normalize_col_name(c)) for c in df.columns]
-    nonempty = [name for name in renamed if name]
-    if len(nonempty) != len(set(nonempty)):
-        raise HTTPException(status_code=422, detail="表头包含重复列或同一字段的多个别名，请保留其中一列")
-    result = df.copy()
-    result.columns = renamed
-    # Ignore empty unused columns; nonempty data without a header is ambiguous.
-    for index, name in enumerate(renamed):
-        if not name and any(_normalize_str(v) for v in result.iloc[:, index]):
-            raise HTTPException(status_code=422, detail="存在无表头的数据列，请补充表头")
-    return result.loc[:, [bool(name) for name in renamed]]
-
-
 def _preview_rows(rows: List[Dict[str, Any]], limit: int = 10) -> List[Dict[str, Any]]:
     return rows[: max(0, min(limit, 50))]
 
 
 from .import_templates import build_template_response, style_worksheet as _style_worksheet, template_columns as _template_columns  # noqa: F401  有意回导，测试用例按旧路径导入
-
-def _students_mapping() -> Dict[str, List[str]]:
-    return {
-        "学年": ["年份", "year"],
-        "学期": ["term"],
-        "年级": ["grade"],
-        "班级": ["班别", "班级名称", "class", "class_name"],
-        "学号": ["学生学号", "student_no", "studentId", "student_id"],
-        "姓名": ["学生姓名", "name", "student_name"],
-        "性别": ["gender", "sex"],
-    }
-
-
-def _courses_mapping() -> Dict[str, List[str]]:
-    return {
-        "学年": ["年份", "year"],
-        "学期": ["term"],
-        "年级": ["grade"],
-        "课程代码": ["代码", "course_code", "courseId", "course_id"],
-        "课程名称": ["名称", "course_name"],
-        "课程负责人": ["教师", "任课老师", "teacher"],
-        "各班限报人数": ["限报人数", "课程人数", "quota_by_class", "quota"],
-        "上课地点": ["地点", "location", "classroom"],
-    }
-
-
-def _selections_mapping() -> Dict[str, List[str]]:
-    return {
-        "学年": ["年份", "year"],
-        "学期": ["term"],
-        "年级": ["grade"],
-        "学号": ["学生学号", "student_no", "studentId", "student_id"],
-        "姓名": ["学生姓名", "name", "student_name"],
-        "课程代码": ["代码", "course_code", "courseId", "course_id"],
-    }
-
-
-def _validate_required_columns(df: pd.DataFrame, required: List[str]) -> None:
-    missing = [c for c in required if c not in df.columns]
-    if missing:
-        raise HTTPException(status_code=422, detail=f"缺少必要列: {', '.join(missing)}")
-
-
-def _drop_empty_rows(df: pd.DataFrame) -> pd.DataFrame:
-    if df.empty:
-        return df
-    mask = df.apply(
-        lambda row: any(_normalize_str(v) for v in row.values),
-        axis=1,
-    )
-    return df[mask].copy()
 
 
 @router.get("/import/template")
@@ -225,23 +166,6 @@ async def download_template(
     _: Dict[str, Any] = Depends(require_admin),
 ) -> StreamingResponse:
     return build_template_response(scope)
-
-
-def _import_spec(scope: str) -> Tuple[Any, Dict[str, List[str]], List[str], Dict[str, str], List[str]]:
-    if scope == "students":
-        return XbkStudent, _students_mapping(), ["班级", "学号", "姓名"], {
-            "班级": "class_name", "学号": "student_no", "姓名": "name", "性别": "gender",
-        }, ["year", "term", "student_no"]
-    if scope == "courses":
-        return XbkCourse, _courses_mapping(), ["课程代码", "课程名称"], {
-            "课程代码": "course_code", "课程名称": "course_name", "课程负责人": "teacher",
-            "上课地点": "location",
-        }, ["year", "term", "course_code"]
-    if scope == "selections":
-        return XbkSelection, _selections_mapping(), ["学号", "课程代码"], {
-            "学号": "student_no", "姓名": "name", "课程代码": "course_code",
-        }, ["year", "term", "student_no", "course_code"]
-    raise HTTPException(status_code=422, detail=f"不支持的导入范围: {scope}")
 
 
 async def _filter_selection_references(db, valid, row_numbers, errors, *, lock=False):

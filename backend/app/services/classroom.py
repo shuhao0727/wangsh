@@ -1,6 +1,5 @@
 """课堂互动 Service 层"""
 
-import asyncio
 import time
 from datetime import datetime, timezone
 from typing import Optional, List, Any
@@ -10,13 +9,15 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.classroom import ClassroomActivity, ClassroomResponse
-from app.models.core.user import User
 from app.services.classroom_analysis import (  # noqa: F401  有意回导，非未使用导入
     ClassroomAnalysisRetryableError,
     list_candidate_agents as _list_candidate_agents,
-    mark_analysis_enqueue_failed,
     normalize_prompt as _normalize_prompt,
-    run_auto_analysis_for_ended_activity as _execute_auto_analysis,
+)
+from app.services.classroom_tasks import (
+    enqueue_auto_analysis,
+    mark_enqueue_failed,
+    run_auto_analysis_for_ended_activity,
 )
 from app.services.classroom_events import (
     dispatch_activity_events as _dispatch_activity_events,
@@ -477,7 +478,8 @@ async def _run_auto_analysis_for_ended_activity(
     *,
     allow_running_retry: bool = False,
 ) -> None:
-    await _execute_auto_analysis(
+    # 入队细节在 classroom_tasks；私有助手以参数注入，避免模块间成环。
+    await run_auto_analysis_for_ended_activity(
         db,
         activity_id,
         allow_running_retry=allow_running_retry,
@@ -488,19 +490,7 @@ async def _run_auto_analysis_for_ended_activity(
 
 
 async def _enqueue_auto_analysis(activity_id: int) -> None:
-    from app.tasks.classroom import analyze_ended_classroom_activity
-
-    await asyncio.to_thread(
-        analyze_ended_classroom_activity.apply_async,
-        args=[activity_id],
-        retry=True,
-        retry_policy={
-            "max_retries": 3,
-            "interval_start": 0,
-            "interval_step": 1,
-            "interval_max": 3,
-        },
-    )
+    await enqueue_auto_analysis(activity_id)
 
 
 async def _mark_analysis_enqueue_failed(
@@ -508,7 +498,7 @@ async def _mark_analysis_enqueue_failed(
     activity_id: int,
     error: Exception,
 ) -> None:
-    await mark_analysis_enqueue_failed(
+    await mark_enqueue_failed(
         db,
         activity_id,
         error,
@@ -529,39 +519,9 @@ async def _ensure_activity_not_overdue(db: AsyncSession, activity: ClassroomActi
 
 
 # ─── helpers ───
-
-async def _get_activity(db: AsyncSession, activity_id: int) -> ClassroomActivity:
-    activity = (await db.execute(
-        select(ClassroomActivity).where(ClassroomActivity.id == activity_id)
-    )).scalar_one_or_none()
-    if not activity:
-        raise ValueError("活动不存在")
-    return activity
-
-
-async def _get_activity_for_update(
-    db: AsyncSession,
-    activity_id: int,
-    *,
-    read: bool = False,
-) -> ClassroomActivity:
-    activity = (
-        await db.execute(
-            select(ClassroomActivity)
-            .where(ClassroomActivity.id == activity_id)
-            .with_for_update(read=read)
-            .execution_options(populate_existing=True)
-        )
-    ).scalar_one_or_none()
-    if not activity:
-        raise ValueError("活动不存在")
-    return activity
-
-
-async def _lock_activity_owner(db: AsyncSession, user_id: int) -> None:
-    """同一教师的活动启动/重启必须串行，保证最多一个 active 活动。"""
-    result = await db.execute(
-        select(User.id).where(User.id == user_id).with_for_update()
-    )
-    if result.scalar_one_or_none() is None:
-        raise ValueError("活动创建者不存在")
+# 行级读取与加锁已抽到 classroom_queries，回导旧私有名保持内部调用不变。
+from app.services.classroom_queries import (  # noqa: E402
+    get_activity as _get_activity,
+    get_activity_for_update as _get_activity_for_update,
+    lock_activity_owner as _lock_activity_owner,
+)

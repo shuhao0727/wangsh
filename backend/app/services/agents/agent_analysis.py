@@ -17,6 +17,10 @@ from app.services.agents.agent_analysis_helpers import (
     _group_chain_rows,
     _segment_keywords,
 )
+# 时间线纯计算抽到 agent_analysis_timeline；回导旧名保持既有引用不变。
+from app.services.agents.agent_analysis_timeline import (
+    build_timeline_buckets as _build_timeline_buckets,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -24,110 +28,6 @@ logger = logging.getLogger(__name__)
 # combined = "\n".join(...) 还会再复制一份；按最近 5000 条截断足以支撑
 # 词云、去重与 LLM 对比，同时把内存与耗时钉在上限。
 MAX_ANALYSIS_QUESTIONS = 5000
-
-
-def _timestamp_value(value: Any) -> Optional[float]:
-    if value is None:
-        return None
-    if hasattr(value, "timestamp"):
-        return value.timestamp()
-    if isinstance(value, str):
-        try:
-            return datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp()
-        except ValueError:
-            return None
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
-
-
-def _build_timeline_buckets(
-    rows: List[Dict[str, Any]],
-    bucket_seconds: int,
-    teacher_marks: List[Dict[str, Any]],
-    start_at: datetime,
-    end_at: datetime,
-    top_n: int = 5,
-) -> List[Dict[str, Any]]:
-    """
-    将提问记录按时间桶分组，检测爆发点，关联教师标记。
-    rows: 每行含 content, created_at, full_name 等字段
-    teacher_marks: [{"time": datetime, "question": str}, ...]
-    返回: TimelineBucket 列表
-    """
-    from math import floor
-
-    if not rows:
-        return []
-
-    # 计算桶边界
-    start_epoch = start_at.timestamp()
-    buckets_map: Dict[float, List[Dict[str, Any]]] = {}
-
-    for r in rows:
-        created = r.get("created_at")
-        ts = _timestamp_value(created)
-        if ts is None:
-            continue
-        bucket_key = floor((ts - start_epoch) / bucket_seconds) * bucket_seconds + start_epoch
-        if bucket_key not in buckets_map:
-            buckets_map[bucket_key] = []
-        buckets_map[bucket_key].append(r)
-
-    # 构建有序桶列表
-    sorted_keys = sorted(buckets_map.keys())
-    timeline = []
-    prev_count = 0
-
-    for bk in sorted_keys:
-        items = buckets_map[bk]
-        bucket_start = datetime.fromtimestamp(bk, tz=timezone.utc)
-        bucket_end = datetime.fromtimestamp(bk + bucket_seconds, tz=timezone.utc)
-
-        # 统计
-        question_count = len(items)
-        unique_students = len(set(
-            r.get("full_name") or r.get("student_id") or "unknown" for r in items
-        ))
-
-        # Top 问题
-        freq: Dict[str, int] = {}
-        for r in items:
-            q = (r.get("content") or "").strip().lower().rstrip("？?。.")
-            if q:
-                freq[q] = freq.get(q, 0) + 1
-        sorted_qs = sorted(freq.items(), key=lambda x: x[1], reverse=True)[:top_n]
-        top_questions = [{"question": q, "count": c} for q, c in sorted_qs]
-
-        # 爆发点检测：提问量 > 前一桶的 2 倍且绝对值 >= 3
-        is_burst = (prev_count > 0 and question_count >= prev_count * 2 and question_count >= 3)
-
-        # 关联最近的教师标记
-        near_teacher_mark = None
-        if teacher_marks:
-            for tm in teacher_marks:
-                tm_time = tm.get("time")
-                tm_ts = _timestamp_value(tm_time)
-                if tm_ts is None:
-                    continue
-                # 如果教师标记在该桶之前 5 分钟内
-                if bk - 300 <= tm_ts <= bk + bucket_seconds:
-                    near_teacher_mark = tm.get("question", "")
-                    break
-
-        timeline.append({
-            "bucket_start": bucket_start.isoformat(),
-            "bucket_end": bucket_end.isoformat(),
-            "question_count": question_count,
-            "unique_students": unique_students,
-            "top_questions": top_questions,
-            "is_burst": is_burst,
-            "near_teacher_mark": near_teacher_mark,
-        })
-        prev_count = question_count
-
-    return timeline
 
 
 async def _call_llm_analysis(
