@@ -19,13 +19,24 @@ from loguru import logger
 from app.core.config import settings
 from app.schemas.ai_partner import EvaluationRequest, EvaluationResponse, ModelEvaluation
 from app.services.agents.ai_agent import get_agent
+from app.services.agents.assistant_answer_sanitizer import sanitize_assistant_answer
 from app.services.agents.endpoint_security import _assert_safe_endpoint_async
 from app.services.agents.providers import get_provider, resolve_credentials
 from app.services.agents.providers.dify_provider import DifyProvider
 from app.services.ai_partner_leaderboard import round_keys
 from app.utils.cache import cache
 
-MODEL_TIMEOUT_SECONDS = 25
+# 评分是一次长推理：实测真实 payload（query 约 22k 字符）在 Dify + DeepSeek 上
+# 耗时 22.5s / 27.1s / 29.9s 三次，全部超过原有的 25s 预算，且内层 httpx 只给了
+# 20s —— 于是每次都在 SSL 读上先超时，用户看到的是「AI评分超时」。
+# 三层预算必须严格嵌套，且从内到外递增：
+#   MODEL_HTTP_TIMEOUT_SECONDS(45) < MODEL_TIMEOUT_SECONDS(50) < EVALUATION_LOCK_TTL_SECONDS(60) < 前端 65s
+# 45s 相对实测最慢 29.9s 留了约 50% 余量；50s 总预算保证即使 httpx 卡在 DNS/连接
+# 也能被 asyncio.timeout 兜住；锁 60s 必须长于总预算，否则请求还没结束锁就过期，
+# 同用户并发就会双跑评分、双扣配额。
+MODEL_HTTP_TIMEOUT_SECONDS = 45
+MODEL_TIMEOUT_SECONDS = 50
+EVALUATION_LOCK_TTL_SECONDS = 60
 RECEIPT_TTL_SECONDS = 600
 DIMENSIONS = {
     "value": "价格性价比", "completion": "任务完成度",
@@ -47,7 +58,7 @@ local clock = redis.call('TIME')
 local now = tonumber(clock[1]) * 1000 + math.floor(tonumber(clock[2]) / 1000)
 local deadline = tonumber(redis.call('GET', KEYS[1]))
 if deadline and now >= deadline then return {'ended', '0'} end
-if redis.call('EXISTS', KEYS[4]) == 1 then return {'limited', '30'} end
+if redis.call('EXISTS', KEYS[4]) == 1 then return {'limited', tostring(math.max(1, redis.call('TTL', KEYS[4])))} end
 for i = 2, 3 do
     local limit = i == 2 and 5 or 60
     if tonumber(redis.call('GET', KEYS[i]) or '0') >= limit then
@@ -57,7 +68,7 @@ end
 for i = 2, 3 do
     if redis.call('INCR', KEYS[i]) == 1 then redis.call('EXPIRE', KEYS[i], 60) end
 end
-redis.call('SET', KEYS[4], ARGV[1], 'EX', 35)
+redis.call('SET', KEYS[4], ARGV[1], 'EX', tonumber(ARGV[2]))
 return {'ok', '0'}
 """
 ISSUE_LUA = r"""
@@ -230,7 +241,7 @@ def _model_payload(provider, agent, request: EvaluationRequest, context: dict) -
 
 async def _model_response(provider, url: str, payload: dict) -> str:
     async with httpx.AsyncClient(
-        timeout=20, follow_redirects=False, trust_env=False
+        timeout=MODEL_HTTP_TIMEOUT_SECONDS, follow_redirects=False, trust_env=False
     ) as client:
         async with client.stream(
             "POST", url, headers=provider.build_headers(), json=payload
@@ -275,7 +286,19 @@ async def call_model(db, request: EvaluationRequest, context: dict) -> str:
 
 
 def parse_evaluation(raw: str) -> ModelEvaluation:
-    if not isinstance(raw, str) or len(raw) > 20000:
+    if not isinstance(raw, str):
+        raise ValueError("invalid_model_output")
+
+    # Dify 的 DeepSeek 插件会把思维链塞进 <think>…</think>，与真正的答案共用
+    # 同一个文本流：raw 形如 "<think>…推理…</think>{json}"。直接 json.loads 必然
+    # JSONDecodeError，这就是线上 502「未返回有效结构化结果」的真实原因。
+    # 与存储/读取边界保持一致，统一走 sanitizer，而不是在这里另写一份剥离逻辑。
+    #
+    # 长度上限只卡剥离后的答案，不卡 raw：思维链长度不可控（实测同一 prompt
+    # 在 8.8k~13.8k 之间波动），若对 raw 设 20000 上限，推理一长就会把正确答案
+    # 判成「无效输出」。上游响应的字节数已由 _model_response 的 64KB 兜住。
+    clean = sanitize_assistant_answer(raw).strip()
+    if not clean or len(clean) > 20000:
         raise ValueError("invalid_model_output")
 
     def unique_pairs(pairs):
@@ -286,7 +309,7 @@ def parse_evaluation(raw: str) -> ModelEvaluation:
             obj[key] = value
         return obj
 
-    result = ModelEvaluation.model_validate(json.loads(raw, object_pairs_hook=unique_pairs))
+    result = ModelEvaluation.model_validate(json.loads(clean, object_pairs_hook=unique_pairs))
     if {d.key for d in result.dimensions} != set(DIMENSIONS):
         raise ValueError("invalid_dimensions")
     by_key = {d.key: d for d in result.dimensions}
@@ -306,6 +329,7 @@ async def _reserve_evaluation(prefix: str, user_id: int, lock: str, nonce: str):
                 f"{prefix}:evaluate-rate:global",
                 lock,
                 nonce,
+                EVALUATION_LOCK_TTL_SECONDS,
             )
     except Exception:
         raise HTTPException(503, "AI评分存储暂不可用") from None

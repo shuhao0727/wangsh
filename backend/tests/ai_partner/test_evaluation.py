@@ -372,3 +372,47 @@ def test_task_ids_match_frontend_and_have_chinese_context():
         ctx=svc.catalog_context(EvaluationRequest(**payload(primary_feature=task,features=list(get_args(TaskId)))))
         assert set(ctx['task_definitions'])==set(get_args(TaskId))
         assert any('\u4e00'<=c<='\u9fff' for c in ctx['task_definitions'][task])
+
+
+def test_parse_evaluation_strips_reasoning_envelope():
+    """Dify 的 DeepSeek 插件把思维链和答案塞进同一个字符串。
+
+    线上真实形态：'<think>…推理…</think>{"dimensions":[…]}'。
+    修复前 parse_evaluation 直接 json.loads，必然 JSONDecodeError →
+    HTTP 502「AI评分未返回有效结构化结果」。本测试锁住剥离行为。
+    """
+    answer = model_output()
+    for wrapped in (
+        f"<think>\n先看预算是否超支，再逐维度打分。\n</think>{answer}",
+        f"<THINK>大小写不敏感</THINK>{answer}",
+        f"<think>跨行\n推理\n</think>\n\n{answer}\n",
+        answer,  # 没有思维链时不能被误伤
+    ):
+        result = svc.parse_evaluation(wrapped)
+        assert sum(d.score for d in result.dimensions) == 80
+
+
+def test_parse_evaluation_rejects_absent_or_oversized_answer():
+    """剥离后为空、或答案本身超长，都必须判为无效输出。"""
+    # 只有思维链、没有答案
+    with pytest.raises(ValueError):
+        svc.parse_evaluation("<think>只有推理</think>")
+    # 思维链很长但答案正常：不能因为 raw 长就误判（这正是修复前的缺陷）
+    long_reasoning = "分析" * 12000  # 24000 字符，超过旧的 20000 raw 上限
+    assert sum(d.score for d in svc.parse_evaluation(f"<think>{long_reasoning}</think>{model_output()}").dimensions) == 80
+    # 答案本身超长
+    with pytest.raises(ValueError):
+        svc.parse_evaluation("x" * 20001)
+
+
+def test_model_timeout_budget_is_nested_outside_in():
+    """三层超时必须严格嵌套，否则内层先超时、外层预算形同虚设。
+
+    实测真实评分 22.5s / 27.1s / 29.9s，旧的 20s httpx + 25s 总预算必然超时。
+    """
+    assert svc.MODEL_HTTP_TIMEOUT_SECONDS < svc.MODEL_TIMEOUT_SECONDS
+    assert svc.MODEL_TIMEOUT_SECONDS < svc.EVALUATION_LOCK_TTL_SECONDS
+    # 锁必须长于总预算，否则请求未结束锁就过期 → 同用户并发双跑、双扣配额
+    assert svc.EVALUATION_LOCK_TTL_SECONDS > svc.MODEL_TIMEOUT_SECONDS
+    # 相对实测最慢 29.9s 需留出余量
+    assert svc.MODEL_TIMEOUT_SECONDS >= 40
