@@ -12,7 +12,7 @@
 
 ---
 
-## v2.2.1：Dify 连续对话与评分修复、S4 缺陷（2026-10-28，待部署）
+## v2.2.1：Dify 连续对话与评分修复、S4 缺陷、性能与前端体验（2026-10-28 23:39 已部署）
 
 ### 修复
 
@@ -43,6 +43,47 @@ AGENT_TRUSTED_INTERNAL_ENDPOINTS=http://docker-api-1:5001/v1
 
 不配置则评分行为与修复前一致（仍 503）。白名单只放这一条，新增需走变更评审。
 
+### 性能优化（五项）
+
+- **首屏 markdown-vendor 移出静态闭包**（`2a747ee`）：Entry JS 1041.3 KB → 594.2 KB（−43%），
+  gzip 317.6 → 186.2 KB（−41%）。根因是两处叠加——入口 `import 'katex/dist/katex.min.css'`
+  被判进 markdown-vendor，且 Rolldown 的 `manualChunks` 默认 `includeDependenciesRecursively`
+  会把 react、react/jsx-runtime 递归吞进同一 chunk。改为 `output.codeSplitting.groups` +
+  `priority`（react 100 > markdown 10）。只改 jsx-runtime 分组无效（实测过）。
+- **导出改线程池**（`91cd134`）：pandas/openpyxl 是同步阻塞调用，直接写在 `async def` 里
+  会卡住事件循环。实测 3000 行 + 样式：最大停顿 231ms → 47ms（5x）。
+- **agent_analysis 加 LIMIT 5000**（`91cd134`）：原本 `content`（TEXT）数万条全文进内存，
+  再 join 成字符串翻一倍。改为 `ORDER BY created_at DESC LIMIT 5000`，取回后 reversed()
+  恢复升序，下游时间线语义不变。
+- **学生端 `/classroom/active` 批量取作答**（`91cd134`）：原本每活动一次往返，
+  改为 `IN` 一次查回。
+- **SSE 连通后停轮询**（`2a747ee`）：`ClassroomPanel` 的 3s 轮询原本无条件启动，
+  SSE 连上后仍在跑——一节课 45 分钟 × 每生 3s ≈ 每生 900 次请求。改为收到 `connected`
+  停轮询、`onerror` 恢复。
+
+### 前端体验（S5 三项重开发）
+
+`9f84619` 大回滚删掉的三项，本版按当前代码状态重新实现（不是恢复原样）：
+
+- **语义色彩 token 体系**（`2e5d002`）：新增 `frontend/src/lib/cssTokens.ts`，把
+  `--ws-color-*` 解析成 TS 可用的具体色值，供 ECharts Canvas 等拿不到 CSS 变量的场景使用
+  （`fillStyle = 'var(--ws-color-*)'` 会静默失败变黑，是踩过的真实坑）。配 2 个测试，
+  其中 contract 测试守 TS 常量与 `index.css` 的一致性。
+- **内容运行时懒加载**（`2e5d002`）：KaTeX / highlight.js / Mermaid / D3+Markmap 从
+  `index.html` 的 7 个 `<script defer>`（gzip ≈1.37MB）改为 `contentRuntimeLoader.ts`
+  在首次真正渲染时按需注入。首屏静态脚本请求 7 → 0。
+- **Caddy 目录条目**（`2e5d002`）：`/docs/` 这类目录请求不再被 SPA 回退成 `index.html`。
+
+### 工程治理（`9cdb9cd` 等）
+
+governance errors 5 → 0，四项历史债务真正拆分而非登记豁免：
+
+- `_apply_valid_import_rows` complexity 16 → 拆出 `_prepare_import_context`
+- `build_assessment_export_xlsx` complexity 35 → 拆成 3 个辅助函数
+- `course_selection_workbook.py` 706 行 → 抽 `workbook_types.py`，降为 617 行
+- `selection_rules.py` 759 行 → 抽 `selection_capacity.py`，降为 680 行
+- `matches_trusted_endpoint` complexity 18 → 拆出 `_parse_trusted_candidate`
+
 ### 已知局限
 
 - Dify 连续对话只做到阶段一：每次仍是全新 query、不带 `conversation_id`，
@@ -53,11 +94,16 @@ AGENT_TRUSTED_INTERNAL_ENDPOINTS=http://docker-api-1:5001/v1
 
 ### 验证
 
-- 本地门禁：根脚本 89 passed、文档合同 151 files / 700 links、版本一致性 2.2.1、
-  compose 生产与 dev 均通过、网关合同 PASS
-- 后端：`tests/users` 33 passed、`tests/ai_agents` 346 passed、`tests/ai_partner` 118 passed
-- 前端：`SplitPanePage.test.tsx` 4 passed、`tsc --noEmit` 通过
-- 服务器 L3 待验证：评分 200、连续对话追问、健康检查
+- 本地门禁：根脚本 89 passed、文档合同 152 files / 702 links、版本一致性 2.2.1、
+  compose 生产与 dev 均通过、网关合同 PASS、**governance errors=0**
+- 后端：`tests/users` 36 passed、`tests/ai_agents` 350 passed、`tests/ai_partner` 118 passed、
+  `tests/xbk`+`tests/assessment`+`tests/classroom` 合计 1997 passed
+- 前端：`tsc --noEmit` 0 错误、`token:check:ci` 0 undefined / 2077 引用、
+  S5+性能新增测试 52 项通过
+- **生产部署**（2026-10-28 23:39）：六镜像 linux/amd64，digest 与 release-set 一致；
+  `/api/health` 返回 `version=2.2.1`、`status=healthy`、database 与 redis 均 healthy；
+  8 容器全 healthy；433 用户 / 55 表与部署前一致
+- **服务器 L3 待验证**：评分 200、连续对话追问、SSE 80s 长连接
 
 ---
 

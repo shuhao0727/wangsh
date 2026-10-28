@@ -619,8 +619,16 @@ test("production compose isolates Redis and PythonLab runtime resources", () => 
   const redisBody = compose.match(/^  redis:\n    image: redis:7-alpine\n([\s\S]*?)^  backend:/m)?.[1] ?? "";
 
   assert.doesNotMatch(redisBody, /container_name:/);
-  assert.match(compose, /^\s{2}REDIS_HOST: redis$/m);
-  assert.doesNotMatch(compose, /wangsh-redis/);
+  // REDIS_HOST 用显式容器名 wangsh-redis-1，而不是短名 redis。
+  //
+  // 历史：这条断言原本要求 `REDIS_HOST: redis` 且禁止 compose 出现 wangsh-redis，
+  // 意图是「生产不硬编码容器名、靠 Compose 服务发现」。2026-10-28 部署 2.2.1 时
+  // 该意图被现实推翻：本栈 backend 为访问 Dify 而加入 docker_default 网络，与 Dify
+  // 同网；短名 redis 会被 Dify 的 docker-redis-1（172.18.0.14，有密码）抢占，
+  // 导致 backend 报 Authentication required、健康检查变 degraded。
+  // 因此现在要求用显式容器名，并禁止回退到短名——方向与旧断言相反。
+  assert.match(compose, /^\s{2}REDIS_HOST: wangsh-redis-1$/m);
+  assert.doesNotMatch(compose, /^\s{2}REDIS_HOST: redis$/m);
   assert.match(devCompose, /container_name:\s*wangsh-redis/);
   assert.match(
     compose,

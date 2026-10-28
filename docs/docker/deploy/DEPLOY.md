@@ -868,7 +868,26 @@ PythonLab 更新后，旧运行容器若缺少模式标签或资源/镜像/网�
 
 如果检查失败，不要删除已有表，也不要直接重跑迁移。先备份数据库，再对照待执行迁移确认真实表、列、索引、约束是否完整；只有在确认真实 schema 已等价于目标迁移后，才允许手动补齐缺失索引/约束并 `alembic stamp <verified_revision>`。
 
-`bootstrap_db.py --initial-only` 只用于真正空库的首次初始化：它仅创建受维护迁移链之前的 legacy baseline，并以 `VARCHAR(64)` 创建空的 `alembic_version`，不会 stamp。创建前会从独立 metadata 副本排除迁移管理的索引（包括迁移原生 SQL 定义），由所属 migration 按依赖顺序创建扩展和索引；不得在 bootstrap 中临时建扩展或先建再删这些索引。 XBK baseline 副本使用迁移前的整数年份，并排除后续学年检查约束；原 migration 负责转换到 `VARCHAR(9)` 并建立约束，不能把当前 ORM 字段形态提前当作旧基线。失败后已提交 baseline 的专用模拟库不能再次当成空库；保留诊断并使用新的专用空库重验，不绕过非空保护。随后必须执行完整 `alembic upgrade head`，再由普通 `bootstrap_db.py` 补兼容字段和视图。不要在全新空库上绕过 bootstrap 直接执行 Alembic；历史 revision 中存在超过 32 字符的标识。对于已有标准 `VARCHAR(32)` 版本表的历史库，Alembic online 环境会在迁移事务前幂等扩容为 `VARCHAR(64)`。已有业务表但缺失 `alembic_version` 的数据库仍会被拒绝，避免把历史库误标记为最新。
+`bootstrap_db.py --initial-only` 只用于真正空库的首次初始化：它仅创建受维护迁移链之前的 legacy baseline，并以 `VARCHAR(64)` 创建空的 `alembic_version`，不会 stamp。创建前会从独立 metadata 副本排除迁移管理的索引（包括迁移原生 SQL 定义），由所属 migration 按依赖顺序创建扩展和索引；不得在 bootstrap 中临时建扩展或先建再删这些索引。 XBK baseline 副本使用迁移前的整数年份，并排除后续学年检查约束；原 migration 负责转换到 `VARCHAR(9)` 并建立约束，不能把当前 ORM 字段形态提前当作旧基线。失败后已提交 baseline 的专用模拟库不能再次当成空库；保留诊断并使用新的专用空库重验，不绕过非空保护。随后必须执行完整 `alembic upgrade head`，再由普通 `bootstrap_db.py` 补兼容字段和视图。**关于「能否在空库裸跑 `alembic upgrade head`」**（2026-10-28 实测订正）：
+可以。历史 revision 中确有 8 个标识超过 32 字符（最长 47 字符），但
+`backend/app/db/alembic_compat.py` 的 `ensure_alembic_version_capacity()` 在建
+`alembic_version` 时就按 `VARCHAR(64)` 创建，由 `alembic/env.py` 在迁移事务内调用，
+所以裸跑不会截断。
+
+S2-1 验证时实测两条路径都通过、结果完全一致：
+
+| 路径 | 命令 | 结果 |
+|---|---|---|
+| A（推荐，生产用） | `check_migration_state.py` → `bootstrap_db.py --initial-only` → `alembic upgrade head` → `bootstrap_db.py` | 55 条（54 基表 + 1 视图）、49 序列、5 索引、单 head |
+| B（裸跑） | `alembic upgrade head` | 同上，表集合 `IDENTICAL_TABLE_SETS`、视图定义逐字相同 |
+
+**但生产仍建议走路径 A**：`bootstrap_db.py --initial-only` 会从当前模型 `create_all`
+再按 `MIGRATION_ORIGIN_COLUMNS` 白名单退回历史形状，能覆盖「模型与迁移链之间的列差异」；
+裸跑只是按迁移字面 DDL 建表，遇到模型新增的列没有对应迁移时会缺列。
+
+**历史库**：已有标准 `VARCHAR(32)` 版本表的库，Alembic online 环境会在迁移事务前幂等
+扩容为 `VARCHAR(64)`。已有业务表但缺失 `alembic_version` 的数据库仍会被拒绝，
+避免把历史库误标记为最新。已有业务表但缺失 `alembic_version` 的数据库仍会被拒绝，避免把历史库误标记为最新。
 
 当前 head 为 `20261026_0001`（`20261026_0001_idx_classroom_plan_items_activity`，
 位于 legacy baseline 索引恢复之后）；

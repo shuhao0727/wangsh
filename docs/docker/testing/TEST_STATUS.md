@@ -2,9 +2,57 @@
 
 > 状态：active
 > Owner：testing
-> 当前版本：生产正式 2.2.0（2026-10-26 20:52 部署）；2.2.1 待发布
+> 当前版本：生产正式 2.2.1（2026-10-28 23:39 部署）；含 Dify 评分/连续对话、S4 缺陷、性能与 S5 优化
 > 最近更新：2026-10-28
 > 说明：本文件是当前测试事实的唯一汇总入口；阶段报告只引用本页，不复制新基线。
+
+## 2026-10-28 2.2.1 发布验证
+
+- **发布范围：** 8 个功能提交 + 5 项审查修复 + compose 透传 + 4 项 governance 债务拆分 +
+  性能五项 + S5 三项重开发。详见 [RELEASE_NOTES](../RELEASE_NOTES.md) 的 v2.2.1 段。
+- **本地门禁（全绿）：** 根脚本 89 passed / 0 fail、文档合同 152 files / 703 links / 0 missing、
+  版本一致性 2.2.1、compose 生产与 dev 均通过、网关合同 PASS、**governance errors=0**
+  （原 5 项债务全部真拆，非登记豁免）。
+- **后端测试：** `tests/users` 36 passed、`tests/ai_agents` 350 passed、`tests/ai_partner` 118 passed、
+  `tests/xbk` + `tests/assessment` + `tests/classroom` 合计 1997 passed / 126 skipped。
+  **环境限制**：`tests/xbk/test_xbk_duplicate_target_guard.py` 与
+  `test_xbk_duplicate_tool_decision_logic.py` 在容器内报 `FileNotFoundError: /scripts/xbk/...`
+  ——容器只挂了 `backend/`，未挂仓库根的 `scripts/`，属既有环境问题，非本次改动。
+- **前端测试：** `tsc --noEmit` 0 错误、`token:check:ci` 0 undefined / 2077 引用、
+  S5 与性能相关新增测试 52 项通过（cssTokens 16、contentRuntimeLoader 10、
+  BookReader.runtime 11、ClassroomPanel 10、chartTheme 5）。
+- **镜像：** 六个 `shuhao07/*:2.2.1` 全部 `linux/amd64`，推送 Docker Hub 后逐个
+  `docker pull` 核对的 digest 与生成的 release-set 完全一致。
+- **生产部署（2026-10-28 23:39）：** `/api/health` 返回 `version=2.2.1`、`status=healthy`、
+  database 与 redis 均 healthy；8 容器全 healthy 且 RestartCount=0；
+  **433 用户 / 55 表**与部署前一致；`AGENT_TRUSTED_INTERNAL_ENDPOINTS` 已进容器。
+
+### 部署期间的两个生产事故（已修复，记录教训）
+
+- **数据险些丢失：** 新建 `2.2.1/source` 目录并软链 `data` 后启动 postgres，
+  它把软链目标当成空数据目录重新初始化，433 用户变 1 个。
+  用部署前 20:19 的备份恢复（`DROP DATABASE` + 重建 + `pg_restore`），433 用户回来了。
+  **教训**：切换发布目录前必须先停服务、独立验证数据可读；软链方案不可靠。
+  **最终改用原地升级**（留在 2.2.0 目录只改 `.env` 版本号），数据目录不动。
+- **Redis 连到 Dify 的实例：** backend 报 `Authentication required`，健康检查变 degraded。
+  根因是本栈 backend 为访问 Dify 而加入 `docker_default` 网络，与 Dify 同网；
+  短名 `redis` 被 Dify 的 `docker-redis-1`（172.18.0.14，有密码）抢占，
+  而非本栈的 `wangsh-redis-1`（172.20.0.2，无密码）。
+  已改 `REDIS_HOST: redis` → `wangsh-redis-1`（提交 `8a42f22`）。
+
+### 未覆盖 / 残余风险
+
+- **服务器 L3 真实验证未做**：评分 200 / 连续对话追问 / 负例 503 / SSE 80s 长连接。
+  这是 2.2.1 的最终验收点，也是 2.2.0 遗留的真实线上问题（生产 gateway 此前缺 SSE 修复）。
+- **依赖 digest 校验的 `deploy.sh pull-up` 未走通**：`verify_release_set` 用
+  `docker buildx imagetools inspect` 直连 `registry-1.docker.io`，服务器上超时；
+  镜像源 `docker.1ms.run` 只对 `docker pull` 生效。本次改为手动 `docker pull` +
+  逐个核对 digest + `docker compose up -d --no-build`。
+- 三个后端 `:dev` 镜像仍落后 HEAD（缺 `b129572` CORS `NoDecode`），本地验证靠环境变量变通。
+- 移动端只测 Chromium 375px，未覆盖 WebKit 与 320px。
+- S4-B1 用户唯一性只测 `super_admin` 路径，普通 admin 的 `_assert_role_assignment_allowed` 未覆盖。
+
+---
 
 ## 2026-10-28 S2 / S3 / S4 / S6 分级验证
 
@@ -117,7 +165,7 @@
 
 ## 2026-10-27~28 S1 致命级验证（7 项全部通过）
 
-- **文档门禁：** Markdown 合同检查为 `152 files / 702 links / 0 missing`。
+- **文档门禁：** Markdown 合同检查为 `152 files / 703 links / 0 missing`。
 
 - **范围：** 按 [S1~S7 验证计划](../archive/plans/2026-10-27-S1-S7-VERIFICATION-PLAN-V3.md)（已归档）执行 S1 致命级 7 项。
   规则：Docker 实例验证（D1/D2/D3）+ 双 Agent 交叉验证 + 主控复现争议结论。

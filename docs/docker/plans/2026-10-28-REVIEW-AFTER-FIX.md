@@ -184,11 +184,13 @@ v2.1.6                      2026-10-20
 | P4 | `ASSESSMENT.md` head 过期 | ✅ 已订正为 `20261026_0001`（`bc7b4eb`） |
 | P5 | GitHub Release v2.2.0 缺失 | ✅ 已补建（2026-10-28），内容取自 RELEASE_NOTES 与部署记录 |
 
-### 仍待处理
+### 全部完成
 
-| # | 项 | 说明 |
+| # | 项 | 处理结果 |
 |---|---|---|
-| P2 | `row_generator` 异常语义 | 已派 Agent 处理中；实际影响很小（实测所有截断都在 load_workbook 阶段失败） |
+| P2 | `row_generator` 异常语义 | ✅ 已修（`bda288b`）。Agent 实测推翻了我的原判断——`HTTPException` 不会被 `except Exception` 捕获（生成器异常在 `enumerate(reader)` 的 `next()` 中抛出，发生在进入 `try` 之前），状态码本来就是 400。**但发现了真问题**：`except HTTPException` 分支缺 rollback，文件级失败时会残留已 flush 的行（实测 95% 截断后残留 190 行、超 413 上限残留 2 行）。已补显式 rollback，并加 3 个测试 + 反向验证。
+
+> **教训**：审查结论也要实测验证，不能只读代码就下判断。
 
 ---
 
