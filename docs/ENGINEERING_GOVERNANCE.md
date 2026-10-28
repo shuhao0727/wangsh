@@ -159,6 +159,15 @@ git diff --check
    - 历史迁移按 revision 冻结命中数（`FROZEN_GUARD_COUNTS`），只许减少不许增加；新增条目必须说明理由。
    - 已在生产执行过的历史迁移不改写其中 DDL；需要清理时走新的 expand-migrate-contract 迁移。
    - 数据库侧的真实漂移仍由 `scripts/check_migration_state.py` 在线校验，两者互补。
+9. **`check_migration_state.py` 的漂移检测有明确边界，不要误当成 bug。** 它比对的是
+   「待执行迁移想建的表/索引/列」∩「库里已存在的对象」，因此只能发现**前向冲突**
+   （迁移要加、库里已有）。它**发现不了**以下两类：
+   - **孤儿对象**：库里存在、但任何迁移都不创建的表/索引/列（例如手工 `ADD COLUMN`、
+     未走迁移的热修）。这类对象不会进入 `pending ops` 的比对集合。
+   - **已执行过的历史迁移里被守卫跳过、事后又被手工补齐的对象**：迁移已不在 pending 中，
+     历史守卫的后果不会被重新评估。
+   要发现孤儿对象，必须用 `alembic check` 或对空库完整 `upgrade head` 后比对 schema 差异，
+   不能依赖 `check_migration_state.py`。
 
 ## 七、文档和脚本
 
