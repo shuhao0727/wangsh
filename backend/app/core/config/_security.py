@@ -4,8 +4,9 @@
 
 import ipaddress
 import json
-from typing import List, Optional, Union
+from typing import Annotated, List, Optional, Union
 from pydantic import Field, field_validator
+from pydantic_settings import NoDecode
 
 
 class SecuritySettingsMixin:
@@ -23,7 +24,11 @@ class SecuritySettingsMixin:
     COOKIE_DOMAIN: Optional[str] = Field(default=None)
 
     # ==================== CORS 配置 ====================
-    CORS_ORIGINS: List[str] = Field(default=["http://localhost:6608", "http://127.0.0.1:6608"])
+    # NoDecode：pydantic-settings 默认会对列表字段先做强制 JSON 解码，
+    # 逗号分隔或空值会在进入校验器之前就抛 SettingsError，这里显式关闭
+    CORS_ORIGINS: Annotated[List[str], NoDecode] = Field(
+        default=["http://localhost:6608", "http://127.0.0.1:6608"]
+    )
 
     # ==================== 超级管理员配置 ====================
     SUPER_ADMIN_USERNAME: str = Field(default="admin")
@@ -60,10 +65,19 @@ class SecuritySettingsMixin:
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
     def parse_cors_origins(cls, v: Union[str, List[str]]) -> List[str]:
-        """解析 CORS_ORIGINS，支持 JSON 字符串或逗号分隔"""
+        """解析 CORS_ORIGINS，支持 JSON 数组或逗号分隔；空值得到空列表。
+
+        走到这里说明 NoDecode 已关闭了 pydantic-settings 的强制 JSON 解码，
+        因此要自己区分「合法 JSON 数组」和「逗号分隔字符串」两种情况：
+        前者按数组返回，后者按逗号切分。JSON 能解析但不是数组（例如 `"abc"`、
+        `123`）时同样按逗号处理，避免把裸字符串当成 origin 列表。
+        """
         if isinstance(v, str):
             try:
-                return json.loads(v)
+                parsed = json.loads(v)
             except json.JSONDecodeError:
-                return [origin.strip() for origin in v.split(",") if origin.strip()]
+                parsed = None
+            if isinstance(parsed, list):
+                return [str(origin) for origin in parsed]
+            return [origin.strip() for origin in v.split(",") if origin.strip()]
         return v
