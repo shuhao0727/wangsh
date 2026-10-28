@@ -17,5 +17,10 @@ requests==2.32.3
 pytest-cov==7.1.0
 coverage==7.15.4
 
+# 隔离 AI 伙伴测试（AI_PARTNER_ISOLATED_TESTS=1 时才加载）
+# test_leaderboard.py 用 fakeredis[lua] 跑真实的 Lua 脚本；lupa 是其 Lua 运行时后端。
+# 未设该环境变量时模块整体 skip，CI 不加载这两个包，所以只在本地跑隔离测试时需要。
+fakeredis[lua]==2.40.0
+
 # Kubernetes（沙箱扩展，开发预留）
 kubernetes==32.0.0
