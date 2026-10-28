@@ -13,11 +13,16 @@
 - **本地门禁（全绿）：** 根脚本 89 passed / 0 fail、文档合同 152 files / 703 links / 0 missing、
   版本一致性 2.2.1、compose 生产与 dev 均通过、网关合同 PASS、**governance errors=0**
   （原 5 项债务全部真拆，非登记豁免）。
-- **后端测试：** `tests/users` 36 passed、`tests/ai_agents` 350 passed、`tests/ai_partner` 118 passed、
-  `tests/xbk` + `tests/assessment` + `tests/classroom` 合计 1997 passed / 126 skipped。
+- **后端测试：** `tests/users` 36 passed、`tests/ai_agents` 350 passed、`tests/ai_partner`
+  121 passed / 1 skipped（含 2026-10-29 新增的 3 项评分解析与超时预算测试）、
+  `tests/xbk` + `tests/assessment` + `tests/classroom` 合计 **1755 passed / 125 skipped**
+  （2026-10-29 复现；此前记录的 1997/126 无法复现，已订正）。
   **环境限制**：`tests/xbk/test_xbk_duplicate_target_guard.py` 与
   `test_xbk_duplicate_tool_decision_logic.py` 在容器内报 `FileNotFoundError: /scripts/xbk/...`
   ——容器只挂了 `backend/`，未挂仓库根的 `scripts/`，属既有环境问题，非本次改动。
+  `tests/ai_partner` 的 catalog 一致性测试在容器内另报
+  `FileNotFoundError: /frontend/ai-partner/src/catalog.json`，原因同为只挂 `backend/`，
+  因此容器内该套件实为 118 passed + 2 failed（历史上记为全通过，一并订正）。
 - **前端测试：** `tsc --noEmit` 0 错误、`token:check:ci` 0 undefined / 2077 引用、
   S5 与性能相关新增测试 52 项通过（cssTokens 16、contentRuntimeLoader 10、
   BookReader.runtime 11、ClassroomPanel 10、chartTheme 5）。

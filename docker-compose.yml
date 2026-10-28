@@ -31,7 +31,10 @@ x-common-env: &common-env
   # 而 Dify 也有一个名为 redis 的服务。两者在同一网络上时，短名 "redis" 会被
   # Dify 的 Redis 抢占，导致 backend 连到需要密码的 Dify Redis 并报
   # "Authentication required"。用显式容器名 wangsh-redis-1 消除歧义。
-  REDIS_HOST: wangsh-redis-1
+  #
+  # 仍允许显式覆盖：simulate / deploy-local 等场景可用其它 COMPOSE_PROJECT，
+  # 此时容器名不是 wangsh-redis-1，硬编码会让它们解析失败。默认值保持生产行为不变。
+  REDIS_HOST: ${REDIS_HOST:-wangsh-redis-1}
   REDIS_PORT: "6379"
   SUPER_ADMIN_USERNAME: ${SUPER_ADMIN_USERNAME:-admin}
   SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD:?SUPER_ADMIN_PASSWORD is required}

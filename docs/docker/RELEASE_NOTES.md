@@ -20,6 +20,10 @@
   四元组严格匹配（scheme + host + 显式 port + path 前缀）。此前 SSRF 检查把 Docker 内网
   `172.18.0.2` 判为私网，评分请求在发往 Dify 前就被拦（503）。`_is_disallowed_ip` 一行未改，
   未命中白名单的目标继续全拒。
+  白名单打通后暴露了另外两个独立故障（`5a4c86d`）：Dify 把思维链和答案塞进同一个字符串
+  （`<think>…</think>{json}`），而评分路径没接 `assistant_answer_sanitizer`，`json.loads`
+  必然失败 → 502；以及三层超时倒挂（内层 httpx 20s < 外层 25s），而实测真实评分需
+  22.5–34.1s → 504。现剥离思维链、并把预算改为 45s / 50s / 锁 60s 严格嵌套。
 - **Dify 连续对话上下文**：流式对话此前只把最后一条 user 消息当 query，多轮第二轮上下文全丢
   （7 个应用连续追问全部失败）。本版做阶段一止血——把历史折叠进 query，双重上限
   （最近 4 轮 / 3000 字符），超出从最早一轮整轮丢弃。评分路径保持无状态。
@@ -27,6 +31,9 @@
   `MultipleResultsFound` → 500。两处加 `.order_by(User.id).limit(1)`。
 - **用户导入**：非法 UTF-8 CSV 与损坏 xlsx 由 500 改为 400 并给出可操作提示；
   非法角色值不再静默降级成 `student`，改为行级 error。
+  另补两处（`bda288b`、`bc7b4eb`）：xlsx 内部 XML 损坏抛的是 `ParseError`——它既不是
+  `ValueError` 也不是 `OSError` 子类，此前漏在捕获清单外；且文件级失败时缺 `rollback`，
+  前面已 flush 的行会被调用方后续 `commit` 写进库，造成「报了错却入库一半」。
 - **移动端文章目录**：`SplitPanePage` 堆叠时 `gridTemplateRows` 只有一行却塞两个子元素，
   目录面板被压成 0px 完全不可见。改为两行 + 左侧 40vh 限高可滚
   （需 `alignSelf: start`，否则网格 stretch 会让内部列表仍滚不动）。
@@ -42,6 +49,12 @@ AGENT_TRUSTED_INTERNAL_ENDPOINTS=http://docker-api-1:5001/v1
 ```
 
 不配置则评分行为与修复前一致（仍 503）。白名单只放这一条，新增需走变更评审。
+
+另有两项部署侧修正：`b6b3eaf` 补上 compose 对上述变量的透传（否则只在宿主 `.env` 里
+生效、进不了容器），`6bff788` 修正该提交误删的 `AI_AGENT_MAX_OUTPUT_TOKENS`；
+`8a42f22` 把 `REDIS_HOST` 从短名 `redis` 改为容器名 `wangsh-redis-1`——本栈 backend
+同时加入 `docker_default` 网络以访问 Dify，而 Dify 也有一个名为 `redis` 的服务，
+短名会被抢占，导致连到需要密码的 Dify Redis 并报 `Authentication required`。
 
 ### 性能优化（五项）
 
@@ -72,7 +85,11 @@ AGENT_TRUSTED_INTERNAL_ENDPOINTS=http://docker-api-1:5001/v1
 - **内容运行时懒加载**（`2e5d002`）：KaTeX / highlight.js / Mermaid / D3+Markmap 从
   `index.html` 的 7 个 `<script defer>`（gzip ≈1.37MB）改为 `contentRuntimeLoader.ts`
   在首次真正渲染时按需注入。首屏静态脚本请求 7 → 0。
-- **Caddy 目录条目**（`2e5d002`）：`/docs/` 这类目录请求不再被 SPA 回退成 `index.html`。
+- **AI Partner 独立入口**（`2e5d002`）：Caddyfile 为 `/games/ai-partner` 加了独立
+  `try_files` 条目，该路径不再落到主 SPA 的 `index.html`，而是返回自己的
+  `index.html`（实测 522B vs 主站 1508B）。
+  注：此项只覆盖 `/games/ai-partner`，**不涉及** `/docs/` 等其它目录——
+  `/docs/` 仍由 SPA 回退（实测返回 1508B，与 `/` 相同）。
 
 ### 工程治理（`9cdb9cd` 等）
 
@@ -94,16 +111,20 @@ governance errors 5 → 0，四项历史债务真正拆分而非登记豁免：
 
 ### 验证
 
-- 本地门禁：根脚本 89 passed、文档合同 152 files / 702 links、版本一致性 2.2.1、
+- 本地门禁：根脚本 89 passed、文档合同 152 files / 703 links、版本一致性 2.2.1、
   compose 生产与 dev 均通过、网关合同 PASS、**governance errors=0**
-- 后端：`tests/users` 36 passed、`tests/ai_agents` 350 passed、`tests/ai_partner` 118 passed、
-  `tests/xbk`+`tests/assessment`+`tests/classroom` 合计 1997 passed
+- 后端：`tests/users` 36 passed、`tests/ai_agents` 350 passed、`tests/ai_partner`
+  121 passed / 1 skipped、`tests/xbk`+`tests/assessment`+`tests/classroom` 合计
+  **1755 passed / 125 skipped**（2026-10-29 实测；此前记的 1997 无法复现，已订正）
 - 前端：`tsc --noEmit` 0 错误、`token:check:ci` 0 undefined / 2077 引用、
   S5+性能新增测试 52 项通过
 - **生产部署**（2026-10-28 23:39）：六镜像 linux/amd64，digest 与 release-set 一致；
   `/api/health` 返回 `version=2.2.1`、`status=healthy`、database 与 redis 均 healthy；
   8 容器全 healthy；433 用户 / 55 表与部署前一致
-- **服务器 L3 待验证**：评分 200、连续对话追问、SSE 80s 长连接
+- **评分链路 L3**（2026-10-29）：临时容器挂载修复代码 + 生产 env/网络跑真实评分两次，
+  34.1s / 24.8s 均成功（total=51 / 36）。修复前同样调用分别止步于
+  `JSONDecodeError`（502）与 20s `ReadTimeout`（504）
+- **服务器 L3 仍待验证**：连续对话追问、SSE 80s 长连接
 
 ---
 

@@ -634,7 +634,7 @@ backend、Typst worker、PythonLab worker 的 `TIMEZONE` 和容器 `TZ`。开发
 ### Redis 与 PythonLab 隔离
 
 ```bash
-REDIS_HOST=redis
+REDIS_HOST=wangsh-redis-1
 PYTHONLAB_CONTAINER_NAMESPACE=pythonlab
 PYTHONLAB_WORKSPACE_ROOT=/tmp/pythonlab/workspaces
 PYTHONLAB_HOST_WORKSPACE_ROOT=/absolute/path/to/wangsh/data/pythonlab/workspaces
@@ -642,9 +642,13 @@ PYTHONLAB_HOST_WORKSPACE_ROOT=/absolute/path/to/wangsh/data/pythonlab/workspaces
 HOST_WORKSPACE_ROOT=/absolute/path/to/wangsh/data/pythonlab/workspaces
 ```
 
-生产 Compose 不固定 Redis `container_name`，应用和 worker 统一通过服务名 `redis`
-访问缓存，从而允许不同 Compose project 并存。开发 Compose 的现有 Redis 容器行为
-保持不变。
+生产 Compose **不**使用短服务名 `redis`，而是默认指向显式容器名 `wangsh-redis-1`。
+原因：本栈 backend 为访问 Dify 而加入 `docker_default` 网络，与 Dify 同网；Dify 也有
+一个名为 `redis` 的服务，短名会被其抢占，导致 backend 连到需要密码的 Dify Redis 并报
+`Authentication required`，健康检查转 degraded。取值形式为
+`${REDIS_HOST:-wangsh-redis-1}`——默认行为不变，但允许在其它 COMPOSE_PROJECT
+（如 simulate / deploy-local）下显式覆盖，避免容器名不同导致解析失败。
+开发 Compose 的现有 Redis 容器行为保持不变。
 
 `PYTHONLAB_CONTAINER_NAMESPACE` 决定动态沙箱容器前缀以及
 `list_active_sessions` 的枚举范围，默认 `pythonlab` 保持现有容器名兼容。
@@ -654,7 +658,8 @@ DockerProvider 定位宿主机目录时，`HOST_WORKSPACE_ROOT` 应填写同一�
 
 `.env.example` 是该合同的机器可读基线：
 
-- `REDIS_HOST=redis` 对应生产 Compose 服务发现，不再依赖固定 Redis 容器名。
+- `REDIS_HOST` 默认 `wangsh-redis-1`（显式容器名，避免与 Dify 的 `redis` 冲突），
+  写成 `${REDIS_HOST:-wangsh-redis-1}` 以便其它 COMPOSE_PROJECT 覆盖。
 - `TIMEZONE=Asia/Shanghai` 同时驱动应用业务时区和 Compose 容器时区。
 - `PYTHONLAB_CONTAINER_NAMESPACE=pythonlab` 保持开发/正式环境动态沙箱命名兼容。
 - `PYTHONLAB_HOST_WORKSPACE_ROOT` 负责 Compose bind mount 源目录。
