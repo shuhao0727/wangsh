@@ -286,3 +286,137 @@ def test_batch_delete_rejects_missing_targets_without_partial_delete():
     assert exc_info.value.status_code == 404
     assert student.is_deleted is False
     assert db.commit_count == 0
+
+
+# ---------------------------------------------------------------------------
+# 提交 4：唯一性检查在多行命中时不得抛 MultipleResultsFound（会变成 HTTP 500）
+# ---------------------------------------------------------------------------
+from sqlalchemy.exc import MultipleResultsFound  # noqa: E402
+
+
+class _StrictUniquenessDb(_FakeDb):
+    """模拟真实 PostgreSQL 语义：没有 LIMIT 的唯一性 OR 查询命中多行时抛异常。
+
+    _FakeDb 总是把 scalar_one_or_none 收成单值，会掩盖生产缺陷，
+    因此这里显式按 SQL 是否带 LIMIT 来判定。
+    """
+
+    async def execute(self, query):
+        self.queries.append(query)
+        sql = str(query).upper()
+        if "LIMIT" not in sql and " OR " in sql and " FOR UPDATE" not in sql:
+            raise MultipleResultsFound(
+                "Multiple rows were found when one or none was required"
+            )
+        return _ScalarRows(self.values)
+
+
+def test_create_user_double_field_conflict_returns_400_not_500():
+    # A(username=alpha, student_id=sid_y)、B(student_id=sid_x)：两个字段各命中不同用户
+    first = SimpleNamespace(
+        id=2, username="alpha", student_id="sid_y", full_name="A",
+        role_code="student", is_active=True, is_deleted=False,
+    )
+    second = SimpleNamespace(
+        id=3, username="bravo", student_id="sid_x", full_name="B",
+        role_code="student", is_active=True, is_deleted=False,
+    )
+    db = _StrictUniquenessDb([first, second], actor_role="super_admin")
+    user_data = users_api.UserCreate(
+        username="alpha", student_id="sid_x", full_name="双字段冲突"
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(
+            users_api.create_user(user_data, {"id": 10, "role_code": "super_admin"}, db)
+        )
+
+    assert exc_info.value.status_code == 400
+    # 唯一性查询必须带 ORDER BY + LIMIT，语义上只取一行
+    uniqueness_sql = str(db.queries[-1]).upper()
+    assert "LIMIT" in uniqueness_sql
+    assert "ORDER BY" in uniqueness_sql
+    assert db.commit_count == 0
+    assert db.added == []
+
+
+def test_update_user_double_field_conflict_returns_400_not_500():
+    # 直接测唯一性校验辅助函数：PUT 端点在它之前还有锁定与角色校验，
+    # 用真实 PG 才能跑完整链路（已在实例验证中覆盖，PUT 双字段冲突 → 400）。
+    target = SimpleNamespace(
+        id=3, username="bravo", student_id="sid_x", full_name="B",
+        role_code="student", is_active=True, is_deleted=False,
+    )
+    conflicting_owner = SimpleNamespace(
+        id=2, username="alpha", student_id="sid_dup", full_name="A",
+        role_code="student", is_active=True, is_deleted=False,
+    )
+    db = _StrictUniquenessDb([conflicting_owner], actor_role="super_admin")
+
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(
+            users_api._assert_update_unique_fields(
+                db,
+                target,
+                target.id,
+                users_api.UserUpdate(username="alpha", student_id="sid_dup"),
+            )
+        )
+
+    assert exc_info.value.status_code == 400
+    uniqueness_sql = str(db.queries[-1]).upper()
+    assert "LIMIT" in uniqueness_sql
+    assert "ORDER BY" in uniqueness_sql
+
+
+def test_update_unique_fields_passes_when_nothing_conflicts():
+    target = SimpleNamespace(
+        id=3, username="bravo", student_id="sid_x", full_name="B",
+        role_code="student", is_active=True, is_deleted=False,
+    )
+    db = _StrictUniquenessDb([], actor_role="super_admin")
+
+    asyncio.run(
+        users_api._assert_update_unique_fields(
+            db,
+            target,
+            target.id,
+            users_api.UserUpdate(username="charlie", student_id="sid_free"),
+        )
+    )
+
+    assert "LIMIT" in str(db.queries[-1]).upper()
+
+
+def test_create_user_single_field_conflicts_keep_explicit_detail():
+    username_owner = SimpleNamespace(
+        id=2, username="alpha", student_id="sid_y", full_name="A",
+        role_code="student", is_active=True, is_deleted=False,
+    )
+    db = _StrictUniquenessDb([username_owner], actor_role="super_admin")
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(
+            users_api.create_user(
+                users_api.UserCreate(username="alpha", student_id="sid_new", full_name="x"),
+                {"id": 10, "role_code": "super_admin"},
+                db,
+            )
+        )
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.detail == "用户名已存在"
+
+    student_owner = SimpleNamespace(
+        id=3, username="bravo", student_id="sid_taken", full_name="B",
+        role_code="student", is_active=True, is_deleted=False,
+    )
+    db = _StrictUniquenessDb([student_owner], actor_role="super_admin")
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(
+            users_api.create_user(
+                users_api.UserCreate(username="newuser", student_id="sid_taken", full_name="x"),
+                {"id": 10, "role_code": "super_admin"},
+                db,
+            )
+        )
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.detail == "学号已存在"

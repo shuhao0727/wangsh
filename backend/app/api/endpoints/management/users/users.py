@@ -244,7 +244,13 @@ async def create_user(
         
         # 类型忽略：Pylance不理解这个条件检查
         if existing_checks:  # type: ignore
-            check_query = select(User).where(or_(*existing_checks))
+            # 取舍说明：or_ 查询在「username 命中 A、student_id 命中 B」时会返回多行，
+            # 若用 scalar_one_or_none() 会抛 MultipleResultsFound 变成 HTTP 500。
+            # 这里用 order_by(id).limit(1) 只止血成「400 提示某一字段已存在」；
+            # 更严格的语义应拆成两次独立查询、分别判定每个字段，改动更大，留待后续。
+            check_query = (
+                select(User).where(or_(*existing_checks)).order_by(User.id).limit(1)
+            )
             check_result = await db.execute(check_query)
             existing_user = check_result.scalar_one_or_none()
             
@@ -316,8 +322,15 @@ async def _assert_update_unique_fields(
     if not checks:
         return
 
+    # 同 create 路径：双字段各自命中不同用户时 or_ 会返回多行，
+    # 必须 limit(1) 否则抛 MultipleResultsFound → HTTP 500。
     existing_user = (
-        await db.execute(select(User).where(or_(*checks), User.id != user_id))
+        await db.execute(
+            select(User)
+            .where(or_(*checks), User.id != user_id)
+            .order_by(User.id)
+            .limit(1)
+        )
     ).scalar_one_or_none()
     if existing_user and existing_user.username == user_data.username:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="用户名已存在")
