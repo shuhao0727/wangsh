@@ -6,9 +6,118 @@
 > 最近更新：2026-10-28
 > 说明：本文件是当前测试事实的唯一汇总入口；阶段报告只引用本页，不复制新基线。
 
+## 2026-10-28 S2 / S3 / S4 / S6 分级验证
+
+按 [S2~S7 执行计划 v4](../plans/2026-10-28-S2-S7-EXECUTION-PLAN-V4.md) 与
+[S4~S7 条目清单](../plans/2026-10-28-S4-S7-ITEM-MANIFEST.md) 执行。
+规则：一次性环境隔离 + 基线对照 + 主控复核关键结论。
+
+### S2 崩溃级（3 项通过）
+
+- **前置 S2-0：** `wangsh-frontend:dev` 原为 2026-10-22 的 Caddy 生产形态（EXPOSE 80 / `caddy run`），
+  已用 `docker build -f frontend/Dockerfile.dev --target development` 重建为开发形态
+  （EXPOSE 6608 / `npx vite --mode development`，vite 8.0.3）。非测试源码与 HEAD 零差异（621 文件比对）。
+- **S2-1 空库 bootstrap（`312f387`），两条路径均通过：**
+  - 路径 A（`check_migration_state` → `bootstrap_db --initial-only` → `alembic upgrade head` → `bootstrap_db`）：
+    四步全 rc=0，50 条迁移。**55 条 = 54 BASE TABLE + 1 VIEW**、视图 14 列、49 序列、5 个关键索引、单 head `20261026_0001`。
+  - 路径 B（裸 `alembic upgrade head`）：同样全通过，表集合 `IDENTICAL_TABLE_SETS`、视图定义逐字相同。
+  - **结论：`DEPLOY.md:871`「不要在空库裸跑 Alembic（历史 revision 标识超 32 字符）」需订正**——
+    `alembic_compat` 已自动扩到 `VARCHAR(64)`，最长 revision 47 字符，实测两路列宽均 64，无截断。
+    同段「当前 head 20261020_0001_knn_collection」也已过时。
+  - **形态差异（待评估）：** 路径 A 的 `alembic_version` **无主键**（`bootstrap_db.py:219` 用
+    `CREATE TABLE IF NOT EXISTS` 不带 PRIMARY KEY），路径 B 有 `alembic_version_pkc`；索引数 224 vs 225。
+    功能都能跑通，但生产路径 A 的版本表缺唯一约束。
+  - **部署必经步骤（不在 S2-1 范围）：** bootstrap 后 `auth_authority` 闸门为 CLOSED，前后台全部 503。
+    这是有意设计（模型注释 `Migration starts CLOSED; never auto-open`），开通需走
+    `backend/app/api/endpoints/auth/cutover.py` 且要求四项运维冻结证据。S2-1 断言不含 auth 开通。
+- **S2-2 前端回退（`cba3c0e`）：** `git merge-base --is-ancestor` 返回 ok，判为「由 S1-7 覆盖」，不重复执行。
+  **未验证前提：** S1-7 当时用的前端产物未记录；若用的是旧 `frontend:dev`（10-22 生产镜像），
+  其 `pageerror=0` 证明的是 10-22 代码而非 HEAD。该前提无法回溯确认。
+- **S2-3 dev 镜像：** `alembic heads` 单 head 正确；两 worker `celery ready` 且周期任务 succeeded；
+  frontend:dev 四项形态断言全中并实跑 vite（`/`、`/@vite/client`、`/src/main.tsx` 均 200）。
+  **但三个后端 `:dev` 镜像落后 HEAD 一个提交**（缺 `b129572` 的 CORS `NoDecode`），
+  用 `.env.dev` 不挂载源码启动会 `SettingsError`；本次验证靠 `-e 'CORS_ORIGINS=[...]'` 变通跑通，
+  验的是镜像内容而非最终形态。**S3/S4 若引用这些镜像需先重建。**
+
+### S3 阻断级（5 项通过 + 1 项判失效）
+
+- **S3-1 KNN HTTP UUID（`b2d97a7`）通过。** 前置 `window.isSecureContext === false` 成立
+  （Caddy 反代 `http://knn.test:8443` + `header_up Host localhost`，未改 `vite.config.ts`/hosts）。
+  提交流程 201 且 `pageerror=0`；`request_id` 为合法 UUID v4 并与库内落盘一致；
+  **首包人为 503 后二次提交，两次 body 逐字节相同、`request_id` 完全相同**；
+  负向（抹掉 `randomUUID`+`getRandomValues`）出现「当前浏览器暂不支持提交…本页填写内容已保留」
+  且 `/submissions` 请求数为 0。后端契约核实：`request_id: UUID` + `uq_knn_submission_request` + `payload_hash`。
+- **S3-2 评分智能体空值（`7a4af95`）通过。** 空串时 `/health` 200 且 `status=healthy`、
+  `RestartCount=0`；评分端点返回 **503**「尚未配置AI评分智能体」；负向 `abc` 时 `ExitCode=1` +
+  pydantic `ValidationError`；基线 `7a4af95^` 空串确实崩。25 项参数化用例等价重写全通过
+  （含「空白串未被全局忽略」——`AI_PARTNER_LEADERBOARD_DURATION_SECONDS=''` 仍报错）。
+- **S3-3 KaTeX 本地字体（`c3f0de4`）通过。** `index.html` 无 `katex.min.css` 链接；
+  生产构建主 CSS **59/59** 条 `KaTeX_*` 均 `/assets/` 同源；运行期 jsdelivr 字体请求为空、
+  5 条 `/assets/KaTeX_*.woff2` 全 200；CSP `font-src` 不含 jsdelivr。
+  **负向对照**：退回修复前形态后 Chromium 报 55 条 `violates font-src ... blocked`。
+  断言已收窄——KaTeX 的 **JS 仍走 jsdelivr**（CSP 允许），只验 CSS/字体同源。
+- **S3-4 GDPR 导出兜底（`6abef78`）通过。** 基线对照（规则 5）：同一库同一数据，
+  `6abef78^` 版本 **HTTP 500** + `AttributeError: 'GroupDiscussionMessage' object has no attribute 'message_type'`；
+  修复后 **HTTP 200**，`discussion_messages_count=1`、`message_type: null`、`content` 逐字一致。
+  审计日志每次导出稳定落一条 `EXPORT_DATA`。对照无讨论消息的用户打同端点 → 200，排除端点本身故障。
+- **S3-5 中间状态恢复（`4ffdb31`）：需重定义检查项。** `4ea3d69` 已覆盖式改写热点分析管线，
+  `normalize.ts` 中一半字段只剩定义、无消费者。仍活着的两条链：SSE `errorCode` → 中文文案
+  （`useStreamEngine.ts`/`index.tsx` 对该提交 diff 为 0）、热点结果页渲染。
+- **S3-6 批量变更守卫（`7645024`）：判为已失效。** `9f84619` 删除了该提交全部 7 个文件，
+  `rg` 零命中。无验证对象，不占 S3 配额。核实：`RELEASE_NOTES.md` 中**没有**该提交的残留宣传段落。
+
+### S4 错误级（3 项通过 + 4 项不通过 + 2 项能力缺失）
+
+**批次 A（`e74bb61` XBK 年级约束）全通过：**
+- 高一学生选仅高二课程 → **409**「课程 C1 仅面向 高二 开设」
+- quota 改 0 后仍报年级错误，证明年级校验在容量校验之前（`selection_rules.py:558`）
+- 导入缺「各班限报人数」列 → **422** 带行号
+- 补充：`test_xbk_selection_rules_isolated.py -k grade` 7 passed；`test_xbk_import_validation.py` 17 passed
+
+**批次 B 实测结果：**
+
+| 项 | 实测 | 判定 |
+|---|---|---|
+| `4a448a9` 用户唯一性 | 单字段冲突正常 400；**双字段各命中不同用户 → 500** `Multiple rows were found`；PUT 同样 500。位置 `users.py:249`（create）与 `:321`（`_assert_update_unique_fields`） | 需修 |
+| `14aeba9` 学习进度 | 基本持久化保留；但 **PUT/POST 是全量替换** `progress_data`，只提交 `{notes}` 会冲掉其他字段；`version` 字段与 PATCH 端点均不存在（405） | 保护逻辑全丢 |
+| `888f32b` 导入加固 | **非法 UTF-8 → 500**、**破坏的 xlsx → 500**；逐行 savepoint 正常（中间行缺陷 → 200 + `error_count=1`）；**非法角色值静默降级成 `student`**（`import_service.py:190-191`） | 需修 |
+| `73853e2` 文章搜索 | 公开端 `?q=` 精确命中正文；后台 `GET /articles` **无 `search` 参数**，前端降级为客户端 `title`/`slug` 过滤，不查正文 | 降级 |
+| `2171d6d` 移动端 | 375px 无页面级横向溢出；但 **`SplitPanePage.tsx:24` 的 `gridTemplateRows: "minmax(0,1fr)"` 只有一行却塞两个子元素**，目录面板高度被压成 0，**移动端目录不可见**；折叠目录 `article-mobile-toc` 已被 `9f84619` 删除且无替代入口 | 需修 |
+| `17709be` PDF | 匿名访问未发布笔记 → **404**（不区分不存在与未发布，有意设计）；`pdf_available` 前后端均不存在，前端靠 404 + toast 兜底 | 能力缺失 |
+| `903eb00` PythonLab | 目标 2 用例 + 整文件 **54 passed**（fake Docker/Redis）；**未创建任何真实 `pythonlab_u*` 容器** | 通过 |
+
+### S6 质量级（2 项通过）
+
+- **`b77d849` 往返次数通过，520 → 1。** 两条独立证据链：
+  - ORM 级（`before_cursor_execute` 计数器，26 班×20 课 520 条选课）：基线 `6d694b1` **553 条总 SQL / 520 次容量 COUNT**；HEAD **34 条 / 1 次**
+  - 真实 HTTP（`SQLALCHEMY_ECHO=true`，`POST /xbk/import?scope=selections`）：基线 **566 / 520**；HEAD **47 / 1**（单条 `GROUP BY`）
+- **`cd868f8` echarts 产物通过。** `build:check` 退出码 0，`echarts-vendor` 584,082 字节（570.5 KB）vs 全量 1,033,870（1009.6 KB），瘦身约 45%。
+  **雷达图 SVGRenderer 回归做了对照组**：生产版 `svgCount=1/canvasCount=0`、彩色像素 4.84%；
+  模拟缺 `SVGRenderer` 的对照组 `svgCount=0/canvasCount=1`、**彩色像素 0%**（只剩灰阶网格）。
+  另注 `build:check` 整体状态为 WARN（total JS 10.96MB > 10MB、`editor.api2` 3541.7KB > 500KB），
+  非本次改动引入。
+
+### 本轮方法论发现
+
+- **`uvicorn --reload` 会掩盖子进程崩溃。** 用镜像默认 CMD 起 `AI_PARTNER_SCORING_AGENT_ID=abc`
+  的容器显示 `Status=running ExitCode=0`，但 `/health` 完全不通；去掉 `--reload` 后才看到真实
+  `ExitCode=1` + `ValidationError`。已写入 `ENGINEERING_GOVERNANCE.md` §4.2：
+  验证启动类条目必须看 `/health` 而非容器状态、检查 `RestartCount==0`、失败类场景禁用 `--reload`。
+
+### 未覆盖 / 残余风险
+
+- 三个后端 `:dev` 镜像在 arm64 上验证，生产链声明 `platform: linux/amd64`，架构差异未测。
+- S1-7 所用前端产物来源无法回溯。
+- S4-B5 只在 Chromium 375px 测，未覆盖 WebKit 与 320px；`articleDetailUi.governance.test.tsx` 已随回滚消失。
+- S4-B2 未做并发验证，多标签页丢写风险是代码推断。
+- S4-B1 只测 `super_admin` 路径，普通 admin 的 `_assert_role_assignment_allowed` 未覆盖。
+- S6-1 只测导入路径，单条 `POST /data/selections` 改动前后都是 1 次、无区分度。
+- S3-2 的单元测试未用 pytest 正式跑（`wangsh-backend:dev` 镜像内无 pytest），改用裸 pydantic 等价重写 25 项。
+- S3-4 只验导出读路径，`conversations`/`analyses` 段在一次性库中均为空数组。
+
 ## 2026-10-27~28 S1 致命级验证（7 项全部通过）
 
-- **文档门禁：** Markdown 合同检查为 `150 files / 690 links / 0 missing`。
+- **文档门禁：** Markdown 合同检查为 `150 files / 692 links / 0 missing`。
 
 - **范围：** 按 [S1~S7 验证计划](../plans/2026-10-27-S1-S7-VERIFICATION-PLAN-V3.md) 执行 S1 致命级 7 项。
   规则：Docker 实例验证（D1/D2/D3）+ 双 Agent 交叉验证 + 主控复现争议结论。
