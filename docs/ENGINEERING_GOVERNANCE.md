@@ -152,6 +152,13 @@ git diff --check
 5. 生产迁移应逐步改为独立 one-shot migrator，并使用数据库 advisory lock。
 6. Web 容器不应长期承担自动生产迁移职责。
 7. 有破坏性或长锁迁移时，发布前必须确认备份、停写窗口和回滚路径。
+8. **迁移不得使用 `IF NOT EXISTS` / `if_not_exists` 守卫。** 这类守卫会让「手工加过同名列/索引」的
+   schema 漂移在 upgrade 时被静默跳过，`alembic_version` 照常推进，schema 与迁移文件永久分叉。
+   - 执行方式：`cd backend && python scripts/check_migration_guard.py`，CI 在 python governance
+     步骤首先执行（纯静态，不需要数据库）。
+   - 历史迁移按 revision 冻结命中数（`FROZEN_GUARD_COUNTS`），只许减少不许增加；新增条目必须说明理由。
+   - 已在生产执行过的历史迁移不改写其中 DDL；需要清理时走新的 expand-migrate-contract 迁移。
+   - 数据库侧的真实漂移仍由 `scripts/check_migration_state.py` 在线校验，两者互补。
 
 ## 七、文档和脚本
 

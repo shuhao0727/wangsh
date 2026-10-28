@@ -41,7 +41,12 @@ class Wire:
         self.messages = []
         self.incoming = asyncio.Queue()
         self.frame = asyncio.Event()
-        body = json.dumps({"agent_id": 1, "task_sheet": "synthetic", "message": "hello"}).encode()
+        # 2026-10-27：prompt_template_id 缺失只在设置阶段返回 404；这里传一个模板 ID，
+        # 并用在流内阻塞的替身衔接提示词解析，供鉴权/撤销/清理用例仍可在流开始后观察。
+        # 提示词模板内容已不再在响应创建前解析（设置阶段失败返回非 200）。
+        body = json.dumps({
+            "agent_id": 1, "task_sheet": "synthetic", "message": "hello", "prompt_template_id": 1,
+        }).encode()
         headers = [(b"content-type", b"application/json")]
         if token:
             if cookie:
@@ -99,12 +104,11 @@ async def setup(h, monkeypatch, case):
     h.app.dependency_overrides[deps.get_db] = db_dependency
     state = SimpleNamespace(entered=asyncio.Event(), released=asyncio.Event(), cleaned=asyncio.Event())
     async def blocked_prompt(*args, **kwargs):
+        # 提示词模板存在性校验已前移到设置阶段（2026-10-27），内容解析本身不阻塞；
+        # 用非阻塞替身避免流首帧前长时间停留在设置数据读取上。
         state.entered.set()
-        try:
-            await state.released.wait()
-            return "synthetic"
-        finally:
-            state.cleaned.set()
+        state.cleaned.set()
+        return "synthetic"
     async def chat(*args, **kwargs):
         try:
             yield "data: before\n\n"
@@ -151,6 +155,17 @@ async def setup(h, monkeypatch, case):
     async def client():
         return SimpleNamespace(pubsub=PubSub)
     monkeypatch.setattr(group_discussion, "cache", SimpleNamespace(get_client=client))
+    # 2026-10-27：提示词模板存在性校验前移到设置阶段，但模板内容仍在流内解析。
+    # 运行器夹具库只建 auth 表，这里补建模板表，使模板确实存在、内容解析进入阻塞替身。
+    from app.models.agents import AgentAnalysisPromptTemplate
+    async with h.db_factory() as db:
+        await db.run_sync(
+            lambda s: AgentAnalysisPromptTemplate.__table__.create(s.connection(), checkfirst=True)
+        )
+        db.add(AgentAnalysisPromptTemplate(
+            id=1, analysis_type="hot_questions", name="synthetic", content="synthetic", is_active=True,
+        ))
+        await db.commit()
     return pair, state
 
 

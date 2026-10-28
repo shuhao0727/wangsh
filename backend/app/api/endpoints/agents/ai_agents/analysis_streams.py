@@ -10,7 +10,7 @@ import asyncio
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,6 +19,7 @@ from app.core.deps import get_db, require_admin
 from app.core.stream_session import session_checked_stream
 from app.utils.errors import safe_error_detail
 from app.models.agents import AIAgent, HotQuestionAnalysis, StudentChainAnalysis
+from app.models.agents import AgentAnalysisPromptTemplate
 from app.models.agents import TaskAnalysis as TaskAnalysisModel
 from app.schemas.agents import (
     HotQuestionAnalysisSaveRequest,
@@ -85,15 +86,21 @@ async def save_hot_question_analysis_stream(
     current_user: Dict[str, Any] = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
+    # 请求参数（提示词模板）的解析属于设置阶段：在 SSE 响应开始前完成，
+    # 出错直接返回 4xx/5xx，而不是先发 200 再在流里报错。
+    try:
+        prompt_text = await _resolve_prompt_text(
+            db,
+            prompt_template_id=body.prompt_template_id,
+            custom_prompt=body.custom_prompt,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=safe_error_detail("读取分析提示词失败", exc)) from exc
+
     async def event_generator():
         try:
             effective_start, effective_end = _analysis_window(body.start_at, body.end_at)
             yield _sse("analysis_started", {"message": "开始热点问题深度分析", "progress": 0})
-            prompt_text = await _resolve_prompt_text(
-                db,
-                prompt_template_id=body.prompt_template_id,
-                custom_prompt=body.custom_prompt,
-            )
             yield _sse("step_started", {"step_id": "events", "message": "正在提取课堂对话事件", "progress": 15})
             analysis_result = await analyze_hot_questions_v2(
                 db,
@@ -190,15 +197,32 @@ async def save_student_chain_analysis_stream(
     current_user: Dict[str, Any] = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
+    # 同上：前端填写了 prompt_template_id 就一定会把模板内容作为提示词参与分析，
+    # 模板缺失等同于「要分析的资源不存在」，在 SSE 响应开始前返回 404。
+    if body.prompt_template_id:
+        template = (
+            await db.execute(
+                select(AgentAnalysisPromptTemplate.id).where(
+                    AgentAnalysisPromptTemplate.id == body.prompt_template_id,
+                    AgentAnalysisPromptTemplate.is_active.is_(True),
+                )
+            )
+        ).scalar_one_or_none()
+        if template is None:
+            raise HTTPException(status_code=404, detail="分析提示词模板不存在或已停用")
+    try:
+        prompt_text = await _resolve_prompt_text(
+            db,
+            prompt_template_id=body.prompt_template_id,
+            custom_prompt=body.custom_prompt,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=safe_error_detail("读取分析提示词失败", exc)) from exc
+
     async def event_generator():
         try:
             effective_start, effective_end = _analysis_window(body.start_at, body.end_at)
             yield _sse("analysis_started", {"message": "开始学生问题链深度分析", "progress": 0})
-            prompt_text = await _resolve_prompt_text(
-                db,
-                prompt_template_id=body.prompt_template_id,
-                custom_prompt=body.custom_prompt,
-            )
             yield _sse("step_started", {"step_id": "chains", "message": "正在构建教师主线与学生问题链", "progress": 18})
             analysis_result = await analyze_student_chains_v2(
                 db,

@@ -141,6 +141,8 @@ jobs:
           PUSH_BEFORE_SHA: ${{ github.event.before }}
           WORKFLOW_CALL_BASE_REF: origin/main
         run: |
+          # 迁移守卫是纯静态检查，不需要数据库，放在最前面尽早失败。
+          python scripts/check_migration_guard.py
           python scripts/check_python_governance.py check
           if [ "$EVENT_NAME" = "pull_request" ]; then
             python scripts/check_python_governance.py check --base-ref "$PR_BASE_SHA"

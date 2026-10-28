@@ -309,6 +309,33 @@ ASGI middleware 在 FastAPI/Starlette 表单解析前约束请求头和表单请
 
 检查和网络发送不是原子操作，不能保证已经在途/已缓存事件被收回，也不刷新数据库角色或班级。AI 与小组讨论 SSE 不由此覆盖。规则见 [AUTH](../features/AUTH.md#管理与课堂-sse-会话持续校验)，证据见 [TEST_STATUS](../docker/testing/TEST_STATUS.md)。
 
+## AI 分析/对话 SSE 的设置阶段错误码
+
+`POST /api/v1/ai-agents/stream`、`POST /api/v1/ai-agents/analysis/hot-questions/stream`、
+`POST /api/v1/ai-agents/analysis/student-chains/stream`、`POST /api/v1/ai-agents/analysis/task-analyses/stream`
+在**响应开始之前**完成的检查（智能体是否存在、是否停用、端点/密钥是否配置、熔断状态、
+提示词模板是否存在等）失败时，**直接返回对应的 4xx/5xx 状态码**，不再先发 `200` 再在流里塞
+`event: error` 帧。
+
+| 错误码 | HTTP 状态 | 含义 |
+|---|---|---|
+| `invalid_agent` | 404 | 智能体不存在或已删除 |
+| `agent_inactive` | 409 | 智能体已停用 |
+| `missing_endpoint` | 409 | 未配置 API 地址 |
+| `missing_api_key` | 409 | 未配置 API 密钥 |
+| `circuit_open` | 409 | 熔断中 |
+| `model_not_configured` | 409 | 模型未配置 |
+| `stream_setup_failed` | 503 | 设置阶段其他失败（未知错误码也归入此档） |
+| `stream_failed` | 503 | 流建立失败；非 `DEBUG` 下不返回 `detail` 原文 |
+
+响应体为 FastAPI 标准错误结构，`detail` 保留原错误字典，前端可同时按状态码和 `error` 字段判定。
+
+**流开始之后**的错误（上游超时、连接中断）仍只能通过 `event: error` 帧传递——这是 SSE 协议
+的限制，HTTP 状态码此时无法再更改。
+
+前端 `frontend/src/services/znt/api/index.ts` 已按 `if (!response.ok)` 处理非 200，本次变更
+不需要前端改动。
+
 ## 认证存储不可用反馈补充
 
 初始身份查询遇到已识别的数据库连接故障返回 `503` 并拒绝身份，覆盖 Bearer、已配置
