@@ -107,6 +107,20 @@ S2-2 前端回退（一条命令 + 引用 S1-7）
 - 5 个关键索引存在（3 个 XBK `grade`、2 个文章样式）
 - 49 个序列
 
+**部署必经步骤（S2-1 不覆盖，但必须写明）**
+
+空库 bootstrap 完成后，`auth_authority` 这个部署闸门是 **CLOSED** 的（模型注释：
+`Migration starts CLOSED; never auto-open`）。此时前后台**全部无法登录**（返回 503），
+这不是缺陷，是有意设计——避免未完成运维前置的环境被误用。
+
+开通需走 `backend/app/api/endpoints/auth/cutover.py`，它要求显式提供 `database_url`、
+`redis_url`、`operator`、`paired_snapshot_id`、`freeze_evidence`，并记录
+`legacy_writers_stopped` / `inflight_drained` / `account_writes_frozen` /
+`redis_auth_writes_frozen` 四项运维冻结证据。**这是正式部署流程，不是 bootstrap 的一部分。**
+
+因此 S2-1 的验证范围明确**不含 auth 开通**：断言只到「55 张表 / 视图 / 索引 / 序列 / 单 head」，
+不验证登录可用性。任何需要登录的后续验证（S3-1、S3-4 等）都必须自行处理闸门状态。
+
 **坑**：
 
 1. **失败后不能重跑同一库**。`bootstrap_db.py` 在 `alembic_version` 存在但为空时直接
