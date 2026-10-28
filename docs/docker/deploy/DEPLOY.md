@@ -965,6 +965,31 @@ bash scripts/deploy.sh restore-db "${BACKUP_FILE:-./backups/your-backup.dump}" -
 
 ## 数据备份与恢复
 
+### 执行前提
+
+`backup-db` / `restore-db` 通过 `scripts/deploy.sh` 的 `compose exec` 在 PostgreSQL 容器里执行，
+读取的是两个环境变量：
+
+| 变量 | 默认值 | 作用 |
+|---|---|---|
+| `ENV_FILE` | `.env` | 提供 `POSTGRES_DB` / `POSTGRES_USER` |
+| `COMPOSE_FILE` | `docker-compose.yml` | 决定容器拓扑 |
+
+**注意本仓库的开发栈用的是另一套文件**：开发栈由 `docker-compose.dev.yml` + `.env.dev` 启动，
+容器名是 `wangsh-postgres`。如果直接按默认值执行，会出现两类错误：
+
+- 根目录没有 `.env` → `require_env_file` 直接报 `.env not found`
+- 容器名按默认规则推导成 `<工作树名>-postgres-1` → `service "postgres" is not running`
+
+对开发栈执行时请显式指定：
+
+```bash
+ENV_FILE=.env.dev COMPOSE_FILE=docker-compose.dev.yml bash scripts/deploy.sh backup-db full
+ENV_FILE=.env.dev COMPOSE_FILE=docker-compose.dev.yml bash scripts/deploy.sh restore-db ./backups/xxx.dump --yes
+```
+
+生产环境按仓库根 `.env` + `docker-compose.yml` 的默认值执行即可。
+
 ### 备份数据库
 
 ```bash
@@ -989,6 +1014,42 @@ bash scripts/deploy.sh restore-db ./backups/your-backup.dump --yes
 --if-exists` 恢复；也兼容已有 `.sql` 文件。不要依赖 Compose 自动生成的容器名，也不要
 在未确认目标环境前手工删除生产数据库。`restore-db` 必须显式传入 `--yes`；
 `down-v` 必须设置 `ALLOW_VOLUME_DELETION=true`，隔离 `wangsh_sim` 模拟栈清理除外。
+
+**三种备份模式的恢复边界（2026-10-27 起）**
+
+| 备份模式 | 内容 | 能否单独 `restore-db` |
+|---|---|---|
+| `full` | 表结构 + 数据 | ✅ 可恢复到任意目标库（`--clean` 会先清空同名对象） |
+| `schema` | 仅表结构 | ⚠️ 可恢复，但只得到空表；通常用于核对结构 |
+| `data` | 仅数据（无 CREATE TABLE） | ⚠️ **只能恢复到「表已建好且为空」的库** |
+
+`data` 备份不含建表语句，`--clean` 无法清空已有行。`restore-db` 会先读取归档目录，
+按备份里实际包含的 `TABLE DATA` 逐张核对目标库：只要其中一张表已存在且有数据，就
+**直接拒绝并列出冲突表名**，而不是让 `COPY` 撞主键后失败、留下“恢复成功”的错觉。
+需要回滚到某个时间点时请使用 `full` 备份。
+
+`pg_restore` 默认遇到错误只打警告并继续，`restore-db` 现在统一加 `--exit-on-error`：
+恢复中途任何一处失败都会立即中止、返回非零退出码，不会出现“恢复了一半却报成功”。
+`.sql` 格式的备份走 `psql`，同样加了 `ON_ERROR_STOP=1`，中途出错即以非零退出码停下。
+
+**各模式的具体边界（实测）**
+
+- `data` 备份恢复到**没有对应表**的库会失败并提示 `relation ... does not exist`——这是有意
+  为之，避免把「什么都没恢复」当成成功。
+- `--clean` 只清理 dump 里存在的对象；目标库中多出来的表和视图会**保留**，不会被顺带删除。
+- `schema` 备份恢复到空库只得到空表结构，不含任何数据行。
+- 目标库存在与备份表同名但类型不同的对象（例如备份是表、目标库是视图）时，
+  `pg_restore` 会在 `ALTER TABLE ... DROP CONSTRAINT` 处失败并以非零退出码中止。
+- 判定冲突时支持含空格、单引号、逗号、点号的表名；仍建议避免在 `public` 之外的 schema 与
+  表名里同时使用点号，以免与其他工具冲突。
+
+```bash
+# 回滚：用 full 备份
+bash scripts/deploy.sh restore-db ./backups/wangsh_db_YYYYMMDD_HHMMSS.dump --yes
+
+# 仅导数据到空库（例如新建分析库）
+docker exec -i <postgres> pg_restore -U admin -d <empty_db> --data-only < ./backups/xxx_data.dump
+```
 
 ### 备份计划
 

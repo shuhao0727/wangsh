@@ -968,8 +968,120 @@ PY
     user="$(env_value POSTGRES_USER)"
     user="${user:-admin}"
     case "${dump_path}" in
-      *.sql) cat "${dump_path}" | compose exec -T postgres psql -U "${user}" -d "${db}" ;;
-      *) cat "${dump_path}" | compose exec -T postgres pg_restore -U "${user}" -d "${db}" --clean --if-exists --no-owner --no-privileges ;;
+      *.sql)
+        # psql 默认遇到错误只打 ERROR 就继续执行后续语句，最后退出码仍是 0，
+        # 运维看到「成功」其实中间已经丢了一段。ON_ERROR_STOP 让它在第一处错误即中止。
+        sql_status=0
+        cat "${dump_path}" | compose exec -T postgres psql -v ON_ERROR_STOP=1 -U "${user}" -d "${db}" || sql_status=$?
+        if [ "${sql_status}" -ne 0 ]; then
+          echo "restore-db: psql failed (status ${sql_status}); the target database may be incomplete" >&2
+          exit "${sql_status}"
+        fi
+        ;;
+      *)
+        # 先取 TOC：pg_restore --list 本身也是「归档是否可读」的校验，
+        # 尾部截断的 dump 在这里就会失败，不会等到恢复进行到一半才发现。
+        if ! dump_toc="$(compose exec -T postgres pg_restore --list < "${dump_path}")"; then
+          echo "restore-db: ${dump_path} is not a readable archive" >&2
+          exit 1
+        fi
+        restore_status=0
+        # 只用 TABLE DATA 条目判断，不引用 "TABLE " 本身：后者是前者的前缀，
+        # 计数时会把数据行一并算进去，导致 data 备份被误判成 full。
+        table_datas="$(printf '%s\n' "${dump_toc}" | grep -cE "^[0-9]+;[0-9 ]+TABLE DATA [^ ]+ [^ ]+" || true)"
+        table_defs="$(printf '%s\n' "${dump_toc}" | grep -cE "^[0-9]+;[0-9 ]+TABLE [^ ]+ [^ ]+" || true)"
+        # schema-only 备份同样没有 TABLE DATA 但有 TABLE，按 full 处理（--clean 无害）。
+        if [ "${table_defs}" -gt "${table_datas}" ] || [ "${table_datas}" -eq 0 ]; then
+          pass_args="--clean --if-exists"
+        else
+          # data 备份不含 CREATE TABLE，--clean 没有对象可删、清不掉已有行，
+          # 直接 COPY 会撞主键；这里按备份里 TABLE DATA 的表名逐张核对目标库，
+          # 只认「表存在且已有行」为冲突，避免拿全库表数当判据而误拒。
+          # 表名里可能出现空格、单引号、逗号甚至点号：用逗号或点号切分都会拆坏名字，
+          # 换行又没法放进 psql 变量，所以用 awk 把每个「schema 表名」连成
+          # "schema\x01表名\x01schema\x01表名…" 一行，交给 psql 变量整体传入。
+          table_names="$(printf '%s\n' "${dump_toc}" | awk '
+            /^[0-9]+;[ ]+[0-9]+ [0-9]+ TABLE DATA / {
+              line = $0
+              sub(/^[0-9]+;[ ]+[0-9]+ [0-9]+ TABLE DATA /, "", line)
+              n = split(line, parts, " ")
+              owner = parts[n]
+              ctl = sprintf("%c", 1)
+              sub(" " owner "$", "", line)
+              sub(" ", ctl, line)
+              if (out != "") out = out ctl
+              out = out line
+            }
+            END { printf "%s", out }')"
+          pass_args=""
+          if [ -n "${table_names}" ]; then
+            # 查询失败必须让恢复停下来：吞掉错误会得到空结果，进而把已满的库误判为空库。
+            # 表名列表静态展开成 VALUES 行，不做字符串切分：表名含单引号、逗号、点号、
+            # 空格都不会拆坏；单引号按 SQL 规则双写转义，不会拼出可执行语句。
+            # 判据分两层：n_live_tup > 0 直接判冲突；统计滞后为 0 的表逐张真实计数复核
+            # （用 DO 里的动态 SQL，表名经 quote_ident 转义，不存在时跳过）。
+            # 这里用不带引号的 <<SQL：${values_rows} 和 $$ 需要在 shell 侧展开，
+            # 而 SQL 里的 '$$' 会被 psql 当成变量占位符，故用 \$ 关掉这种替换。
+            values_rows="$(printf '%s' "${table_names}" | awk -F'\001' 'BEGIN { q = sprintf("%c", 39) }
+              { for (i = 1; i + 1 <= NF; i += 2) {
+                  sub(q, q q, $(i));
+                  sub(q, q q, $(i+1));
+                  printf "%s(%s%s%s, %s%s%s)", (i > 1 ? "," : ""), q, $(i), q, q, $(i+1), q;
+              } }')"
+            if ! busy_tables="$(compose exec -T postgres psql -U "${user}" -d "${db}" \
+              -tAq -v ON_ERROR_STOP=1 -f - <<SQL
+CREATE TEMP TABLE _rc(sch text, rel text);
+INSERT INTO _rc VALUES ${values_rows};
+DO \$\$
+DECLARE r record; n bigint;
+BEGIN
+  CREATE TEMP TABLE _busy(name text);
+  FOR r IN SELECT c.sch, c.rel,
+                  coalesce(s.n_live_tup, 0) AS est
+             FROM _rc c
+             LEFT JOIN pg_stat_user_tables s
+               ON s.schemaname = c.sch AND s.relname = c.rel
+            WHERE to_regclass(quote_ident(c.sch) || '.' || quote_ident(c.rel)) IS NOT NULL
+  LOOP
+    IF r.est > 0 THEN
+      INSERT INTO _busy VALUES (r.sch || '.' || r.rel);
+    ELSE
+      EXECUTE format('SELECT count(*) FROM %I.%I', r.sch, r.rel) INTO n;
+      IF n > 0 THEN
+        INSERT INTO _busy VALUES (r.sch || '.' || r.rel);
+      END IF;
+    END IF;
+  END LOOP;
+END \$\$;
+SELECT coalesce(string_agg(name, ', '), '') FROM _busy;
+SQL
+            )"; then
+              echo "restore-db: failed to inspect target database; restore aborted" >&2
+              exit 1
+            fi
+            if [ -n "${busy_tables}" ]; then
+              echo "restore-db: 目标库中与备份对应的表已有数据: ${busy_tables}" >&2
+              echo "  该备份不含建表语句，--clean 无法清空已有行，直接恢复会因主键冲突整体失败。" >&2
+              echo "  请改用 full 备份恢复，或先恢复到空库。" >&2
+              exit 1
+            fi
+          fi
+        fi
+        # pg_restore 默认遇到错误只打警告、退出码仍为 0，失败会被当成成功；
+        # --exit-on-error 让它遇到第一处错误就中止。cat 在管道左侧，
+        # $? 是 compose exec 的退出码，这里直接用它即可（set -o pipefail 不限左侧）。
+        if [ -n "${pass_args}" ]; then
+          cat "${dump_path}" | compose exec -T postgres pg_restore -U "${user}" -d "${db}" \
+            ${pass_args} --exit-on-error --no-owner --no-privileges || restore_status=$?
+        else
+          cat "${dump_path}" | compose exec -T postgres pg_restore -U "${user}" -d "${db}" \
+            --exit-on-error --no-owner --no-privileges || restore_status=$?
+        fi
+        if [ "${restore_status}" -ne 0 ]; then
+          echo "restore-db: pg_restore failed (status ${restore_status}); the target database may be incomplete" >&2
+          exit "${restore_status}"
+        fi
+        ;;
     esac
     ;;
   *)
