@@ -7,16 +7,29 @@
 本目录只保留当前执行计划与仍维护的回归参考。历史审计、日期报告与旧执行计划统一进入
 [归档索引](../archive/README.md)，不因旧文件曾标记 active 或“唯一台账”而继续作为当前依据。
 
-## 当前项目整理
+## 当前执行计划
+
+**当前只有一个正在执行的计划，其余是实现参考或后续排期。**
+
+| 文档 | 状态 | 职责 |
+|---|---|---|
+| [2026-10-28-RELEASE-2.2.1-PLAN.md](2026-10-28-RELEASE-2.2.1-PLAN.md) | `active` | **当前执行**：2.2.1 的 8 个提交拆分、验证策略、部署与回滚流程 |
+
+## 实现参考与后续排期
+
+这两份不单独启动执行，由 2.2.1 计划或其他更高层计划引用时才用。
+
+| 文档 | 状态 | 职责 |
+|---|---|---|
+| [2026-10-28-DIFY-DEFECT-FIX-PLAN.md](2026-10-28-DIFY-DEFECT-FIX-PLAN.md) | `active-ref` | Dify 两处 P0 的**技术细节**（四元组匹配规则、边界处理、Dify API 契约）；归属 2.2.1 的提交 2 与 3 |
+| [2026-10-28-S2-S7-EXECUTION-PLAN-V4.md](2026-10-28-S2-S7-EXECUTION-PLAN-V4.md) | `active` | S2~S7 分级验证计划；S1~S6 已完成，S5/S7 待做 |
+| [2026-10-28-S4-S7-ITEM-MANIFEST.md](2026-10-28-S4-S7-ITEM-MANIFEST.md) | `active` | S4~S7 条目清单与「存活/已回滚」状态冻结基线，V4 依赖它 |
+
+## 长期维护
 
 | 文档 | 状态 | 职责 |
 |---|---|---|
 | [project-consolidation.md](project-consolidation.md) | `active` | 全项目整理批次、历史发现的复核方式、未解决事项与退出证据 |
-| [2026-10-28-S2-S7-EXECUTION-PLAN-V4.md](2026-10-28-S2-S7-EXECUTION-PLAN-V4.md) | `active` | S2~S7 执行计划（探针实测后重制）；S1 部分见 v3 |
-| [2026-10-28-S4-S7-ITEM-MANIFEST.md](2026-10-28-S4-S7-ITEM-MANIFEST.md) | `active` | S4~S7 条目清单与存活状态冻结基线 |
-| [2026-10-28-DIFY-DEFECT-FIX-PLAN.md](2026-10-28-DIFY-DEFECT-FIX-PLAN.md) | `active` | Dify 集成两处 P0 缺陷的修复计划与服务器实测事实 |
-| [2026-10-28-RELEASE-2.2.1-PLAN.md](2026-10-28-RELEASE-2.2.1-PLAN.md) | `active` | 2.2.1 发布的 8 个提交拆分、验证策略、部署与回滚流程 |
-| [2026-10-27-S1-S7-VERIFICATION-PLAN-V3.md](2026-10-27-S1-S7-VERIFICATION-PLAN-V3.md) | `superseded` | S1 验证已完成；S2~S7 部分由 v4 取代 |
 
 动态验证结果只写 [TEST_STATUS.md](../testing/TEST_STATUS.md)，工程门禁由
 [ENGINEERING_GOVERNANCE.md](../../ENGINEERING_GOVERNANCE.md) 维护，部署与镜像操作遵循

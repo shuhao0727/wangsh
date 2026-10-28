@@ -1,8 +1,10 @@
 # S1 ~ S7 验证计划 —— 审核与重制（v2）
 
-> 状态：superseded
+> 状态：archived
 > Owner：project-governance
-> 前身：[2026-10-27-S1-S7-VERIFICATION-PLAN.md](2026-10-27-S1-S7-VERIFICATION-PLAN.md)
+> 归档日期：2026-10-28
+> 归档原因：S1~S7 计划的审核稿，其结论已沉淀进 v3/v4 计划与 ENGINEERING_GOVERNANCE.md §十二
+> 前身：2026-10-27-S1-S7-VERIFICATION-PLAN.md（v1 原计划，已删除；内容已并入 v3）
 > 依据：近 20 天提交汇总（S1~S7 分级）、`sleepy-northcutt-a731db` 会话实际执行记录、当前工作区真实状态
 > 制定日期：2026-10-27
 > 制定方式：只读审查（会话记录 + 代码 + 文档），未改动任何代码与测试

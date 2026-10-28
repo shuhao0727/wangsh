@@ -1,7 +1,9 @@
 # S1 ~ S7 验证执行计划（v3，已批准）
 
-> 状态：active
+> 状态：archived
 > Owner：project-governance
+> 归档日期：2026-10-28
+> 归档原因：S1 七项验证已完成，10 条规则已沉淀进 ENGINEERING_GOVERNANCE.md §十二；S2~S7 部分由 [v4 计划](../../plans/2026-10-28-S2-S7-EXECUTION-PLAN-V4.md) 取代
 > 批准日期：2026-10-27
 > 取代：v1 原计划（`sleepy-northcutt-a731db/docs/docker/plans/2026-10-27-S1-S7-VERIFICATION-PLAN.md`）、v2 审核稿（本目录 `2026-10-27-S1-S7-VERIFICATION-REVIEW-PLAN.md`）
 > 执行工作树：`sleepy-northcutt-a731db`

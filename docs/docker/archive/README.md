@@ -190,3 +190,8 @@
 ### 2026-10-27 算法复杂度审查
 
 - [全项目算法复杂度审查报告_20261025.md](全项目算法复杂度审查报告_20261025.md) - 全项目静态推导加隔离基准的复杂度审查；P0/P1 清单为后续后端性能修复的依据。开发库为空，标 `[实测]` 的数字来自隔离脚本，不代表真实业务数据下的结论。
+
+### 2026-10-28 S1~S7 早期验证计划归档
+
+- [plans/2026-10-27-S1-S7-VERIFICATION-PLAN-V3.md](plans/2026-10-27-S1-S7-VERIFICATION-PLAN-V3.md) - S1~S7 首版可执行计划与 10 条验证规则。S1 七项已全部通过，规则已沉淀进 [ENGINEERING_GOVERNANCE.md](../../ENGINEERING_GOVERNANCE.md) §十二；S2~S7 部分由 [v4 计划](../plans/2026-10-28-S2-S7-EXECUTION-PLAN-V4.md) 取代。
+- [plans/2026-10-27-S1-S7-VERIFICATION-REVIEW-PLAN.md](plans/2026-10-27-S1-S7-VERIFICATION-REVIEW-PLAN.md) - 对 S1~S7 计划的审核稿，逐条指出检查项未冻结、循环引用、未提交改动统计偏差等问题；结论已并入 v3/v4。

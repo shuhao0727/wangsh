@@ -3,7 +3,7 @@
 > 状态：active
 > Owner：project-governance
 > 制定日期：2026-10-28
-> 取代：[v3 计划](2026-10-27-S1-S7-VERIFICATION-PLAN-V3.md)（S1 部分已完成，S2~S7 部分被本文件取代）
+> 取代：[v3 计划](../archive/plans/2026-10-27-S1-S7-VERIFICATION-PLAN-V3.md)（已归档；S1 部分已完成，S2~S7 部分被本文件取代）
 > 清单依据：[S4~S7 条目清单](2026-10-28-S4-S7-ITEM-MANIFEST.md)
 > 调研方式：两个独立探针 Agent 只读调研 + 主控逐条复核关键结论
 
