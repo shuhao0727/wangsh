@@ -14,6 +14,13 @@ from app.models import XbkCourse, XbkSelection, XbkStudent
 from app.services.xbk.locking import lock_key_rows, lock_rows
 from app.services.xbk.grade_scope import normalize_grade, validate_course_grade_scope, validate_student_grade_scope
 
+# 容量校验已抽到独立模块；这里保留原私有名做别名，调用点无需改动。
+from app.services.xbk.selection_capacity import (
+    capacity_key as _capacity_key,
+    capacity_used_batch as _capacity_used_batch,
+    validate_capacities as _validate_capacities,
+)
+
 UNSELECTED_CODES = ("", "未选")
 ACTIVE_SELECTION_UNIQUE_CONSTRAINT = "uq_xbk_selections_active_period_student"
 
@@ -405,17 +412,6 @@ def _apply_mutation_values(
     row.updated_at = now
 
 
-def _capacity_key(
-    values: Mapping[str, Any],
-    student: XbkStudent,
-) -> tuple[str, str, str, Optional[str], str] | None:
-    code = str(values["course_code"])
-    if code in UNSELECTED_CODES:
-        return None
-    year, term, _student_no = _student_key(values)
-    return (year, term, code, student.grade, student.class_name)
-
-
 def _apply_mutations(
     db: AsyncSession,
     mutations: Sequence[SelectionMutation],
@@ -467,81 +463,6 @@ def _validate_final_student_positions(
             status_code=409,
             detail="每个学期每名学生最多只能有一个有效选课位置",
         )
-
-
-async def _capacity_used_batch(
-    db: AsyncSession,
-    keys: Sequence[tuple[str, str, str, Optional[str], str]],
-) -> dict[tuple[str, str, str, Optional[str], str], int]:
-    """一次 GROUP BY 查出全部 (学年,学期,课程,年级,班级) 桶的已用名额。
-
-    逐桶调用 COUNT 时往返次数等于受影响桶数（最坏 = 课程数 × 班级数，
-    26 班 × 20 课 = 520 次），每次都是带 JOIN 的计数查询。
-    合并成一条按 (year, term, course_code, grade, class_name) 分组的聚合查询后，
-    往返次数固定为 1，返回行数不超过桶数。
-    """
-    if not keys:
-        return {}
-    years = {key[0] for key in keys}
-    terms = {key[1] for key in keys}
-    codes = {key[2] for key in keys}
-    statement = (
-        select(
-            XbkSelection.year,
-            XbkSelection.term,
-            XbkSelection.course_code,
-            XbkStudent.grade,
-            XbkStudent.class_name,
-            func.count(XbkSelection.id),
-        )
-        .select_from(XbkSelection)
-        .join(
-            XbkStudent,
-            and_(
-                XbkStudent.year == XbkSelection.year,
-                XbkStudent.term == XbkSelection.term,
-                XbkStudent.student_no == XbkSelection.student_no,
-            ),
-        )
-        .where(
-            XbkSelection.is_deleted.is_(False),
-            XbkSelection.year.in_(years),
-            XbkSelection.term.in_(terms),
-            XbkSelection.course_code.in_(codes),
-            XbkStudent.is_deleted.is_(False),
-        )
-        .group_by(
-            XbkSelection.year,
-            XbkSelection.term,
-            XbkSelection.course_code,
-            XbkStudent.grade,
-            XbkStudent.class_name,
-        )
-    )
-    rows = (await db.execute(statement)).all()
-    counts: dict[tuple[str, str, str, Optional[str], str], int] = {}
-    for year, term, code, grade, class_name, used in rows:
-        counts[(year, term, code, grade, class_name)] = int(used or 0)
-    return counts
-
-
-async def _validate_capacities(
-    db: AsyncSession,
-    affected: Iterable[tuple[str, str, str, Optional[str], str]],
-    courses: Mapping[tuple[str, str, str], XbkCourse],
-) -> None:
-    ordered = sorted(affected, key=_roster_sort_key)
-    if not ordered:
-        return
-    used_by_key = await _capacity_used_batch(db, ordered)
-    for year, term, code, grade, class_name in ordered:
-        quota = int(courses[(year, term, code)].quota or 0)
-        used = used_by_key.get((year, term, code, grade, class_name), 0)
-        if used > quota:
-            raise HTTPException(
-                status_code=409,
-                detail=f"课程已满（{grade or '未分年级'} {class_name}，限额 {quota} 人）",
-            )
 
 
 async def apply_selection_mutations(
