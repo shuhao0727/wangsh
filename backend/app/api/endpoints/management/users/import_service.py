@@ -2,12 +2,14 @@
 
 import csv
 import io
+import zipfile
 from typing import Any, Dict, Iterator, List, Optional, Tuple
 from urllib.parse import quote
 
 from fastapi import HTTPException, UploadFile, status
 from fastapi.responses import StreamingResponse
 from openpyxl import Workbook, load_workbook
+from openpyxl.utils.exceptions import InvalidFileException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -37,6 +39,10 @@ USER_IMPORT_TEMPLATE_ROWS = [
     ["20230004", "赵六", "2025", "高一(1)班", "true", "", "teacher"],
 ]
 
+# 损坏/伪造的 xlsx 会以这些异常形态出现：BadZipFile（非 zip 容器）、
+# InvalidFileException（openpyxl 明确拒绝）、KeyError/OSError（缺 workbook 部件或 IO 异常）。
+XLSX_PARSE_ERRORS = (zipfile.BadZipFile, InvalidFileException, OSError, KeyError, ValueError)
+
 
 def normalize_cell_value(value: Any) -> str:
     if value is None:
@@ -47,7 +53,17 @@ def normalize_cell_value(value: Any) -> str:
 
 
 def parse_csv_rows(content: bytes) -> Tuple[List[str], Iterator[Dict[str, str]]]:
-    content_text = content.decode("utf-8-sig")
+    try:
+        content_text = content.decode("utf-8-sig")
+    except UnicodeDecodeError as exc:
+        # 非 UTF-8 文件属于用户输入错误，必须返回 400 而不是泄漏成 500。
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "CSV文件编码不是 UTF-8，无法解析。"
+                "请在 Excel 中选择「CSV UTF-8」格式另存后重新上传"
+            ),
+        ) from exc
     csv_file = io.StringIO(content_text)
     reader = csv.DictReader(csv_file)
     if not reader.fieldnames:
@@ -61,11 +77,21 @@ def parse_csv_rows(content: bytes) -> Tuple[List[str], Iterator[Dict[str, str]]]
 
 
 def parse_xlsx_rows(content: bytes) -> Tuple[List[str], Iterator[Dict[str, str]]]:
-    workbook = load_workbook(filename=io.BytesIO(content), data_only=True, read_only=True)
-    worksheet = workbook.active
-    assert worksheet is not None  # XLSX 文件总是有 active sheet
-    row_iterator = worksheet.iter_rows(values_only=True)
-    header_row = next(row_iterator, None)
+    try:
+        workbook = load_workbook(
+            filename=io.BytesIO(content), data_only=True, read_only=True
+        )
+        worksheet = workbook.active
+        assert worksheet is not None  # XLSX 文件总是有 active sheet
+        row_iterator = worksheet.iter_rows(values_only=True)
+        header_row = next(row_iterator, None)
+    except XLSX_PARSE_ERRORS as exc:
+        # 损坏/伪造的 xlsx（不是 zip 容器、缺 workbook 部件等）同属用户输入错误 → 400。
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Excel文件已损坏或不是有效的 xlsx 文件，请重新导出后上传",
+        ) from exc
+
     if not header_row:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -80,15 +106,23 @@ def parse_xlsx_rows(content: bytes) -> Tuple[List[str], Iterator[Dict[str, str]]
         )
 
     def row_generator() -> Iterator[Dict[str, str]]:
-        for row in row_iterator:
-            current_row = row or ()
-            parsed_row: Dict[str, str] = {}
-            for idx, header in enumerate(fieldnames):
-                if not header:
-                    continue
-                value = current_row[idx] if idx < len(current_row) else ""
-                parsed_row[header] = normalize_cell_value(value)
-            yield parsed_row
+        try:
+            for row in row_iterator:
+                current_row = row or ()
+                parsed_row: Dict[str, str] = {}
+                for idx, header in enumerate(fieldnames):
+                    if not header:
+                        continue
+                    value = current_row[idx] if idx < len(current_row) else ""
+                    parsed_row[header] = normalize_cell_value(value)
+                yield parsed_row
+        except XLSX_PARSE_ERRORS as exc:
+            # read_only 模式下工作簿是惰性读取的，损坏文件可能在迭代到一半才报错。
+            # 这里同样归一为 400，避免变成 500（此时尚未写入任何行）。
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Excel文件已损坏，读取过程中失败，请重新导出后上传",
+            ) from exc
 
     return [header for header in fieldnames if header], row_generator()
 
@@ -186,9 +220,15 @@ def _parse_import_user(row: Dict[str, str]) -> Dict[str, Any]:
     else:
         raise ValueError(f"状态值无效: {status_str}")
 
-    role_code = row.get("角色", "student").strip() or "student"
+    # 角色值：先做大小写与空白规范化，再严格校验白名单。
+    # 旧实现把非法值静默降级成 student，用户以为导入成功、实际角色被改错，
+    # 属于数据正确性问题；这里改为抛 ValueError，由 _process_import_rows 记为行级 error，
+    # 只回滚该行，其余行照常提交。
+    role_code = (row.get("角色", "") or "").strip().lower() or "student"
     if role_code not in ("student", "teacher", "admin", "super_admin"):
-        role_code = "student"
+        raise ValueError(
+            f"角色值无效: {role_code}（可选 student/teacher/admin/super_admin）"
+        )
 
     return {
         "student_id": student_id,

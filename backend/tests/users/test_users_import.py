@@ -166,3 +166,112 @@ def test_import_savepoint_creation_failure_is_reported_per_row_and_next_row_cont
     assert result.errors[0].message == "savepoint unavailable"
     assert len(db.added) == 1
     assert db.commit_count == 1
+
+
+# ---------------------------------------------------------------------------
+# 提交 5：畸形文件必须 400，非法角色必须行级报错
+# ---------------------------------------------------------------------------
+import pytest  # noqa: E402
+from fastapi import HTTPException  # noqa: E402
+from openpyxl import Workbook  # noqa: E402
+
+from app.api.endpoints.management.users import import_service  # noqa: E402
+
+
+def test_parse_csv_rows_rejects_non_utf8_bytes_with_400():
+    # 0xff 不是合法 UTF-8 起始字节，旧实现会让 UnicodeDecodeError 冒泡成 500
+    content = "学号,姓名\nS1,张三\n".encode("utf-8") + b"\xff\xfe\x00"
+
+    with pytest.raises(HTTPException) as exc_info:
+        import_service.parse_csv_rows(content)
+
+    assert exc_info.value.status_code == 400
+    assert "UTF-8" in exc_info.value.detail
+
+
+def test_parse_xlsx_rows_rejects_broken_zip_with_400():
+    with pytest.raises(HTTPException) as exc_info:
+        import_service.parse_xlsx_rows(b"this is definitely not a zip archive")
+
+    assert exc_info.value.status_code == 400
+    assert "Excel" in exc_info.value.detail
+
+
+def test_parse_xlsx_rows_rejects_truncated_workbook_with_400():
+    buffer = io.BytesIO()
+    workbook = Workbook()
+    workbook.active.append(["学号", "姓名"])
+    workbook.active.append(["X9", "截断"])
+    workbook.save(buffer)
+
+    with pytest.raises(HTTPException) as exc_info:
+        import_service.parse_xlsx_rows(buffer.getvalue()[:200])
+
+    assert exc_info.value.status_code == 400
+
+
+def test_parse_xlsx_rows_still_reads_valid_workbook():
+    buffer = io.BytesIO()
+    workbook = Workbook()
+    worksheet = workbook.active
+    worksheet.append(["学号", "姓名", "角色"])
+    worksheet.append(["XL-1", "表格一", "student"])
+    workbook.save(buffer)
+
+    fieldnames, rows = import_service.parse_xlsx_rows(buffer.getvalue())
+
+    assert fieldnames == ["学号", "姓名", "角色"]
+    assert list(rows)[0] == {"学号": "XL-1", "姓名": "表格一", "角色": "student"}
+
+
+def test_invalid_role_is_row_level_error_not_silent_downgrade():
+    db = _ImportDb(existing_user=None)
+    csv_content = "学号,姓名,角色\nROLE-1,非法角色,not_a_role\n".encode("utf-8")
+    upload = UploadFile(filename="users.csv", file=io.BytesIO(csv_content))
+
+    result = asyncio.run(
+        users_api.import_users(upload, {"id": 10, "role_code": "super_admin"}, db)
+    )
+
+    assert result.success is False
+    assert result.imported_count == 0
+    assert result.error_count == 1
+    assert "角色值无效" in result.errors[0].message
+    # 关键：不能静默降级成 student 并入库
+    assert db.added == []
+    assert db.savepoints[0].rollback_count == 1
+
+
+def test_invalid_middle_row_keeps_surrounding_rows_committed():
+    db = _ImportDb(existing_user=None)
+    csv_content = (
+        "学号,姓名,角色\n"
+        "MID-1,前一行,student\n"
+        "MID-BAD,中间坏行,not_a_role\n"
+        "MID-3,后一行,student\n"
+    ).encode("utf-8")
+    upload = UploadFile(filename="users.csv", file=io.BytesIO(csv_content))
+
+    result = asyncio.run(
+        users_api.import_users(upload, {"id": 10, "role_code": "super_admin"}, db)
+    )
+
+    assert result.imported_count == 2
+    assert result.error_count == 1
+    assert result.errors[0].row_number == 2
+    # 逐行 savepoint：只回滚坏行，其余照常提交（保持既有语义，不改整份回滚）
+    assert db.savepoints[1].rollback_count == 1
+    assert db.commit_count == 1
+    assert sorted(user.student_id for user in db.added) == ["MID-1", "MID-3"]
+
+
+def test_role_value_is_case_insensitive_after_normalization():
+    parsed = import_service._parse_import_user(
+        {"学号": "C1", "姓名": "大小写", "角色": "STUDENT"}
+    )
+    assert parsed["role_code"] == "student"
+
+    parsed_teacher = import_service._parse_import_user(
+        {"学号": "C2", "姓名": "教师", "角色": " Teacher "}
+    )
+    assert parsed_teacher["role_code"] == "teacher"
