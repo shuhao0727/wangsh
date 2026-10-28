@@ -22,6 +22,12 @@ const importOptionalModule = new Function(
 
 function manualChunkForModule(id: string) {
   const normalizedId = id.replaceAll("\\", "/");
+  // CSS 模块（如 index.tsx 里的 katex/dist/katex.min.css）只产出样式，
+  // 若把它归入 markdown-vendor，入口就会为了这段 CSS 静态依赖整个
+  // Markdown 解析 chunk，把 425KB 拖进首屏。交回默认处理即可。
+  if (/\.(css|scss|sass|less)(\?|$)/.test(normalizedId)) {
+    return undefined;
+  }
   // Worker graphs are independent Rollup entries in Vite 8. Assigning
   // them to an application vendor chunk makes worker bytes look like
   // eagerly loaded entry code and can also break worker emission.
@@ -93,6 +99,24 @@ function manualChunkForModule(id: string) {
 
   return undefined;
 }
+
+// Rolldown 的 manualChunks 会转成 codeSplitting 分组，且默认
+// includeDependenciesRecursively: true —— 分组会把依赖递归吞进同名 chunk。
+// 结果 markdown-vendor 通过 react-markdown 把 react / react/jsx-runtime
+// 一起吞掉，凡是 import React 的 UI chunk 都被迫静态依赖 markdown-vendor，
+// 425KB 的 Markdown 解析器因此被打进首屏。这里显式声明分组 + 优先级：
+// react 与其它重型 vendor 优先级更高，先被捕获，不会再被 markdown 组吸收。
+const CHUNK_GROUPS = [
+  { name: "react-vendor", priority: 100 },
+  { name: "graphviz-vendor", priority: 90 },
+  { name: "pdf-vendor", priority: 90 },
+  { name: "terminal-vendor", priority: 90 },
+  { name: "echarts-vendor", priority: 80 },
+  { name: "markdown-vendor", priority: 10 },
+].map((group) => ({
+  ...group,
+  test: (id: string) => manualChunkForModule(id) === group.name,
+}));
 
 // https://vitejs.dev/config/
 export default defineConfig(async ({ mode }) => {
@@ -224,7 +248,9 @@ export default defineConfig(async ({ mode }) => {
       // 分包策略
       rollupOptions: {
         output: {
-          manualChunks: manualChunkForModule,
+          codeSplitting: {
+            groups: CHUNK_GROUPS,
+          },
         },
       },
     },

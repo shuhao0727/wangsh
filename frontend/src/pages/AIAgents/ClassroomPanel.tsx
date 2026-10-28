@@ -206,6 +206,8 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isAdmin, 
 
   const timerRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
   const pollRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
+  // SSE 是否已连通；连通期间停掉 3 秒轮询，断线后恢复兜底
+  const sseConnectedRef = useRef(false);
   const streamRetryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownRefreshRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeRequestSeqRef = useRef(0);
@@ -383,16 +385,29 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isAdmin, 
     }
   }, [checkActive]);
 
-  useEffect(() => {
-    if (participantId == null) return;
-    void checkActive({ silent: true });
+  // 兜底轮询：SSE 未连通时才按 3 秒节奏拉取
+  const stopPolling = useCallback(() => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = undefined;
+    }
+  }, []);
+
+  const startPolling = useCallback(() => {
+    if (pollRef.current) return;
     pollRef.current = setInterval(() => {
       void checkActive({ silent: true });
     }, 3000);
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [participantId, checkActive]);
+  }, [checkActive]);
 
-  // SSE 增强：优先用实时推送触发刷新，轮询作为兜底
+  useEffect(() => {
+    if (participantId == null) return;
+    void checkActive({ silent: true });
+    if (!sseConnectedRef.current) startPolling();
+    return () => { stopPolling(); };
+  }, [participantId, checkActive, startPolling, stopPolling]);
+
+  // SSE 增强：优先用实时推送触发刷新，仅当 SSE 未连通时用轮询兜底
   useEffect(() => {
     if (participantId == null) return;
     let stopped = false;
@@ -429,16 +444,26 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isAdmin, 
         stream.onmessage = (event) => {
           try {
             const payload = JSON.parse(event.data || "{}");
-            if (payload?.type === "connected") return;
+            if (payload?.type === "connected") {
+              // SSE 已连通：停掉兜底轮询，只靠推送刷新
+              sseConnectedRef.current = true;
+              stopPolling();
+              return;
+            }
           } catch {}
           void checkActive({ silent: true });
         };
         stream.onerror = () => {
           closeStream();
+          // 断线：恢复兜底轮询，重连成功后 onmessage 会再次停掉
+          sseConnectedRef.current = false;
+          startPolling();
           scheduleReconnect();
         };
       } catch {
         closeStream();
+        sseConnectedRef.current = false;
+        startPolling();
         scheduleReconnect();
       }
     };
@@ -446,10 +471,11 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isAdmin, 
     connect();
     return () => {
       stopped = true;
+      sseConnectedRef.current = false;
       clearRetry();
       closeStream();
     };
-  }, [participantId, checkActive]);
+  }, [participantId, checkActive, startPolling, stopPolling]);
 
   // 倒计时
   useEffect(() => {

@@ -150,6 +150,90 @@ describe("ClassroomPanel role boundary", () => {
     expect(classroomApi.getActive).toHaveBeenCalledTimes(callsBeforeStaleEvents);
   });
 
+  it("stops the 3s fallback polling once SSE reports connected", async () => {
+    vi.useFakeTimers();
+    render(
+      <ClassroomPanel
+        isAuthenticated
+        isStudent
+        isAdmin={false}
+        userId={2}
+      />,
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(classroomApi.getActive).toHaveBeenCalledOnce();
+
+    // SSE 未连通前，兜底轮询照常按 3 秒节奏触发
+    await act(async () => {
+      vi.advanceTimersByTime(3000);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(classroomApi.getActive).toHaveBeenCalledTimes(2);
+
+    // 收到 connected 后停掉轮询
+    const stream = MockEventSource.created[0];
+    await act(async () => {
+      stream?.onmessage?.(
+        new MessageEvent("message", { data: JSON.stringify({ type: "connected" }) }),
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const callsAfterConnected = vi.mocked(classroomApi.getActive).mock.calls.length;
+    await act(async () => {
+      vi.advanceTimersByTime(30000);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    // 连通期间不再有轮询请求（30 秒内本应产生 10 次）
+    expect(classroomApi.getActive).toHaveBeenCalledTimes(callsAfterConnected);
+  });
+
+  it("resumes the fallback polling after SSE errors out", async () => {
+    vi.useFakeTimers();
+    render(
+      <ClassroomPanel
+        isAuthenticated
+        isStudent
+        isAdmin={false}
+        userId={2}
+      />,
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    const stream = MockEventSource.created[0];
+    await act(async () => {
+      stream?.onmessage?.(
+        new MessageEvent("message", { data: JSON.stringify({ type: "connected" }) }),
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      stream?.onerror?.(new Event("error"));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const callsAtDisconnect = vi.mocked(classroomApi.getActive).mock.calls.length;
+    await act(async () => {
+      vi.advanceTimersByTime(3000);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(vi.mocked(classroomApi.getActive).mock.calls.length).toBeGreaterThan(callsAtDisconnect);
+  });
+
   it("ignores an answer response returned after the student account changes", async () => {
     const response = deferred<{ answer: string; is_correct: boolean }>();
     vi.mocked(classroomApi.getActive).mockResolvedValue([

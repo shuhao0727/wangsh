@@ -30,6 +30,9 @@ export default defineConfig({
       "src/pages/Games/Knn/**/*.test.{ts,tsx}",
       "src/pages/Xbk/**/*.test.{ts,tsx}",
       "src/pages/Admin/ITTechnology/pythonLab/**/*.test.{ts,tsx}",
+      // 学情分析图表配色是 Canvas 渲染，var() 静默失效会导致整图全黑，
+      // 因此把它纳入默认门禁（chartTheme 必须与 CSS token 保持同色）。
+      "src/pages/Admin/AgentData/**/*.test.{ts,tsx}",
       "src/hooks/queries/**/*.test.{ts,tsx}",
       "src/hooks/useAppMeta.metadata.test.tsx",
       "src/layouts/AdminLayout.mobile.test.tsx",
