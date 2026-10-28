@@ -12,7 +12,9 @@
 | 文档 | 状态 | 职责 |
 |---|---|---|
 | [project-consolidation.md](project-consolidation.md) | `active` | 全项目整理批次、历史发现的复核方式、未解决事项与退出证据 |
-| [2026-10-27-S1-S7-VERIFICATION-PLAN-V3.md](2026-10-27-S1-S7-VERIFICATION-PLAN-V3.md) | `active` | S1~S7 分级验证的执行计划、10 条规则与冻结检查项；取代同日两份早期计划 |
+| [2026-10-28-S2-S7-EXECUTION-PLAN-V4.md](2026-10-28-S2-S7-EXECUTION-PLAN-V4.md) | `active` | S2~S7 执行计划（探针实测后重制）；S1 部分见 v3 |
+| [2026-10-28-S4-S7-ITEM-MANIFEST.md](2026-10-28-S4-S7-ITEM-MANIFEST.md) | `active` | S4~S7 条目清单与存活状态冻结基线 |
+| [2026-10-27-S1-S7-VERIFICATION-PLAN-V3.md](2026-10-27-S1-S7-VERIFICATION-PLAN-V3.md) | `superseded` | S1 验证已完成；S2~S7 部分由 v4 取代 |
 
 动态验证结果只写 [TEST_STATUS.md](../testing/TEST_STATUS.md)，工程门禁由
 [ENGINEERING_GOVERNANCE.md](../../ENGINEERING_GOVERNANCE.md) 维护，部署与镜像操作遵循
