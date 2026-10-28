@@ -14,6 +14,7 @@
 | [project-consolidation.md](project-consolidation.md) | `active` | 全项目整理批次、历史发现的复核方式、未解决事项与退出证据 |
 | [2026-10-28-S2-S7-EXECUTION-PLAN-V4.md](2026-10-28-S2-S7-EXECUTION-PLAN-V4.md) | `active` | S2~S7 执行计划（探针实测后重制）；S1 部分见 v3 |
 | [2026-10-28-S4-S7-ITEM-MANIFEST.md](2026-10-28-S4-S7-ITEM-MANIFEST.md) | `active` | S4~S7 条目清单与存活状态冻结基线 |
+| [2026-10-28-DIFY-DEFECT-FIX-PLAN.md](2026-10-28-DIFY-DEFECT-FIX-PLAN.md) | `active` | Dify 集成两处 P0 缺陷的修复计划与服务器实测事实 |
 | [2026-10-27-S1-S7-VERIFICATION-PLAN-V3.md](2026-10-27-S1-S7-VERIFICATION-PLAN-V3.md) | `superseded` | S1 验证已完成；S2~S7 部分由 v4 取代 |
 
 动态验证结果只写 [TEST_STATUS.md](../testing/TEST_STATUS.md)，工程门禁由
