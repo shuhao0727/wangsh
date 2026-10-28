@@ -126,6 +126,9 @@ git diff --check
 - PythonLab、Docker sandbox、WebSocket、Redis、Celery 改动必须运行对应 smoke/soak。
 - 专项 PR workflow 必须启动当前 PR 的代码和依赖，不能用远端生产环境替代。
 - 浏览器交互风险必须使用真实浏览器 channel 验证，不能只调用 DOM `click()`。
+- **「容器 Up」不等于「服务健康」。** 开发镜像的默认 CMD 带 `uvicorn --reload`，reload 监督进程会掩盖子进程崩溃：进程崩了容器仍显示 `Status=running ExitCode=0`，但 `/health` 完全不通。
+  验证启动类条目时必须同时满足：① 看 `/health` 返回 200，不看容器状态；② 检查 `RestartCount == 0`，排除「崩了又拉起」；③ 启动失败类场景改用**不带 `--reload`** 的命令跑，否则结论不可信。
+  实例：2026-10-28 S3-2 验证中，`AI_PARTNER_SCORING_AGENT_ID=abc` 用默认 CMD 起容器显示 running，去掉 `--reload` 后才看到真实的 `ExitCode=1` + pydantic `ValidationError`。
 
 ### 4.3 覆盖率目标
 

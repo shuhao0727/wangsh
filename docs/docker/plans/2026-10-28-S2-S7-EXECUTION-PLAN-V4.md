@@ -45,7 +45,9 @@ FROM caddy:latest AS production        ← 第 90 行，静态站，EXPOSE 80
 **正确命令：**
 
 ```bash
-docker build --target development -t shuhao07/wangsh-frontend:dev frontend
+# frontend/ 下只有 Dockerfile.dev / Dockerfile.prod，没有 Dockerfile，
+# 必须显式 -f，否则报 `failed to read dockerfile: open Dockerfile: no such file or directory`
+docker build -f frontend/Dockerfile.dev --target development -t shuhao07/wangsh-frontend:dev frontend
 ```
 
 **验收断言：**
