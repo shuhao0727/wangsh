@@ -10,6 +10,7 @@ import dayjs from "dayjs";
 import { Button } from "@/components/ui/button";
 import { showMessage } from "@/lib/toast";
 import { agentDataApi } from "@services/znt/api";
+import { readChartPalette } from "@/lib/cssTokens";
 
 type AnalysisRecord = {
   id: number;
@@ -30,7 +31,11 @@ const normalizeRecord = (record: AnalysisRecord, index: number): NormalizedAnaly
   compareKey: `${record.id}-${index}`,
 });
 
-const COLORS = ["#0D9488", "#7C3AED", "#3B82F6", "#F59E0B", "#EC4899"];
+// 对比系列色一律取自语义 token，避免 Canvas 渲染器硬编码色值
+const compareColors = () => {
+  const palette = readChartPalette();
+  return [palette.primary, palette.accent, palette.info, palette.warning, palette.purple];
+};
 const BLOOM_KEYS = ["记忆", "理解", "应用", "分析", "评价", "创造"];
 
 const TaskAnalysisComparePage: React.FC = () => {
@@ -115,6 +120,7 @@ const TaskAnalysisComparePage: React.FC = () => {
   useEffect(() => {
     if (!timelineRef.current || records.length < 2) return;
     const chart = echarts.init(timelineRef.current);
+    const COLORS = compareColors();
     const series = records.map((r, idx) => {
       const buckets = r.normalizedResult?.timeline_buckets || [];
       return {

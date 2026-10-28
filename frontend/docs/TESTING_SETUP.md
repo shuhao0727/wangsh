@@ -21,10 +21,15 @@
 src/components/**/*.test.{ts,tsx}
 src/pages/AIAgents/**/*.test.{ts,tsx}
 src/pages/Admin/ITTechnology/pythonLab/**/*.test.{ts,tsx}
+src/pages/Admin/AgentData/**/*.test.{ts,tsx}
 src/hooks/queries/**/*.test.{ts,tsx}
 src/lib/**/*.test.{ts,tsx}
 src/services/**/*.test.{ts,tsx}
 ```
+
+> 2026-10-28 新增 `src/pages/Admin/AgentData/**`：学情分析图表走 Canvas 渲染器，
+> `var(--ws-color-*)` 在 Canvas 里静默失效会让整图变黑，因此 `chartTheme` 必须
+> 与 `index.css` 同色，纳入默认门禁。
 
 新增测试应放入对应 owner 目录。扩大默认范围时，必须同步更新
 `frontend/vitest.config.ts`、本文件和

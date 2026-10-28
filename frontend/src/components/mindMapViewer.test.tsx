@@ -58,4 +58,12 @@ describe("MindMapViewer", () => {
     expect(svg.style.width).toBe("100%");
     expect(svg.style.height).toBe("100%");
   });
+
+  it("挂载时才注入 markmap 运行时（首屏不再引用 d3/markmap）", () => {
+    render(<MindMapViewer compact markdown="# Root" />);
+    const sources = [...document.querySelectorAll<HTMLScriptElement>("script[data-ws-content-runtime]")]
+      .map((node) => node.src);
+    // markmap 全局已存在（上面的 beforeEach 已 stub），因此这里不应发请求
+    expect(sources.filter((src) => src.includes("/d3@") || src.includes("markmap"))).toEqual([]);
+  });
 });

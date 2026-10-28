@@ -9,7 +9,8 @@
 import React, { useEffect, useMemo, useRef } from "react";
 import { echarts } from "@/lib/echarts";
 import dayjs from "dayjs";
-import { getAgentChartTheme } from "./chartTheme";
+import { getAgentChartTheme, chartSurfaceStroke } from "./chartTheme";
+import { alphaColor } from "@/lib/cssTokens";
 import { escapeHtml, shortText } from "../normalize";
 
 /* ─── 类型 ─── */
@@ -41,13 +42,6 @@ interface ChainBeamChartProps {
   teacherMarks: TeacherMark[];
   startTime?: string; // ISO, 用于计算相对分钟
 }
-
-/* ─── 颜色 ─── */
-const BEAM_COLORS = [
-  "#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6",
-  "#ec4899", "#06b6d4", "#84cc16", "#f97316", "#6366f1",
-  "#14b8a6", "#e11d48", "#a855f7", "#0ea5e9", "#65a30d",
-];
 
 /* ─── 学生数量上限（60人班级取 Top 25 活跃学生，避免卡顿）─── */
 const MAX_STUDENTS = 25;
@@ -120,6 +114,9 @@ const ChainBeamChart: React.FC<ChainBeamChartProps> = ({ mergedGroups, studentCh
     if (!ref.current || students.length === 0) return;
     if (!chartRef.current) chartRef.current = echarts.init(ref.current);
     const theme = getAgentChartTheme();
+    // Canvas 渲染器不认 var()，系列色必须取具体值
+    const beamColors = theme.beamColors;
+    const surfaceStroke = chartSurfaceStroke();
     const toMinute = (iso: string) =>
       Math.round((dayjs(iso).valueOf() - baseTime) / 60000);
 
@@ -130,15 +127,15 @@ const ChainBeamChart: React.FC<ChainBeamChartProps> = ({ mergedGroups, studentCh
     // 教师提问竖线
     const teacherLines = teacherMarks.map((m, i) => ({
       xAxis: toMinute(m.time),
-      label: { formatter: `T${i + 1}`, position: "start" as const, fontSize: 10, color: theme.teacher || "#ef4444", fontWeight: 700 },
-      lineStyle: { color: theme.teacher || "#ef4444", width: 1.5, type: "dashed" as const, opacity: 0.5 },
+      label: { formatter: `T${i + 1}`, position: "start" as const, fontSize: 10, color: theme.teacher, fontWeight: 700 },
+      lineStyle: { color: theme.teacher, width: 1.5, type: "dashed" as const, opacity: 0.5 },
     }));
 
     // 为每个学生生成 series
     const series: any[] = [];
 
     students.forEach((student, sIdx) => {
-      const color = BEAM_COLORS[sIdx % BEAM_COLORS.length];
+      const color = beamColors[sIdx % beamColors.length];
       const chain = studentChains.find((sc) => sc.user_id === student.id);
       if (!chain || chain.questions.length === 0) return;
 
@@ -162,7 +159,7 @@ const ChainBeamChart: React.FC<ChainBeamChartProps> = ({ mergedGroups, studentCh
           return p?.group && p.group.member_count > 1 ? 8 + p.group.member_count : 6;
         },
         lineStyle: { color, width: 2, opacity: 0.6 },
-        itemStyle: { color, borderColor: "#fff", borderWidth: 1.5 },
+        itemStyle: { color, borderColor: surfaceStroke, borderWidth: 1.5 },
         emphasis: {
           lineStyle: { width: 3.5, opacity: 1 },
           itemStyle: { borderWidth: 2, shadowBlur: 8, shadowColor: color },
@@ -189,8 +186,12 @@ const ChainBeamChart: React.FC<ChainBeamChartProps> = ({ mergedGroups, studentCh
       type: "scatter",
       symbol: "circle",
       symbolSize: (val: any, params: any) => params.data.symbolSize,
-      itemStyle: { color: "rgba(100,116,139,0.12)", borderColor: "rgba(100,116,139,0.4)", borderWidth: 1.5 },
-      emphasis: { itemStyle: { borderColor: "#475569", borderWidth: 2, shadowBlur: 12 } },
+      itemStyle: {
+        color: alphaColor(theme.textMuted, 0.12),
+        borderColor: alphaColor(theme.textMuted, 0.4),
+        borderWidth: 1.5,
+      },
+      emphasis: { itemStyle: { borderColor: theme.textSecondary, borderWidth: 2, shadowBlur: 12 } },
       data: sharedData,
       z: 3,
     });
@@ -205,8 +206,8 @@ const ChainBeamChart: React.FC<ChainBeamChartProps> = ({ mergedGroups, studentCh
       animationEasing: "cubicOut",
       tooltip: {
         trigger: "item", confine: true,
-        backgroundColor: theme.surfaceElevated || "#fff", borderColor: theme.border || "#e2e8f0",
-        textStyle: { color: theme.textBase || "#1e293b", fontSize: 12 },
+        backgroundColor: theme.surfaceElevated, borderColor: theme.border,
+        textStyle: { color: theme.textBase, fontSize: 12 },
         formatter: (params: any) => {
           const d = params.data;
           if (!d) return "";
@@ -214,32 +215,32 @@ const ChainBeamChart: React.FC<ChainBeamChartProps> = ({ mergedGroups, studentCh
           if (g && g.member_count > 1) {
             const names = g.student_ids.map((sid) => students.find((s) => s.id === sid)?.name || "未知").join("、");
             return `<b>${escapeHtml(g.topic_label)}</b> · 第${toMinute(g.merged_time)}分钟` +
-              `<br/><span style="color:#8b5cf6;font-weight:600">🔗 ${g.member_count}人汇聚</span>` +
-              `<br/><span style="color:#64748b">学生：${escapeHtml(names)}</span>` +
+              `<br/><span style="color:${theme.accent};font-weight:600">🔗 ${g.member_count}人汇聚</span>` +
+              `<br/><span style="color:${theme.textMuted}">学生：${escapeHtml(names)}</span>` +
               `<br/>「${escapeHtml(shortText(g.representative_question, 40))}」`;
           }
           const name = d.studentName || params.seriesName || "";
           const q = d.question || "";
           const min = Array.isArray(d.value) ? d.value[0] : 0;
           return `<b style="color:${params.color}">${escapeHtml(name)}</b>` +
-            `<br/><span style="color:#64748b">第 ${min} 分钟</span>` +
+            `<br/><span style="color:${theme.textMuted}">第 ${min} 分钟</span>` +
             (q ? `<br/>「${escapeHtml(shortText(q, 40))}」` : "");
         },
       },
       legend: {
         type: "scroll", top: 4, left: 80, right: 40,
         itemWidth: 14, itemHeight: 8,
-        textStyle: { color: theme.textSecondary || "#64748b", fontSize: 11 },
+        textStyle: { color: theme.textSecondary, fontSize: 11 },
       },
       grid: { left: 50, right: 30, top: 50, bottom: 40 },
       xAxis: {
         type: "value", name: "时间（分钟）", nameLocation: "middle", nameGap: 28,
-        nameTextStyle: { color: theme.textSecondary || "#64748b", fontSize: 11 },
+        nameTextStyle: { color: theme.textSecondary, fontSize: 11 },
         min: 0, max: maxMinute, interval: 5,
-        axisLabel: { color: theme.textSecondary || "#94a3b8", fontSize: 11, formatter: "{value}'" },
-        axisLine: { lineStyle: { color: theme.border || "#e2e8f0" } },
+        axisLabel: { color: theme.textSecondary, fontSize: 11, formatter: "{value}'" },
+        axisLine: { lineStyle: { color: theme.border } },
         axisTick: { show: false },
-        splitLine: { lineStyle: { type: "dashed", color: theme.grid || "#f1f5f9" } },
+        splitLine: { lineStyle: { type: "dashed", color: theme.grid } },
       },
       yAxis: {
         type: "value", show: false,

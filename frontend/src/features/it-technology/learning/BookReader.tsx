@@ -9,6 +9,7 @@ import DOMPurify from "dompurify";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { LearningBook, LearningBookChapter } from "@/features/it-technology/learning/types";
+import { ensureContentRuntime } from "@/lib/contentRuntimeLoader";
 import "@/features/it-technology/learning/BookReader.css";
 
 interface BookReaderProps {
@@ -107,13 +108,31 @@ const MermaidPre: React.FC<{ code: string }> = ({ code }) => {
   const ref = useRef<HTMLPreElement>(null);
   useEffect(() => {
     const pre = ref.current;
-    if (!pre || !(window as any).mermaid) return;
-    const id = 'mermaid-' + Math.random().toString(36).substr(2, 9);
-    (window as any).mermaid.render(id, code).then((r: any) => {
-      if (pre) pre.innerHTML = r.svg;
-    }).catch(() => {});
+    if (!pre) return;
+    let active = true;
+    let attempted = false;
+    // 首次渲染到这里才真正拉 Mermaid（约 1MB），不占首屏。
+    void ensureContentRuntime('mermaid').catch(() => undefined);
+    const render = () => {
+      const mermaid = (window as any).mermaid;
+      if (!active || attempted || !mermaid) return;
+      attempted = true;
+      const id = 'mermaid-' + Math.random().toString(36).substr(2, 9);
+      // 就绪信号可能晚于挂载；渲染结果只属于本次 effect。
+      Promise.resolve()
+        .then(() => (active ? mermaid.render(id, code) : undefined))
+        .then((r: any) => { if (active && r) pre.innerHTML = r.svg; })
+        .catch(() => undefined);
+    };
+    window.addEventListener('ws:mermaid-ready', render);
+    render();
+    return () => {
+      active = false;
+      window.removeEventListener('ws:mermaid-ready', render);
+    };
   }, [code]);
-  return <pre ref={ref} className="mermaid">{code}</pre>;
+  // 本组件自己渲染，`data-processed` 防止全局自动扫描把 SVG 当成源码再处理一次。
+  return <pre ref={ref} className="mermaid" data-processed="true">{code}</pre>;
 };
 
 /* ─── Markdown Body (react-markdown) ─── */
@@ -128,13 +147,21 @@ const MarkdownBody: React.FC<{ markdown: string }> = ({ markdown }) => {
     return md;
   }, [markdown]);
 
-  // Track library readiness
+  // 公式与代码高亮的就绪检测。
+  // 首选事件驱动：加载器在脚本 load 后派发 ws:content-runtime-ready；
+  // 兼容路径：若脚本已由 index.html 注入（或测试里已 stub），挂载时直接命中。
+  // 不再用 setInterval 轮询——那在慢网下会持续 100ms 空转。
   const [libsReady, setLibsReady] = useState(false);
   useEffect(() => {
-    const check = () => !!(window as any).katex && !!(window as any).hljs;
-    if (check()) { setLibsReady(true); return; }
-    const id = setInterval(() => { if (check()) { setLibsReady(true); clearInterval(id); } }, 100);
-    return () => clearInterval(id);
+    const ready = () => !!(window as any).katex && !!(window as any).hljs;
+    if (ready()) { setLibsReady(true); return; }
+    // 首次进入阅读器才拉这两个库，首屏 HTML 不再引用它们。
+    void Promise.all([ensureContentRuntime('katex'), ensureContentRuntime('highlight')])
+      .then(() => { if (ready()) setLibsReady(true); })
+      .catch(() => undefined);
+    const onReady = () => { if (ready()) setLibsReady(true); };
+    window.addEventListener('ws:content-runtime-ready', onReady);
+    return () => window.removeEventListener('ws:content-runtime-ready', onReady);
   }, []);
   const katex = libsReady ? (window as any).katex : null;
   const hljsLib = libsReady ? (window as any).hljs : null;

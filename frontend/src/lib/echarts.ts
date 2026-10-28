@@ -43,3 +43,15 @@ echarts.use([
 
 export type { ECharts, EChartsCoreOption } from "echarts/core";
 export { echarts };
+
+// Canvas 渲染器不认 CSS 变量，图表配色统一走这层桥接（见 cssTokens.ts）。
+export {
+  alphaColor,
+  COLOR_TOKEN_FALLBACKS,
+  formatRgba,
+  parseColor,
+  readChartPalette,
+  readCssColor,
+  resolveCssColor,
+} from "./cssTokens";
+export type { ChartPalette, ParsedColor } from "./cssTokens";

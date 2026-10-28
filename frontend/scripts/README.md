@@ -103,3 +103,17 @@ npm run test:scripts
 - 未接入 `package.json`、CI 或 `prod-smoke` 的一次性脚本不再保留。
 - 截图采集、手工调试、临时验证脚本统一清理，不回流到本目录。
 - PythonLab 调试控制区一旦涉及 `tooltip / hover / pointer / focus` 相关改动，必须补跑真实 Chrome channel 与 WebKit。
+
+## 前端静态独立入口合同（Caddy 目录条目）
+
+`caddy-directory-entry.test.mjs` 由 `npm run test:scripts` 默认收集，检查独立
+AI Partner 的裸路径 `/games/ai-partner`、目录 `/games/ai-partner/` 和显式 HTML
+入口都命中它自己的 index：`try_files {path} {path}/index.html =404`，缺失资源
+仍为 404，不回退主站 SPA。它也约束 `/assets/*` 等静态资源不回退 index.html，
+以及主站 SPA 兜底规则仍然保留。
+
+原提交 `51cf5c0` 的这次修复在 `9f84619` 中被回滚，本文件按当前 CSP（脚本源仍
+允许 `cdn.jsdelivr.net` 供内容运行时使用）重新建立合同。
+
+**静态源码合同不替代实际 Caddy HTTP 验证**：200/404、`Cache-Control` 与
+`Content-Type` 必须用同一候选配置起容器逐条请求核对（实测命令见提交说明）。

@@ -88,6 +88,29 @@
 <Button className="bg-red-500">删除</Button>               {/* 绕过 destructive variant */}
 ```
 
+## Canvas / ECharts 等非 CSS 渲染器
+
+`var(--ws-color-*)` 只在 CSS 语境生效。Canvas 的 `fillStyle`、部分 SVG 库的即时
+绘制都拿不到 CSS 变量——赋值失败会**静默**回退成黑色，图表整块变黑且不报错。
+这类场景统一走 `frontend/src/lib/cssTokens.ts`：
+
+```ts
+import { readCssColor, readChartPalette, alphaColor } from "@/lib/cssTokens";
+
+readCssColor("--ws-color-primary");                  // "#0D9488"（浏览器里读实时值）
+const palette = readChartPalette();                  // 一次性拿到整套语义色 + tag palette
+alphaColor("var(--ws-color-border)", 0.5);           // 在原 alpha 上相乘，不会把半透明变实
+```
+
+规则：
+
+- **ECharts 优先用 SVG 渲染器**（`opts={{ renderer: "svg" }}`），此时 `var()` 可以直接写在 option 里
+  （见 `RadarChart.tsx`）；只有 Canvas 渲染器才必须走 `cssTokens`。
+- `cssTokens.ts` 里的 `COLOR_TOKEN_FALLBACKS` 是 `:root` 的镜像，供 SSR/测试/读取失败时使用。
+  它由 `cssTokens.contract.test.ts` 与 `index.css` 逐项比对，**改色值时两处必须同步**，否则测试会红。
+- 不要新增未在 `index.css` 定义的颜色 token；需要新色先定义 token 再引用。
+
+
 ## 对比度要求
 
 所有组合都应满足 **WCAG AA**：

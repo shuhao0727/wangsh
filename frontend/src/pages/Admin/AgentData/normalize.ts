@@ -1,5 +1,6 @@
 // Data normalization and transformation utilities for TaskAnalysisResultPage
 import dayjs from "dayjs";
+import { readCssColor } from "@/lib/cssTokens";
 import type {
   TaskAnalysisDetail, TaskAnalysisResult, TopicItem,
   MainQuestionChainItem, TeacherQuestionItem,
@@ -7,7 +8,16 @@ import type {
   BeamNode, WordCloudItem, BeamTeacherAnchor, BeamStudentChain, BeamQuestionNode, BeamRelationType,
 } from "./types";
 
-export const WC_COLORS = ["#0D9488", "#7C3AED", "#3B82F6", "#06B6D4", "#EC4899", "#F59E0B", "#10B981", "#8B5CF6"];
+export const WC_COLORS = [
+  "--ws-tag-teal",
+  "--ws-tag-purple",
+  "--ws-tag-blue",
+  "--ws-tag-sky",
+  "--ws-tag-pink",
+  "--ws-tag-amber",
+  "--ws-tag-green",
+  "--ws-tag-indigo",
+] as const;
 
 export const escapeHtml = (value: string) => value
   .replace(/&/g, "&amp;")
@@ -25,7 +35,7 @@ export const safeFilePart = (value: string) => value.replace(/[\\/:*?"<>|]+/g, "
 export const wordColor = (word: string) => {
   let hash = 0;
   for (let i = 0; i < word.length; i += 1) hash = (hash * 31 + word.charCodeAt(i)) | 0;
-  return WC_COLORS[Math.abs(hash) % WC_COLORS.length];
+  return readCssColor(WC_COLORS[Math.abs(hash) % WC_COLORS.length]);
 };
 
 export const normalizeTopics = (value: unknown): TopicItem[] => Array.isArray(value)

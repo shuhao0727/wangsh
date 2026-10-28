@@ -6,6 +6,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { showMessage } from "@/lib/toast";
+import { ensureContentRuntime } from "@/lib/contentRuntimeLoader";
 import { ArrowLeft, Save, Eye, Edit3 } from "lucide-react";
 
 interface Props {
@@ -108,6 +109,8 @@ const MindMapEditor: React.FC<Props> = ({ mindmapId, initialTitle, initialMarkdo
   useEffect(() => {
     if (viewMode !== "preview" || !previewRef.current || !markdown) return;
     const container = previewRef.current;
+    // 预览时才拉 markmap，编辑器本身不占首屏。
+    void ensureContentRuntime("markmap").catch(() => undefined);
     let cancelled = false;
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
     container.innerHTML = "";

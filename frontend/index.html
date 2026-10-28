@@ -15,16 +15,13 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>WangSh</title>
-    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" integrity="sha384-7zkQWkzuo3B5mTepMUcHkMB5jZaolc2xDwL6VFqjFALcbeS9Ggm/Yr2r3Dy4lfFg" crossorigin="anonymous"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js" integrity="sha384-43gviWU0YVjaDtb/GhzOouOXtZMP/7XUzwPTstBeZFe/+rCMvRwr4yROQP43s0Xk" crossorigin="anonymous" onload="window.__katexAutoRenderReady=true"></script>
-    <script defer src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/mermaid@11.17.2/dist/mermaid.min.js" integrity="sha384-EOXBFmc3gx5mb+vn0vPvvGqACToJD24hhacX5Yx+8NUUQrHIle/Qi5Bg9o3zKwW2" crossorigin="anonymous" onload="window.__mermaidReady=true;window.dispatchEvent(new Event('ws:mermaid-ready'))" onerror="window.__mermaidLoadFailed=true;window.dispatchEvent(new Event('ws:mermaid-error'))"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js" integrity="sha384-CjloA8y00+1SDAUkjs099PVfnY2KmDC2BZnws9kh8D/lX1s46w6EPhpXdqMfjK6i" crossorigin="anonymous"></script>
-    <!-- markmap UMD 构建：dist/browser/* 挂载 window.markmap（依赖上方已加载的 d3 / katex）。
-         不要改用包根路径 dist/index.js —— 那是 ESM，传统 script 加载会抛
-         "Cannot use import statement outside a module"。 -->
-    <script defer src="https://cdn.jsdelivr.net/npm/markmap-lib@0.18.12/dist/browser/index.iife.js" integrity="sha384-ZlXKtR0wcZqxEYI8i3TPFFiOJR1MEdIzdVvnhSOonCrPsBup4dnkRw49FeYhfsHF" crossorigin="anonymous"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/markmap-view@0.18.12/dist/browser/index.js" integrity="sha384-p+gyhsDIg0RmvIKRr9BBGSyJ9NDDkiFsbilRwdZd20Q8mUL2v7e8+orY4pvTV52w" crossorigin="anonymous"></script>
+    <!--
+      内容运行时（KaTeX / highlight.js / Mermaid / D3+Markmap）不再写在 HTML 里。
+      它们唯一的消费方是 BookReader / MindMapViewer，这两个组件都在懒加载路由内，
+      因此统一由 src/lib/contentRuntimeLoader.ts 在首次真正渲染时按需注入，
+      首屏静态请求从 7 个脚本（gzip ≈1.37MB）降为 0。
+      升级 CDN 版本时必须同步修改该模块的 src 与 SRI。
+    -->
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>

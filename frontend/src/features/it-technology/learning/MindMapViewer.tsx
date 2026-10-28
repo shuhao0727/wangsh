@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from "react";
+import { ensureContentRuntime } from "@/lib/contentRuntimeLoader";
 
 interface Props { markdown: string; onNodeClick?: (text: string) => void; compact?: boolean; }
 
@@ -9,6 +10,8 @@ const MindMapViewer: React.FC<Props> = ({ markdown, onNodeClick, compact }) => {
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
+    // 思维导图只用得到 markmap（d3 + lib + view），进入组件时才拉取。
+    void ensureContentRuntime("markmap").catch(() => undefined);
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
     let fitFrame: number | null = null;
