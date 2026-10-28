@@ -3,8 +3,81 @@
 > 状态：active
 > Owner：testing
 > 当前版本：生产正式 2.1.8；源码、镜像与运行身份见本页发布记录
-> 最近更新：2026-10-27
+> 最近更新：2026-10-28
 > 说明：本文件是当前测试事实的唯一汇总入口；阶段报告只引用本页，不复制新基线。
+
+## 2026-10-27~28 S1 致命级验证（7 项全部通过）
+
+- **文档门禁：** Markdown 合同检查为 `148 files / 684 links / 0 missing`。
+
+- **范围：** 按 [S1~S7 验证计划](../plans/2026-10-27-S1-S7-VERIFICATION-PLAN-V3.md) 执行 S1 致命级 7 项。
+  规则：Docker 实例验证（D1/D2/D3）+ 双 Agent 交叉验证 + 主控复现争议结论。
+
+### 逐项结论
+
+| 项 | 档位 | 结论 | 关键证据 |
+|---|---|---|---|
+| S1-1 backup-db / restore-db | D2 | **通过** | 见下「S1-1 复验」 |
+| S1-2 XBK 名册权限 | D3 | 通过 | admin 403 / super_admin 200 / 未认证 401 / 伪造 token 401；student 403、过期 token 401、伪造 `role_code=super_admin` 的合法签名 token 也 401 |
+| S1-3 迁移守卫 | D2 | 通过（附不变量缺口） | 漂移时抛 `DuplicateTableError`，`alembic_version` 停在上一个 revision；表数 **55**（54 BASE TABLE + 1 VIEW） |
+| S1-4 假数据路径 | D2 | 通过 | 不存在智能体、无凭证、不可达端点均抛 `ValueError`，无假数据回落 |
+| S1-5 CSP / metrics | D1+D3 | 通过 | 七个路径均带 CSP、XFO DENY、nosniff；三个 metrics 端点 super 200 / admin 403 / 匿名 401 |
+| S1-6 生产模拟隔离 | D1 | 通过（清理曾不完整） | 8 个容器均未挂载 `./data`，网络按项目隔离 |
+| S1-7 前端回退 | D3 | 通过 | 三提交在祖先链；计算样式 primary `#0d9488`、bg `#f0fdfa`、accent `#7c3aed`；1440/768/375 无横向溢出；`pageerror=0` |
+
+### S1-1 复验（D2，一次性栈 `s1v3`，端口 15496）
+
+- **修复内容（`scripts/deploy.sh` restore-db）：** 加 `--exit-on-error` 并检查返回码；`--list` 失败即退出（覆盖尾部截断）；按 `TABLE`/`TABLE DATA` 条目数区分 full 与 data 备份，不再写死 `public`；只对备份里实际存在的表逐张核对（`n_live_tup` 为 0 时用动态 SQL 真实计数复核）；去掉吞错的 `2>/dev/null`，查询加 `ON_ERROR_STOP=1`；`.sql` 分支加 `ON_ERROR_STOP=1` 并向上返回非零。
+- **结果：19 个断言全部通过。** full→空库 700/123 行一致且 16MB 中文 emoji 内容 md5 一致（`cad7249678bd1653a1f78fa23ca9a95c`）；data→非空库被拒绝（退出码 1，列出冲突表名）且数据未变；data→空表库 700 行成功；空文件/随机损坏/尾部截断均非零退出；非 `public` schema 的 full 备份恢复 `app.t3=10`；目标库有无关表不影响恢复；空表未 analyze 不被误拒；备份不存在的库时 `pg_dump` 非零退出。
+- **`--exit-on-error` 对照实测：** 三表按 TOC 顺序恢复，中间表因列宽冲突失败。不加时 `a_ok=2 / c_late=1`（坏表被跳过、后续表继续写入，仅一条 warning）；加了之后 `a_ok=2 / c_late=0`（立即中止）。退出码都是 1，差别在于**是否留下半套数据**。
+- **DDL 阶段失败实测：** 构造「目标库有外部外键依赖备份表」，在 `DROP CONSTRAINT` 处失败、退出码 1、后续 COPY 未执行。另测「目标库同名对象是视图」，在 `ALTER TABLE ... DROP CONSTRAINT` 处失败（`This operation is not supported for views`）、退出码 1。
+- **`--clean` 范围：** 目标库预置 `extra_table`、`extra_view`，恢复只含 `t1` 的 full 备份后 `exit=0` 且 `t1` 数据还原，两个额外对象**全部保留**。
+- **`schema` / `data` 边界：** `schema` 恢复到空库只得到空表；`data` 恢复到没有对应表的库 `exit=1`，报 `relation ... does not exist`（有意为之）。
+- **残余风险：** 「逐张核对」依赖统计视图与真实计数两层判断；目标库在核对与 COPY 之间被并发写入时仍可能撞键，此时以非零退出码报错，不再静默成功。
+- **未覆盖：** PostgreSQL 跨版本（16 dump 恢复到更低版本）。
+
+### S1 交叉复核（两个独立复核 Agent）
+
+- **S1-2 / S1-5 确认。** 另测 student 写入 403、匿名 PUT 401、过期 token 401、伪造 `role_code=super_admin` 的合法签名 token 401；同 flag 旁路接口 `POST /system/feature-flags` 同样 super 200 / admin、student 403 / 匿名 401；admin 自提权与创建 super_admin 均 403。`role_code` 取自数据库而非 JWT。CSP 在七个路径生效，metrics 内容扫描无密码、连接串、token。
+- **S1-3 表数推翻。** `information_schema.tables` 实为 **55** 条（`BASE TABLE` 54 + `VIEW` 1 个 `v_conversations_with_deleted`）。早先记的「54 张表」只数了表、漏了视图。`alembic heads` 为 `20261026_0001`，降级后 49 张。
+- **S1-3 不变量缺口。** `if_not_exists` 仍有残留，且**列级漂移会被静默放过**（降级 → 手工 `ADD COLUMN` → 再升级，`rc=0` 版本推进、冲突列无人处理）。索引级漂移的 `DuplicateTableError` 行为本身确认。2026-10-28 已新增静态守卫检查 `backend/scripts/check_migration_guard.py` 阻止新增守卫，见下节。
+- **S1-6 清理被推翻。** `wangsh_sim` 曾遗留 4 个卷与 `run.ep4Il6` 工作区（锁已释放，说明外部中断没走到 trap）。**已手动清理**，复查无残留。
+- **S1-7 措辞更正。** 实际是顶部导航，不是侧边栏（无 `aside`）。
+
+### restore-db 复核发现与修复
+
+- **`.sql` 分支吞错（高，已修）。** `psql` 不加 `ON_ERROR_STOP` 时中途报错仍继续执行、退出码 0。主控复现：不加时 `rc=0`，加上后 `rc=3`。
+- **表名拼接（中，已修）。** 原实现把表名拼成带逗号/点号的 SQL 字面量：`a'b` 触发语法错误被拒、`we,ird` 被拆成两段漏判、`dot.tbl` 被误认成 schema.table。改为 awk 把 `schema\x01表名` 逐条拼成一行、生成静态 VALUES 行（单引号双写转义），psql 侧不做字符串切分；动态 count 用 `quote_ident`。实测：空表时三种特殊表名全部放行并恢复成功，有数据时全部点名拒绝。
+- **`--clean` 不清理 dump 外多余对象（已知边界，已写入 DEPLOY.md）。**
+
+### 工作树执行前提（运维）
+
+本工作树无 `.env`，开发栈由 `docker-compose.dev.yml` + `.env.dev` 启动，容器为 `wangsh-postgres`。
+直接执行 `deploy.sh backup-db`/`restore-db` 会因 `require_env_file` 失败或找不到容器。正确方式见
+[DEPLOY](../deploy/DEPLOY.md#执行前提)。
+
+## 2026-10-28 遗留缺陷修复（迁移守卫 + AI SSE 状态码）
+
+- **迁移守卫静态检查（新增，未改既有判定逻辑）：** 新增 `backend/scripts/check_migration_guard.py`，只读迁移源码、AST 解析 `upgrade()` 函数体，禁止新增 `IF NOT EXISTS` / `if_not_exists`；历史 revision 按 `FROZEN_GUARD_COUNTS` 冻结命中数（以 `--update-baseline` 实测值写入），只许减少不许增加。`downgrade()` 里的 `DROP ... IF EXISTS` 与注释文字不计入。已挂到 `.github/workflows/ci-quality.yml` 的 python governance 步骤第一步（纯静态、不需要数据库）。
+  - **验证：** 仓库现行 50 个迁移文件 `[OK]`；自造三条用例——干净迁移通过、`upgrade()` 含守卫失败（退出码 1）、注释文字不计入（通过）。
+  - **回归：** `tests/test_migration_preflight_guard_contract.py` **56 passed**，与 HEAD 基线一致，既有 `evaluate_migration_state` 判定逻辑未被触碰。
+- **AI SSE 设置阶段错误码（`/ai-agents/stream` 等）：** 设置阶段失败不再返回 `200 + event: error`，改为直接返回 404/409/503。映射见 `docs/development/API.md`「AI 分析/对话 SSE 的设置阶段错误码」。流开始之后的错误仍走 `event: error` 帧（SSE 协议限制）。
+  - **实例验证（真实后端进程内、真实路由）：** 9 种错误码映射全部符合预期（`invalid_agent→404`；`agent_inactive`/`missing_endpoint`/`missing_api_key`/`circuit_open`/`model_not_configured→409`；`stream_setup_failed`/`stream_failed`/未知错误码→503）。未认证请求仍为 `401`。
+  - **测试：** `tests/ai_agents/test_sse_setup_error_status_asgi_isolated.py` **11 passed**；`tests/ai_agents/test_stream_session_asgi_isolated.py` **44 passed**；`tests/ai_agents` 全目录 **311 passed, 1 skipped**。
+  - **前端契约：** `frontend/src/services/znt/api/index.ts` 已按 `if (!response.ok)` 处理非 200，无需改动；`useAdminSSE.ts` 走 `EventSource`（GET `/admin/stream`），不受影响。
+
+## 2026-10-28 生产网关 SSE 30 秒断连（已修，实测验证）
+
+- **问题：** `gateway/Caddyfile` 的 server 级 `timeouts { write 30s }` 是**整个连接**的绝对写截止时间，不是两次写之间的空闲时间。后端每 15 秒发一次 keepalive，第 3 个 keepalive（30s）之前连接就被硬切断，前端只能不断退避重连，浏览器报 `ERR_INCOMPLETE_CHUNKED_ENCODING`。开发用的 `Caddyfile.dev` 没有这项，所以只在生产出现。
+- **关键发现（推翻先前判断）：** `write 30s` 是 Caddy v2 的 **server 级默认值**，**省略不写仍然生效**，而且**优先于** `reverse_proxy transport` 里的 `write_timeout`——route 级设置覆盖不了它。曾先尝试「移除 write 行」，实测连接仍在 30 秒断开；必须**显式写 `write 0`**。
+- **对照实测（最小 Caddy + 探针后端，生产同款 Caddyfile）：**
+  - 保留 `write 30s`：连接在 **30.0s** 结束，只收到 0s 与 15s 两个 keepalive。
+  - 移除 write 行（取默认 30s）：同样在 **30s** 结束。
+  - 显式 `write 0`：连续收到 0/15/30/45/60/75s 共 **6 个 keepalive，稳定跑满 80s**。
+- **修复：** server 级 `write 0`；同时保留 `@api_stream` 专用 handle（对 5 个 SSE 端点把 `read_timeout`/`write_timeout` 置 0），用于覆盖 `/api` 默认 transport 的 30s 写超时。空闲回收交给 `idle 2m`。
+- **验证：** `caddy validate` 返回 `Valid configuration`；上述对照实验为真实容器 + 真实 HTTP 长连接实测。
+- **未覆盖：** 未在生产环境实测；未在真实用户会话下验证前端重连行为是否消失。
+
 
 ## 2026-10-27 算法复杂度 P0 修复（未提交）
 
