@@ -1,11 +1,20 @@
 {
 	# Keep connection and header budgets at the Caddy server boundary. These
 	# are native Caddy options; no third-party rate-limit module is assumed.
+	#
+	# write 必须显式设为 0。
+	# server 级 write_timeout 是「整个连接」的绝对写截止时间，不是「两次写之间的
+	# 空闲时间」；它在 Caddy v2 的默认值是 30s，省略时仍会生效，并且优先于
+	# reverse_proxy transport 里的 write_timeout——route 级设置覆盖不了它。
+	# 曾经显式写 30s，导致后端每 15 秒发一次 keepalive 的 SSE 长连接在第 3 个
+	# keepalive 之前被硬切断，前端只能不断退避重连，浏览器报
+	# ERR_INCOMPLETE_CHUNKED_ENCODING。实测：30s（显式写或省略取默认）时连接
+	# 恰好在 30s 断开；显式置 0 后同一 SSE 稳定跑满 80s。长连接的空闲回收交给 idle。
 	servers {
 		timeouts {
 			read_header 5s
 			read_body 30s
-			write 30s
+			write 0
 			idle 2m
 		}
 		max_header_size 64KB
@@ -48,6 +57,24 @@
 				response_header_timeout 30s
 				read_timeout 60s
 				write_timeout 30s
+				keepalive 30s
+			}
+		}
+	}
+
+	# SSE 长连接单独处理：/api 默认 transport 写超时 30s，而 SSE 在后端 keepalive
+	# （15s 一次）之外可能长时间没有业务数据，超过就会被反向代理侧关掉。
+	# stream 路径把 read/write timeout 置 0，由后端 keepalive 维持；空闲回收交给
+	# server 级 idle 2m。
+	# 注意顺序：handle 按声明顺序匹配，@api_stream 必须排在 @api 之前。
+	@api_stream path /api/v1/admin/stream /api/v1/ai-agents/stream /api/v1/ai-agents/analysis/*/stream /api/v1/ai-agents/group-discussion/stream /api/v1/classroom/admin/stream
+	handle @api_stream {
+		reverse_proxy backend:8000 {
+			transport http {
+				dial_timeout 5s
+				response_header_timeout 60s
+				read_timeout 0
+				write_timeout 0
 				keepalive 30s
 			}
 		}
