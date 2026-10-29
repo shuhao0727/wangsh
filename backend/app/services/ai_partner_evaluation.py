@@ -528,9 +528,11 @@ async def _evaluate_model(db, request: EvaluationRequest, context: dict) -> Mode
       还会放大上游压力（上游 5xx 已在 _model_response 里转成 502 抛出）。
     """
     last_error: Exception | None = None
+    last_raw: str = ""
     try:
         async with asyncio.timeout(MODEL_TIMEOUT_SECONDS):
             for attempt in range(MODEL_ATTEMPTS):
+                raw = ""
                 try:
                     raw = await call_model(db, request, context)
                     return parse_evaluation(raw)
@@ -539,8 +541,11 @@ async def _evaluate_model(db, request: EvaluationRequest, context: dict) -> Mode
                 except (TimeoutError, httpx.TimeoutException):
                     raise
                 except Exception as exc:
-                    # 只剩「解析/校验失败」会走到这里：记录后重试
+                    # 只剩「解析/校验失败」会走到这里：记录后重试。
+                    # raw 每轮重置为空串：call_model 内部（_model_response）
+                    # 也会因上游返回非 JSON 直接抛 JSONDecodeError，那时拿不到 raw。
                     last_error = exc
+                    last_raw = raw
                     if attempt + 1 < MODEL_ATTEMPTS:
                         logger.warning(
                             "AI 评分第 {} 次输出不合格（{}），重试一次",
@@ -553,8 +558,15 @@ async def _evaluate_model(db, request: EvaluationRequest, context: dict) -> Mode
         # 总预算耗尽或单次 HTTP 超时——不重试，直接 504
         raise HTTPException(504, "AI评分超时，请稍后重试") from None
     logger.warning(
-        "AI partner model evaluation failed: {}",
+        "AI partner model evaluation failed after {} attempt(s): {} | "
+        "raw_head={!r} | raw_len={}",
+        MODEL_ATTEMPTS,
         type(last_error).__name__ if last_error else "unknown",
+        # 之前只记异常类型，导致线上出问题后**一个样本都收集不到**，
+        # 排查只能靠复现。这里记前 400 字符便于定位形态；模型输出是评分
+        # 结论本身，不含密钥与用户凭证，截断记录风险可控。
+        (last_raw[:400] if last_raw else ""),
+        len(last_raw) if last_raw else 0,
     )
     raise HTTPException(502, "AI评分未返回有效结构化结果，请重试") from None
 
