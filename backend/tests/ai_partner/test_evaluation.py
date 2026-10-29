@@ -446,3 +446,56 @@ def test_extract_json_object_handles_braces_inside_strings():
     """字符串里的花括号不能被当成结构括号。"""
     text = 'prefix {"note": "用了 {大括号} 和 \\"转义\\"", "n": 1} suffix'
     assert svc._extract_json_object(text) == '{"note": "用了 {大括号} 和 \\"转义\\"", "n": 1}'
+
+
+def test_parse_evaluation_normalizes_extra_dimensions():
+    """模型偶尔返回 5 个维度（把 suggestions 里一条塞进 dimensions）。
+
+    生产实测样本就是这种情况，schema 的 min_length=4/max_length=4 直接
+    ValidationError → 用户看到 502。归一化按 key 白名单精确挑 4 个。
+    """
+    payload = {
+        "dimensions": [
+            {"key": "value", "label": "价格性价比", "score": 12, "max": 25, "note": "预算偏重"},
+            {"key": "completion", "label": "任务完成度", "score": 14, "max": 25, "note": "链路不全"},
+            {"key": "suitability", "label": "选择合理性", "score": 13, "max": 25, "note": "偏重显卡"},
+            {"key": "validation", "label": "设计验证与风险", "score": 8, "max": 25, "note": "未细化"},
+            {"key": "把验证计划具体化", "label": "多余项", "score": 0, "max": 25, "note": "误塞"},
+        ],
+        "suggestions": ["补输入输出链路"],
+    }
+    result = svc.parse_evaluation(json.dumps(payload, ensure_ascii=False))
+    assert [d.key for d in result.dimensions] == list(svc.DIMENSIONS)
+    assert sum(d.score for d in result.dimensions) == 47
+    # label 一律按服务端定义覆盖，不信任模型给的 label
+    assert [d.label for d in result.dimensions] == list(svc.DIMENSIONS.values())
+
+
+def test_parse_evaluation_rejects_missing_dimension_instead_of_padding():
+    """缺维度必须失败——补 0 分会让评分失真，宁可拒绝。"""
+    payload = {
+        "dimensions": [
+            {"key": "value", "label": "价格性价比", "score": 12, "max": 25, "note": "x"},
+            {"key": "completion", "label": "任务完成度", "score": 14, "max": 25, "note": "x"},
+            {"key": "suitability", "label": "选择合理性", "score": 13, "max": 25, "note": "x"},
+        ],
+        "suggestions": ["x"],
+    }
+    with pytest.raises(Exception):
+        svc.parse_evaluation(json.dumps(payload, ensure_ascii=False))
+
+
+def test_parse_evaluation_dedupes_repeated_dimension_key():
+    """同一 key 出现两次时只取第一条，不能让 4 项全是重复内容。"""
+    item = {"key": "value", "label": "价格性价比", "score": 12, "max": 25, "note": "x"}
+    payload = {
+        "dimensions": [
+            item, dict(item),
+            {"key": "completion", "label": "任务完成度", "score": 14, "max": 25, "note": "x"},
+            {"key": "suitability", "label": "选择合理性", "score": 13, "max": 25, "note": "x"},
+            {"key": "validation", "label": "设计验证与风险", "score": 8, "max": 25, "note": "x"},
+        ],
+        "suggestions": ["x"],
+    }
+    result = svc.parse_evaluation(json.dumps(payload, ensure_ascii=False))
+    assert [d.key for d in result.dimensions] == list(svc.DIMENSIONS)

@@ -322,6 +322,33 @@ def _extract_json_object(text: str) -> str | None:
     return None
 
 
+def _normalize_dimensions(payload: dict) -> dict:
+    """把模型返回的 dimensions 收敛到契约要求的 4 项。
+
+    生产实测：模型偶尔返回 5 项——把 suggestions 里的一条当成第 5 个维度
+    塞进 dimensions 数组。schema 是 min_length=4/max_length=4，多一项就
+    ValidationError，用户看到 502。
+
+    这里按 key 白名单精确挑出 DIMENSIONS 的 4 个 key，不靠位置或长度猜测：
+    - 只保留 key 在契约内的项，多余项（含重复 key）丢弃；
+    - 缺任何一项都视为无效输出，不做「补 0 分」之类的臆测。
+    评分必须严格对应四个维度，宁可失败也不能给出错位的分数。
+    """
+    dimensions = payload.get("dimensions")
+    if not isinstance(dimensions, list):
+        return payload
+    picked: dict[str, dict] = {}
+    for item in dimensions:
+        if not isinstance(item, dict):
+            continue
+        key = item.get("key")
+        if key in DIMENSIONS and key not in picked:
+            picked[key] = item
+    if set(picked) != set(DIMENSIONS):
+        return payload
+    return {**payload, "dimensions": [picked[key] for key in DIMENSIONS]}
+
+
 def parse_evaluation(raw: str) -> ModelEvaluation:
     if not isinstance(raw, str):
         raise ValueError("invalid_model_output")
@@ -357,7 +384,7 @@ def parse_evaluation(raw: str) -> ModelEvaluation:
             raise
         payload = json.loads(extracted, object_pairs_hook=unique_pairs)
 
-    result = ModelEvaluation.model_validate(payload)
+    result = ModelEvaluation.model_validate(_normalize_dimensions(payload))
     if {d.key for d in result.dimensions} != set(DIMENSIONS):
         raise ValueError("invalid_dimensions")
     by_key = {d.key: d for d in result.dimensions}
