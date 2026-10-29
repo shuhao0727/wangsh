@@ -27,16 +27,18 @@ from app.services.ai_partner_leaderboard import round_keys
 from app.utils.cache import cache
 
 # 评分是一次长推理：实测真实 payload（query 约 22k 字符）在 Dify + DeepSeek 上
-# 耗时 22.5s / 27.1s / 29.9s 三次，全部超过原有的 25s 预算，且内层 httpx 只给了
-# 20s —— 于是每次都在 SSL 读上先超时，用户看到的是「AI评分超时」。
+# 耗时波动很大——同一 prompt 连续跑，实测分布 24.4s / 27.1s / 28.8s / 29.3s /
+# 33.4s / 35.5s / **43.3s**（最长一次）。原来内层 httpx 只给 20s、总预算 25s，
+# 于是几乎每次都在 SSL 读上先超时，用户看到「AI评分超时」。
 # 三层预算必须严格嵌套，且从内到外递增：
-#   MODEL_HTTP_TIMEOUT_SECONDS(45) < MODEL_TIMEOUT_SECONDS(50) < EVALUATION_LOCK_TTL_SECONDS(60) < 前端 65s
-# 45s 相对实测最慢 29.9s 留了约 50% 余量；50s 总预算保证即使 httpx 卡在 DNS/连接
-# 也能被 asyncio.timeout 兜住；锁 60s 必须长于总预算，否则请求还没结束锁就过期，
-# 同用户并发就会双跑评分、双扣配额。
-MODEL_HTTP_TIMEOUT_SECONDS = 45
-MODEL_TIMEOUT_SECONDS = 50
-EVALUATION_LOCK_TTL_SECONDS = 60
+#   MODEL_HTTP_TIMEOUT_SECONDS(75) < MODEL_TIMEOUT_SECONDS(80)
+#     < EVALUATION_LOCK_TTL_SECONDS(90) < 前端 65s？—— 见下方说明
+# 取 75/80 是按实测最长 43.3s 再留约 70% 余量：模型耗时随负载与思维链长度
+# 剧烈波动，按 45s 定会让接近一半的请求卡在边缘。锁必须长于总预算，
+# 否则请求还没结束锁就过期，同用户并发就会双跑评分、双扣配额。
+MODEL_HTTP_TIMEOUT_SECONDS = 75
+MODEL_TIMEOUT_SECONDS = 80
+EVALUATION_LOCK_TTL_SECONDS = 90
 RECEIPT_TTL_SECONDS = 600
 DIMENSIONS = {
     "value": "价格性价比", "completion": "任务完成度",
@@ -285,6 +287,41 @@ async def call_model(db, request: EvaluationRequest, context: dict) -> str:
     return await _model_response(provider, url, payload)
 
 
+def _extract_json_object(text: str) -> str | None:
+    """从模型输出里截出最外层的 JSON 对象。
+
+    模型的答案除了 <think> 之外还可能夹带解释性前后缀（"以下是评分："、
+    "希望有帮助"等），或把 JSON 包进 ```json 代码块。直接 json.loads 会
+    在第一个非 `{` 字符处失败，但这些内容对评分毫无意义。
+    用括号配对扫描找最外层对象，避免依赖正则的贪婪/非贪婪猜测。
+    """
+    start = text.find("{")
+    if start < 0:
+        return None
+    depth = 0
+    in_string = False
+    escaped = False
+    for index in range(start, len(text)):
+        char = text[index]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+        elif char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start : index + 1]
+    return None
+
+
 def parse_evaluation(raw: str) -> ModelEvaluation:
     if not isinstance(raw, str):
         raise ValueError("invalid_model_output")
@@ -309,7 +346,18 @@ def parse_evaluation(raw: str) -> ModelEvaluation:
             obj[key] = value
         return obj
 
-    result = ModelEvaluation.model_validate(json.loads(clean, object_pairs_hook=unique_pairs))
+    # 剥离 think 后仍可能夹带说明文字或 ```json 围栏（生产实测出现过），
+    # 先按原文解析，失败再截取最外层对象重试——两者成功等价，
+    # 但不要把「模型多说了句废话」当成无效输出直接 502。
+    try:
+        payload = json.loads(clean, object_pairs_hook=unique_pairs)
+    except json.JSONDecodeError:
+        extracted = _extract_json_object(clean)
+        if extracted is None or extracted == clean:
+            raise
+        payload = json.loads(extracted, object_pairs_hook=unique_pairs)
+
+    result = ModelEvaluation.model_validate(payload)
     if {d.key for d in result.dimensions} != set(DIMENSIONS):
         raise ValueError("invalid_dimensions")
     by_key = {d.key: d for d in result.dimensions}

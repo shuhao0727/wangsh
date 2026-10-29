@@ -408,11 +408,41 @@ def test_parse_evaluation_rejects_absent_or_oversized_answer():
 def test_model_timeout_budget_is_nested_outside_in():
     """三层超时必须严格嵌套，否则内层先超时、外层预算形同虚设。
 
-    实测真实评分 22.5s / 27.1s / 29.9s，旧的 20s httpx + 25s 总预算必然超时。
+    实测真实评分耗时分布很宽：24.4s / 27.1s / 28.8s / 29.3s / 33.4s /
+    35.5s / 43.3s。旧的 20s httpx + 25s 总预算必然超时；45s 也会让接近
+    一半的请求卡在边缘，因此取 75/80。
     """
     assert svc.MODEL_HTTP_TIMEOUT_SECONDS < svc.MODEL_TIMEOUT_SECONDS
     assert svc.MODEL_TIMEOUT_SECONDS < svc.EVALUATION_LOCK_TTL_SECONDS
     # 锁必须长于总预算，否则请求未结束锁就过期 → 同用户并发双跑、双扣配额
     assert svc.EVALUATION_LOCK_TTL_SECONDS > svc.MODEL_TIMEOUT_SECONDS
-    # 相对实测最慢 29.9s 需留出余量
-    assert svc.MODEL_TIMEOUT_SECONDS >= 40
+    # 相对实测最慢 43.3s 需留出足够余量
+    assert svc.MODEL_TIMEOUT_SECONDS >= 70
+
+
+def test_parse_evaluation_tolerates_wrapping_text_and_fences():
+    """剥离 think 后仍夹带说明文字或代码围栏时，应截出 JSON 而不是直接 502。
+
+    生产实测出现过模型在 JSON 前后多写一句解释的情况。这类输出对评分
+    毫无影响，不该判成「未返回有效结构化结果」。
+    """
+    answer = model_output()
+    for wrapped in (
+        f"以下是评分结果：\n{answer}\n希望对学生有帮助。",
+        f"```json\n{answer}\n```",
+        f"评分如下{answer}（完）",
+    ):
+        result = svc.parse_evaluation(wrapped)
+        assert sum(d.score for d in result.dimensions) == 80
+
+
+def test_parse_evaluation_still_rejects_truly_broken_json():
+    """截取逻辑不能把坏 JSON 也放过——括号内语法错误仍应失败。"""
+    with pytest.raises((ValueError, json.JSONDecodeError)):
+        svc.parse_evaluation('{"dimensions": [这只不是 JSON], "suggestions": []}')
+
+
+def test_extract_json_object_handles_braces_inside_strings():
+    """字符串里的花括号不能被当成结构括号。"""
+    text = 'prefix {"note": "用了 {大括号} 和 \\"转义\\"", "n": 1} suffix'
+    assert svc._extract_json_object(text) == '{"note": "用了 {大括号} 和 \\"转义\\"", "n": 1}'
