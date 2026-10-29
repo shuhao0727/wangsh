@@ -391,6 +391,7 @@ verify_local_images() {
   local image_ref
   local image_count=0
   local missing=0
+  local wrong_platform=0
 
   compose_output="$(compose config --images)" || {
     echo "failed to render compose image references" >&2
@@ -404,7 +405,24 @@ verify_local_images() {
     if ! docker image inspect "${image_ref}" >/dev/null 2>&1; then
       echo "local image missing: ${image_ref}" >&2
       missing=1
+      continue
     fi
+    # 项目镜像必须是 linux/amd64——服务器是 x86_64。
+    # arm64 镜像在本机（Apple Silicon）能正常 docker run，不会报错，
+    # 只有推到服务器才暴露。2026-10-29 的 pythonlab-sandbox 就踩过这个坑：
+    # 手工 docker build 漏了 --platform，产出 arm64。
+    case "${image_ref}" in
+      *pythonlab-sandbox*|*/wangsh-*)
+        local arch
+        arch="$(docker image inspect "${image_ref}" --format '{{.Os}}/{{.Architecture}}' 2>/dev/null || true)"
+        if [ "${arch}" != "linux/amd64" ]; then
+          echo "local image wrong platform: ${image_ref} is ${arch:-unknown}, expected linux/amd64" >&2
+          echo "  修法：用 docker compose build 重新构建（compose 会按 platform 字段走交叉编译），" >&2
+          echo "        不要单独 docker build，除非显式加 --platform linux/amd64" >&2
+          wrong_platform=1
+        fi
+        ;;
+    esac
   done < <(
     {
       printf '%s\n' "${compose_output}"
@@ -416,10 +434,10 @@ verify_local_images() {
     echo "no local image references found" >&2
     return 2
   fi
-  if [ "${missing}" -ne 0 ]; then
+  if [ "${missing}" -ne 0 ] || [ "${wrong_platform}" -ne 0 ]; then
     return 2
   fi
-  echo "local images verified: ${image_count}"
+  echo "local images verified: ${image_count} (all linux/amd64)"
 }
 
 rand() {

@@ -329,6 +329,52 @@ docker exec <容器> grep -c <该版本引入的独特标识> /app/<路径>
 同时 `git show <标签>:<文件> | grep -c <符号>` 与
 `docker exec <容器> grep -c <符号> /app/<文件>`，两边应相等。
 
+### 生产镜像必须用 `docker compose build`，不要手动 `docker build`
+
+**规则：构建任何生产镜像都走 `docker compose build`（或 `scripts/deploy.sh build-amd64`），
+不要逐个 `docker build`。**
+
+原因：`docker-compose.yml` 给每个服务都声明了 `platform: linux/amd64`，
+compose 会据此强制走 BuildKit 的交叉编译。手动 `docker build` 不读这个字段，
+在 Apple Silicon 上会直接产出 **arm64** 镜像——本机跑得动，推到 x86 服务器就起不来。
+
+**真实事故（2026-10-29）**：`pythonlab-sandbox:2.2.4` 用 `docker build` 手工构建，
+产物是 `linux/arm64`。预期用 `docker image inspect <镜像> --format '{{.Os}}/{{.Architecture}}'`
+才发现，此时其他 5 个镜像都是 `linux/amd64`。若直接推送部署，PythonLab 沙箱会在
+服务器上启动失败。
+
+**六个生产镜像都要经过 compose 的 build 段**：
+
+| 服务 | build context | 说明 |
+|---|---|---|
+| `backend` | `./backend` | Dockerfile.prod，target `backend_runtime` |
+| `frontend` | `./frontend` | Dockerfile.prod |
+| `gateway` | `./gateway` | 含 Caddyfile |
+| `typst-worker` | `./backend` | 与 backend 同源，不同 target |
+| `pythonlab-worker` | `./backend` | 同上 |
+| `pythonlab-sandbox` | `./backend/docker/pythonlab-sandbox` | 独立 Dockerfile，**也在 compose 里，有 build 段** |
+
+最后一行容易踩：sandbox 的 Dockerfile 位置和其他不一样，看起来像「额外单独构建」，
+但它确实在 `docker-compose.yml` 的 services 下、有完整的 build 段，`compose build` 会建它。
+
+**构建后必做的核对**：
+
+```bash
+# 1) 平台：逐个确认都是 linux/amd64
+for img in backend frontend gateway typst-worker pythonlab-worker pythonlab-sandbox; do
+  printf '%-22s ' "$img"
+  docker image inspect "shuhao07/wangsh-${img}:${VERSION}" \
+    --format '{{.Os}}/{{.Architecture}}' 2>/dev/null \
+    || docker image inspect "shuhao07/pythonlab-sandbox:${VERSION}" --format '{{.Os}}/{{.Architecture}}'
+done
+
+# 2) 代码特征：挑本版引入的独特符号，与 git 里同一提交比对
+docker run --rm --entrypoint grep <镜像> -c <符号> /app/<路径>
+```
+
+第一条核对容易被忽略——arm64 镜像在本机能正常 `docker run`，不会报错，
+只有真正推到 x86 服务器才会暴露。
+
 ### 镜像命名与整理
 
 - 项目镜像沿用既有仓库名。开发后端和 worker 显式使用 `shuhao07/wangsh-<组件>:dev`，例如 `shuhao07/wangsh-backend:dev`，不再让 Compose 按工作树目录自动命名。
