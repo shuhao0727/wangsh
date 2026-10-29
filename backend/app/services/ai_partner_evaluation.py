@@ -338,6 +338,51 @@ def _extract_json_object(text: str) -> str | None:
     return None
 
 
+def _salvage_sections(text: str) -> dict | None:
+    """整体 JSON 解析失败时，尝试分别取出 dimensions 与 suggestions 重建。
+
+    生产实测：模型把两个数组的**衔接**写坏了（实测样本末尾是 `"}]}`，
+    少了 suggestions 的闭合 `]`），但两个数组**各自的数据完好**。
+    这种情况下重新调一次模型要 20–40 秒，而数据其实已经在手里。
+
+    做法：用 raw_decode 逐个取出两个数组的元素，再组装成规范对象。
+    这是「抢救」不是「猜测」——只搬运能独立解析出来的元素，
+    任何一项取不全就返回 None，交给上层重试或报错。
+    """
+    import json as _json
+
+    decoder = _json.JSONDecoder()
+
+    def _array_after(key: str) -> list | None:
+        marker = f'"{key}"'
+        idx = text.find(marker)
+        if idx < 0:
+            return None
+        idx = text.find("[", idx + len(marker))
+        if idx < 0:
+            return None
+        items: list = []
+        pos = idx + 1
+        while pos < len(text):
+            while pos < len(text) and text[pos] in " ,\n\r\t":
+                pos += 1
+            if pos >= len(text) or text[pos] == "]":
+                break
+            try:
+                value, pos = decoder.raw_decode(text, pos)
+            except ValueError:
+                # 单个元素坏了就停止，已取到的仍然可用
+                break
+            items.append(value)
+        return items
+
+    dimensions = _array_after("dimensions")
+    suggestions = _array_after("suggestions")
+    if not dimensions or not suggestions:
+        return None
+    return {"dimensions": dimensions, "suggestions": suggestions}
+
+
 def _normalize_dimensions(payload: dict) -> dict:
     """把模型返回的 dimensions 收敛到契约要求的 4 项。
 
@@ -392,13 +437,26 @@ def parse_evaluation(raw: str) -> ModelEvaluation:
     # 剥离 think 后仍可能夹带说明文字或 ```json 围栏（生产实测出现过），
     # 先按原文解析，失败再截取最外层对象重试——两者成功等价，
     # 但不要把「模型多说了句废话」当成无效输出直接 502。
+    #
+    # 两级兜底：
+    #   ① 截出最外层 {...} 再解析（处理前后缀）
+    #   ② 仍失败则分块抢救——分别取出 dimensions 与 suggestions 重建
+    #      （处理两个数组「衔接处」写坏、但数据本身完好的情况）
     try:
         payload = json.loads(clean, object_pairs_hook=unique_pairs)
     except json.JSONDecodeError:
+        payload = None
         extracted = _extract_json_object(clean)
-        if extracted is None or extracted == clean:
-            raise
-        payload = json.loads(extracted, object_pairs_hook=unique_pairs)
+        if extracted is not None and extracted != clean:
+            try:
+                payload = json.loads(extracted, object_pairs_hook=unique_pairs)
+            except json.JSONDecodeError:
+                payload = None
+        if payload is None:
+            salvaged = _salvage_sections(clean)
+            if salvaged is None:
+                raise
+            payload = salvaged
 
     result = ModelEvaluation.model_validate(_normalize_dimensions(payload))
     if {d.key for d in result.dimensions} != set(DIMENSIONS):

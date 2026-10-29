@@ -562,3 +562,42 @@ def test_evaluate_model_gives_up_after_all_attempts(monkeypatch):
     except Exception as exc:
         assert getattr(exc, "status_code", None) == 502
     assert calls["n"] == svc.MODEL_ATTEMPTS
+
+
+def test_salvage_sections_recovers_real_production_sample():
+    """用生产抓到的真实坏样本验证分块抢救。
+
+    fixture 取自 2026-10-29 生产日志中的一次真实失败：模型输出的 JSON
+    在末尾写坏（`json.loads` 报 `Expecting ',' delimiter: char 1838`），
+    但 dimensions(4 项) 与 suggestions(6 条) 的数据本身完好。
+
+    用真实样本而不是手写复现：损坏形态是模型随机产生的，手写容易构造出
+    「其实合法」的输入（我一开始就踩了这个坑）。
+    """
+    fixture = Path(__file__).with_name("fixtures") / "broken_json_real_sample.txt"
+    broken = fixture.read_text(encoding="utf-8")
+
+    # 先确认 fixture 确实是坏的
+    with pytest.raises(json.JSONDecodeError):
+        json.loads(broken)
+
+    salvaged = svc._salvage_sections(broken)
+    assert salvaged is not None
+    assert len(salvaged["dimensions"]) == 4
+    assert len(salvaged["suggestions"]) == 6
+
+    result = svc.parse_evaluation(broken)
+    assert sum(d.score for d in result.dimensions) == 38
+    assert [d.key for d in result.dimensions] == list(svc.DIMENSIONS)
+
+
+def test_salvage_sections_returns_none_when_data_missing():
+    """数据本身缺失时不能凭空造——必须返回 None 交给上层报错。"""
+    assert svc._salvage_sections('{"dimensions": [坏掉了') is None
+    assert svc._salvage_sections('完全没有数组') is None
+
+
+def test_salvage_does_not_mask_garbage():
+    """抢救不能把垃圾输入也放过。"""
+    with pytest.raises(Exception):
+        svc.parse_evaluation("这根本不是 JSON，只是一段中文说明")
