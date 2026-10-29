@@ -190,6 +190,12 @@ CSS 变量 (index.css) → Tailwind 映射 (tailwind.config.js) → shadcn/ui �
 - 不要使用破坏性 Git 命令，例如 `git reset --hard`、`git checkout --`、强推等，除非用户明确批准。
 - 工作区可能有用户或其他 agent 的改动。不要回滚、覆盖或整理不属于当前任务的改动。
 - 修改前后按需检查 `git status` 和相关 diff，但不要把 unrelated changes 当作自己的改动。
+- **不要用 `git add -A` / `git add .` 提交**，一律显式列出文件路径。
+  多 agent 并行或验证进行中时，工作区随时会冒出别人的临时文件；`-A` 会把它们一并带走。
+  实测事故：`0251f52` 用 `git add -A` 把验证 agent 在跑测期间生成的两个一次性探针
+  （`frontend/s46-radar-check.html`、`frontend/src/components/__s46_radar_entry.tsx`）
+  提交进了仓库，事后需要 `8d3ab7b` 再删一次。显式列出路径成本极低，却能避免这类返工。
+- 提交前用 `git status --porcelain` 复核暂存清单，确认只有本次任务的文件。
 
 ## 发布与部署约束
 
