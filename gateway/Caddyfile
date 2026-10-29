@@ -80,19 +80,20 @@
 		}
 	}
 
-	# AI 伙伴评分：单次推理实测 24–43s，远超 @api 的 30s 上限。
-	# response_header_timeout 卡的是「等后端返回响应头」的阶段——评分端点在
-	# 整个模型推理期间都不发响应头，30s 一到 Caddy 就断开，前端拿到 502/504。
-	# 这里放宽到 120s（后端预算 80s + 余量），并放开 read/write 以防大响应体。
+	# AI 伙伴评分：单次推理实测 24–43s，且解析失败会重试一次（总预算 110s、
+	# 锁 120s，见 ai_partner_evaluation.py 的四层预算）。
+	# response_header_timeout 卡的是「等后端返回响应头」阶段——评分端点在
+	# 整个推理期间不发响应头，30s 一到 Caddy 就断开，前端拿到 502/504。
+	# 这里给 180s，比后端锁 120s 再宽 60s，容纳两次尝试与收尾。
 	# 注意顺序：必须排在 @api 之前。
 	@api_ai_partner path /api/v1/ai-partner/evaluate
 	handle @api_ai_partner {
 		reverse_proxy backend:8000 {
 			transport http {
 				dial_timeout 5s
-				response_header_timeout 120s
-				read_timeout 120s
-				write_timeout 120s
+				response_header_timeout 180s
+				read_timeout 180s
+				write_timeout 180s
 				keepalive 30s
 			}
 		}

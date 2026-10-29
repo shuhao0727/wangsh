@@ -416,8 +416,9 @@ def test_model_timeout_budget_is_nested_outside_in():
     assert svc.MODEL_TIMEOUT_SECONDS < svc.EVALUATION_LOCK_TTL_SECONDS
     # 锁必须长于总预算，否则请求未结束锁就过期 → 同用户并发双跑、双扣配额
     assert svc.EVALUATION_LOCK_TTL_SECONDS > svc.MODEL_TIMEOUT_SECONDS
-    # 相对实测最慢 43.3s 需留出足够余量
-    assert svc.MODEL_TIMEOUT_SECONDS >= 70
+    # 相对实测最慢 43.3s 需留出余量；总预算要能容纳两次尝试
+    assert svc.MODEL_HTTP_TIMEOUT_SECONDS >= 45
+    assert svc.MODEL_TIMEOUT_SECONDS >= svc.MODEL_HTTP_TIMEOUT_SECONDS * svc.MODEL_ATTEMPTS
 
 
 def test_parse_evaluation_tolerates_wrapping_text_and_fences():
@@ -499,3 +500,65 @@ def test_parse_evaluation_dedupes_repeated_dimension_key():
     }
     result = svc.parse_evaluation(json.dumps(payload, ensure_ascii=False))
     assert [d.key for d in result.dimensions] == list(svc.DIMENSIONS)
+
+
+def test_evaluate_model_retries_once_on_bad_model_output(monkeypatch):
+    """模型输出不合格时重试一次；第二次成功则应返回结果。
+
+    这是生产 20% 失败率的主要来源：模型偶发输出语法损坏的 JSON。
+    """
+    import asyncio as _asyncio
+
+    calls = {"n": 0}
+    good = model_output(score=20)
+
+    async def flaky_call(db, request, context):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return '{"dimensions": [坏 JSON'      # 第一次坏
+        return good                                # 第二次好
+
+    monkeypatch.setattr(svc, "call_model", flaky_call)
+    result = _asyncio.run(svc._evaluate_model(None, None, {}))
+    assert calls["n"] == 2
+    assert sum(d.score for d in result.dimensions) == 80
+
+
+def test_evaluate_model_does_not_retry_on_timeout(monkeypatch):
+    """超时不重试——重试只会让用户等两倍时间，且多半还是超时。"""
+    import asyncio as _asyncio
+
+    import httpx as _httpx
+
+    calls = {"n": 0}
+
+    async def always_timeout(db, request, context):
+        calls["n"] += 1
+        raise _httpx.ReadTimeout("boom")
+
+    monkeypatch.setattr(svc, "call_model", always_timeout)
+    try:
+        _asyncio.run(svc._evaluate_model(None, None, {}))
+        raise AssertionError("应当抛 504")
+    except Exception as exc:
+        assert getattr(exc, "status_code", None) == 504
+    assert calls["n"] == 1, "超时不该重试"
+
+
+def test_evaluate_model_gives_up_after_all_attempts(monkeypatch):
+    """两次都坏则返回 502，不能无限重试。"""
+    import asyncio as _asyncio
+
+    calls = {"n": 0}
+
+    async def always_bad(db, request, context):
+        calls["n"] += 1
+        return "not json at all"
+
+    monkeypatch.setattr(svc, "call_model", always_bad)
+    try:
+        _asyncio.run(svc._evaluate_model(None, None, {}))
+        raise AssertionError("应当抛 502")
+    except Exception as exc:
+        assert getattr(exc, "status_code", None) == 502
+    assert calls["n"] == svc.MODEL_ATTEMPTS

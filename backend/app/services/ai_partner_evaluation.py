@@ -26,19 +26,28 @@ from app.services.agents.providers.dify_provider import DifyProvider
 from app.services.ai_partner_leaderboard import round_keys
 from app.utils.cache import cache
 
-# 评分是一次长推理：实测真实 payload（query 约 22k 字符）在 Dify + DeepSeek 上
-# 耗时波动很大——同一 prompt 连续跑，实测分布 24.4s / 27.1s / 28.8s / 29.3s /
-# 33.4s / 35.5s / **43.3s**（最长一次）。原来内层 httpx 只给 20s、总预算 25s，
-# 于是几乎每次都在 SSL 读上先超时，用户看到「AI评分超时」。
-# 三层预算必须严格嵌套，且从内到外递增：
-#   MODEL_HTTP_TIMEOUT_SECONDS(75) < MODEL_TIMEOUT_SECONDS(80)
-#     < EVALUATION_LOCK_TTL_SECONDS(90) < 前端 65s？—— 见下方说明
-# 取 75/80 是按实测最长 43.3s 再留约 70% 余量：模型耗时随负载与思维链长度
-# 剧烈波动，按 45s 定会让接近一半的请求卡在边缘。锁必须长于总预算，
-# 否则请求还没结束锁就过期，同用户并发就会双跑评分、双扣配额。
-MODEL_HTTP_TIMEOUT_SECONDS = 75
-MODEL_TIMEOUT_SECONDS = 80
-EVALUATION_LOCK_TTL_SECONDS = 90
+# 评分是一次长推理，实测耗时分布很宽：24.4s / 27.1s / 28.8s / 29.3s /
+# 33.4s / 35.5s / 43.3s（中位数约 25s，最慢 43.3s）。
+#
+# 另外模型偶发输出语法损坏的 JSON（实测抓到 `{` 5 个而 `}` 4 个），
+# 这种情况下重来一次通常就能拿到合规结果。因此解析失败会重试一次
+# （见 MODEL_ATTEMPTS），预算必须按「最坏两次」来算。
+#
+# 四层预算必须严格嵌套，由内到外递增：
+#   MODEL_HTTP_TIMEOUT_SECONDS(50)                      单次 HTTP 上限
+#   < MODEL_TIMEOUT_SECONDS(110)                        全部尝试的总预算
+#   < EVALUATION_LOCK_TTL_SECONDS(120)                  必须长于总预算
+#   < 前端 axios 140s                                   必须宽于后端
+#
+# 为什么单次从 75 收到 50：最慢实测 43.3s，50s 已覆盖；再放大只会让
+# 「第一次坏、第二次好」的重试路径总时长失控。40 秒余量足够。
+# 总预算 110 能容纳「两次各 ~50s」的最坏情况，锁 120 留 10s 收尾。
+MODEL_HTTP_TIMEOUT_SECONDS = 50
+MODEL_TIMEOUT_SECONDS = 110
+EVALUATION_LOCK_TTL_SECONDS = 120
+# 解析失败（JSON 语法损坏 / 结构不合规）时的总尝试次数。
+# 只对「模型输出有问题」重试；超时与上游 5xx 不重试——那会成倍放大延迟。
+MODEL_ATTEMPTS = 2
 RECEIPT_TTL_SECONDS = 600
 DIMENSIONS = {
     "value": "价格性价比", "completion": "任务完成度",
@@ -190,6 +199,13 @@ SYSTEM_PROMPT = """你是课堂AI伙伴工程设计评审员。只能依据服�
 每个维度0至25整数。必须引用具体部件、目录价格/规格或证据缺口写中文理由，不要泛泛赞美；模拟项明确按课堂设定处理。
 只输出一个JSON对象，不要Markdown、总分、等级或额外字段：
 {"dimensions":[{"key":"value","label":"价格性价比","score":0,"max":25,"note":"具体理由"},{"key":"completion","label":"任务完成度","score":0,"max":25,"note":"具体理由"},{"key":"suitability","label":"选择合理性","score":0,"max":25,"note":"具体理由"},{"key":"validation","label":"设计验证与风险","score":0,"max":25,"note":"具体理由"}],"suggestions":["一至六条具体改进建议"]}
+
+严格性要求（违反会导致输出无法解析）：
+- dimensions 必须恰好 4 项，key 只能是 value/completion/suitability/validation，各出现一次，顺序照上面。
+- suggestions 必须是字符串数组，放在顶层，绝对不要放进 dimensions。
+- 所有字符串内部的英文双引号必须转义为 \"，或用中文引号代替；不要在字符串里换行（用空格代替）。
+- JSON 必须闭合完整，最后是 ]} 两个字符；不要在 JSON 之后追加任何说明文字。
+- 不要输出 ```json 代码块围栏。
 """
 
 
@@ -423,17 +439,45 @@ async def _reserve_evaluation(prefix: str, user_id: int, lock: str, nonce: str):
 
 
 async def _evaluate_model(db, request: EvaluationRequest, context: dict) -> ModelEvaluation:
+    """调用模型并解析；解析失败时重试一次。
+
+    重试的边界（很关键，不能放宽）：
+    - **只对「模型输出不合格」重试**（JSON 语法损坏、维度不符等解析异常）。
+      实测这类失败率不低——抓到过 `{` 5 个而 `}` 4 个的样本。
+    - **超时不重试**：重试会让最坏耗时翻倍，用户等更久而且多半还是超时。
+    - **HTTPException 不重试**：429 限流、402 额度、401 鉴权这些重试无意义，
+      还会放大上游压力（上游 5xx 已在 _model_response 里转成 502 抛出）。
+    """
+    last_error: Exception | None = None
     try:
         async with asyncio.timeout(MODEL_TIMEOUT_SECONDS):
-            raw = await call_model(db, request, context)
-        return parse_evaluation(raw)
+            for attempt in range(MODEL_ATTEMPTS):
+                try:
+                    raw = await call_model(db, request, context)
+                    return parse_evaluation(raw)
+                except HTTPException:
+                    raise
+                except (TimeoutError, httpx.TimeoutException):
+                    raise
+                except Exception as exc:
+                    # 只剩「解析/校验失败」会走到这里：记录后重试
+                    last_error = exc
+                    if attempt + 1 < MODEL_ATTEMPTS:
+                        logger.warning(
+                            "AI 评分第 {} 次输出不合格（{}），重试一次",
+                            attempt + 1, type(exc).__name__,
+                        )
+                        continue
     except HTTPException:
         raise
     except (TimeoutError, httpx.TimeoutException):
+        # 总预算耗尽或单次 HTTP 超时——不重试，直接 504
         raise HTTPException(504, "AI评分超时，请稍后重试") from None
-    except Exception as exc:
-        logger.warning("AI partner model evaluation failed: {}", type(exc).__name__)
-        raise HTTPException(502, "AI评分未返回有效结构化结果，请重试") from None
+    logger.warning(
+        "AI partner model evaluation failed: {}",
+        type(last_error).__name__ if last_error else "unknown",
+    )
+    raise HTTPException(502, "AI评分未返回有效结构化结果，请重试") from None
 
 
 async def _issue_receipt(

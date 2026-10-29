@@ -46,11 +46,11 @@ export const aiPartnerService = {
     return response.data;
   },
   async evaluate(payload: PartnerEvaluationRequest, signal: AbortSignal): Promise<PartnerEvaluation> {
-    // 评分是长推理：后端实测 24–43s，预算为 80s（见 ai_partner_evaluation.py
-    // 的 MODEL_TIMEOUT_SECONDS）。前端必须比后端更宽松，否则用户会在后端
-    // 还在算的时候先看到自己的请求被 abort，误以为是网络故障。
+    // 评分是长推理：后端单次上限 50s，解析失败会重试一次，总预算 110s，
+    // 锁 120s（见 ai_partner_evaluation.py 的四层预算）。前端必须比锁更宽松，
+    // 否则用户会在后端还在算的时候先看到自己的请求被 abort。
     const response = await api.client.post<PartnerEvaluation>('/ai-partner/evaluate', payload, {
-      ...requestConfig(signal), timeout: 110000,
+      ...requestConfig(signal), timeout: 140000,
     });
     return response.data;
   },
