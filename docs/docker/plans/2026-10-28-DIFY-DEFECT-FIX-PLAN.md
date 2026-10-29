@@ -125,10 +125,17 @@ AGENT_TRUSTED_INTERNAL_ENDPOINTS: str = Field(default="")
 
 | 项 | 位置 | 后果 |
 |---|---|---|
-| 表数量断言 55 → 56 | 验证计划 `S2-S7-EXECUTION-PLAN-V4.md` | S2-1 断言失效 |
-| `MIGRATION_ORIGIN_COLUMNS` 白名单 | `bootstrap_db.py:48-52` | 空库 bootstrap 静默漂移失败 |
-| GDP R 删除/导出 | `privacy.py:197` | 删了消息留下绑定，合规缺口 |
+| 表数量断言 55 → 56 | `DEPLOY.md:881`、`TEST_STATUS.md`（3 处）、`2026-10-27-KNOWN-ISSUES.md`、本组计划 | 多处断言同时失效，非单点 |
+| `models/__init__.py` 注册新模型 | `backend/app/models/__init__.py` | 未导入则 Alembic autogenerate 漏表 |
+| GDPR 删除/导出 | `privacy.py:197` | 删了消息留下绑定，合规缺口 |
 | 归档任务 | `tasks/data_archiving.py` | 孤儿行无限增长 |
+| GDPR 测试 | `backend/tests/users/test_gdpr_compliance.py` | 新表未被覆盖，回归测不出来 |
+| 4 份功能文档 | `AI_AGENTS.md`、`DATA_ARCHIVING.md`、`MONITORING.md`、`DATABASE_PERFORMANCE_GUIDE.md` | 文档与实际表结构脱节 |
+
+**注意：`MIGRATION_ORIGIN_COLUMNS` 不需要登记**（原计划列错了方向）。
+它只对「已进 `LEGACY_BASELINE_TABLES`、且列由后置迁移添加」的表生效——
+`bootstrap_db.py:151` 是 `baseline.tables.get(table_name)`，取不到就跳过。
+阶段二的新表由新迁移整表创建，本来就不该进 legacy baseline，因此无需登记。
 
 **边界处理**：
 
