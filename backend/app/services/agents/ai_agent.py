@@ -89,26 +89,50 @@ async def get_agent(
 ) -> Optional[AIAgent]:
     """
     根据ID获取智能体 (带内存缓存)
+
+    缓存注意事项（踩过的坑）：
+    这里曾经直接把 ORM 实例放进 TTLCache。ORM 实例绑定在**创建它的那个
+    session** 上，而 `get_db` 是请求级的——session 关闭后实例变成 detached；
+    一旦该实例被 expire（例如同 session 内 commit/rollback 过，或对象被
+    回收后 SQLAlchemy 需要重新加载属性），再读任何字段都会抛
+    `DetachedInstanceError: Instance <AIAgent> is not bound to a Session`。
+
+    生产实测症状：`POST /api/v1/ai-agents/stream` 3 次里 2 次 503
+    「读取智能体配置失败」，堆栈落在 `build_messages` 读 `system_prompt`。
+
+    现在缓存只存**普通属性字典**，命中时用它构造一个新的游离实例返回。
+    返回值仍是 AIAgent 类型，调用方的字段访问全部不变，但不再与任何
+    session 绑定，也就不可能 detached。
     """
     # 仅针对未删除的智能体使用缓存
     if not include_deleted and use_cache:
         cached = _AGENT_CACHE.get(agent_id)
         if cached:
-            return cached
+            # 用快照重建游离实例：字段齐全、不绑定 session
+            return AIAgent(**cached)
 
     query = select(AIAgent).where(AIAgent.id == agent_id)
-    
+
     if not include_deleted:
         query = query.where(AIAgent.is_deleted == False)
-    
+
     result = await db.execute(query)
     agent = result.scalar_one_or_none()
 
-    # 写入缓存
+    # 写入缓存：只存列数据（用 SQLAlchemy 的 inspector 取已加载的列），
+    # 不存 ORM 实例本身，避免把 session 生命周期带进进程级缓存。
     if agent and not include_deleted:
-        _AGENT_CACHE[agent_id] = agent
-        
+        from sqlalchemy import inspect as sa_inspect
+
+        state = sa_inspect(agent)
+        snapshot = {
+            attr.key: getattr(agent, attr.key)
+            for attr in state.mapper.column_attrs
+        }
+        _AGENT_CACHE[agent_id] = snapshot
+
     return agent
+
 
 
 def _resolved_agent_api_key(agent: AIAgent, *, is_openrouter: bool) -> Optional[str]:
