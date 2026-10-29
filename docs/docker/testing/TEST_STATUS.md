@@ -29,7 +29,7 @@
 
 - **发布范围：** 8 个功能提交 + 5 项审查修复 + compose 透传 + 4 项 governance 债务拆分 +
   性能五项 + S5 三项重开发。详见 [RELEASE_NOTES](../RELEASE_NOTES.md) 的 v2.2.1 段。
-- **本地门禁（全绿）：** 根脚本 89 passed / 0 fail、文档合同 153 files / 704 links / 0 missing、
+- **本地门禁（全绿）：** 根脚本 89 passed / 0 fail、文档合同 154 files / 704 links / 0 missing、
   版本一致性 2.2.1、compose 生产与 dev 均通过、网关合同 PASS、**governance errors=0**
   （原 5 项债务全部真拆，非登记豁免）。
 - **后端测试：** `tests/users` 36 passed、`tests/ai_agents` 350 passed、`tests/ai_partner`
@@ -189,7 +189,7 @@
 
 ## 2026-10-27~28 S1 致命级验证（7 项全部通过）
 
-- **文档门禁：** Markdown 合同检查为 `153 files / 704 links / 0 missing`。
+- **文档门禁：** Markdown 合同检查为 `154 files / 704 links / 0 missing`。
 
 - **范围：** 按 [S1~S7 验证计划](../archive/plans/2026-10-27-S1-S7-VERIFICATION-PLAN-V3.md)（已归档）执行 S1 致命级 7 项。
   规则：Docker 实例验证（D1/D2/D3）+ 双 Agent 交叉验证 + 主控复现争议结论。
