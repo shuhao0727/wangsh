@@ -69,7 +69,15 @@ def test_guard_rejects_non_http_scheme_and_missing_host():
             _assert_safe_endpoint(url)
 
 
-def test_guard_rejects_unresolvable_host():
+def test_guard_rejects_unresolvable_host(monkeypatch):
+    # 显式让 DNS 解析失败，不依赖运行环境——本地开 fake-ip 代理时
+    # `.invalid` 也会被解析成 198.18.x.x，那样测的就不是「无法解析」这条分支了。
+    import socket as _socket
+
+    def boom(*args, **kwargs):
+        raise _socket.gaierror("name resolution failed")
+
+    monkeypatch.setattr("socket.getaddrinfo", boom)
     with pytest.raises(EndpointNotAllowedError):
         _assert_safe_endpoint("http://nonexistent-host-xyz-12345.invalid")
 
@@ -217,8 +225,19 @@ WHITELIST = "http://docker-api-1:5001/v1"
 
 @pytest.fixture
 def trusted_whitelist(monkeypatch):
-    """配置一条生产同款白名单：http://docker-api-1:5001/v1。"""
+    """配置一条生产同款白名单：http://docker-api-1:5001/v1。
+
+    同时把 DNS 固定成 Docker 内网地址。**不能让测试依赖真实 DNS**：
+    本地开了 Clash 等 fake-ip 代理时，任何域名都会被解析成 198.18.x.x
+    （基准测试段），而那一段现在是放行的，测试会得到与 CI 完全相反的结果。
+    """
     monkeypatch.setattr(settings, "AGENT_TRUSTED_INTERNAL_ENDPOINTS", WHITELIST)
+
+    def fake_getaddrinfo(host, *args, **kwargs):
+        # docker-api-1 在生产/开发都是 Docker 网络里的内网地址
+        return [(2, 1, 6, "", ("172.18.0.2", 0))]
+
+    monkeypatch.setattr("socket.getaddrinfo", fake_getaddrinfo)
     reset_trusted_endpoint_cache()
     yield
     reset_trusted_endpoint_cache()
@@ -253,7 +272,9 @@ def test_whitelist_hit_requires_explicit_flag(trusted_whitelist):
         _assert_safe_endpoint(f"{WHITELIST}/chat-messages")
 
 
-def test_whitelist_empty_keeps_rejecting_internal(monkeypatch):
+def test_whitelist_empty_keeps_rejecting_internal(trusted_whitelist, monkeypatch):
+    # trusted_whitelist 顺带把 DNS 固定成内网地址（见该 fixture 说明），
+    # 这里再把白名单清空，验证「没配白名单时内网地址依然被拒」。
     monkeypatch.setattr(settings, "AGENT_TRUSTED_INTERNAL_ENDPOINTS", "")
     reset_trusted_endpoint_cache()
     with pytest.raises(EndpointNotAllowedError):
@@ -443,3 +464,52 @@ def test_model_response_maps_redirect_to_502(monkeypatch):
     exc = asyncio.run(check())
     assert exc.status_code == 502
     assert "重定向" in exc.detail
+
+
+# ---------- 基准测试段放行 / 云元数据仍拒绝 ----------
+#
+# 2026-10-29 实测：本地开启 Clash fake-ip 后，所有域名（含 newapi.dragon3api.com）
+# 都被解析成 198.18.x.x / 2001:2::x。旧逻辑按 is_private 一律拒绝，导致本地
+# 完全无法配置 AI 智能体——而 curl 与浏览器都能正常访问，说明该地址是合法的
+# 代理入口。现在放行这两段，但云元数据仍必须拦住。
+
+
+def test_benchmark_ranges_are_allowed():
+    """RFC 2544 与 IETF 基准测试段放行——本地代理 fake-ip 落在这里。"""
+    import ipaddress
+
+    from app.services.agents.endpoint_security import _is_disallowed_ip
+
+    for raw in ("198.18.1.8", "198.19.255.254", "2001:2::104"):
+        assert _is_disallowed_ip(ipaddress.ip_address(raw)) is False, raw
+
+
+def test_metadata_endpoints_still_rejected():
+    """云元数据永远拒绝：命中即可拿到临时凭证，是真实攻击面。"""
+    import ipaddress
+
+    from app.services.agents.endpoint_security import _is_disallowed_ip
+
+    for raw in ("169.254.169.254", "100.100.100.200", "fd00:ec2::254"):
+        assert _is_disallowed_ip(ipaddress.ip_address(raw)) is True, raw
+
+
+def test_real_private_ranges_still_rejected():
+    """真实内网与环回不受影响——放行范围只限基准测试段。"""
+    import ipaddress
+
+    from app.services.agents.endpoint_security import _is_disallowed_ip
+
+    for raw in ("127.0.0.1", "10.0.0.1", "192.168.1.1", "172.16.0.1", "::1"):
+        assert _is_disallowed_ip(ipaddress.ip_address(raw)) is True, raw
+
+
+def test_ipv4_mapped_benchmark_address_allowed():
+    """IPv4-mapped 写法的基准段地址同样放行（先归一化再判定）。"""
+    import ipaddress
+
+    from app.services.agents.endpoint_security import _is_disallowed_ip
+
+    assert _is_disallowed_ip(ipaddress.ip_address("::ffff:198.18.1.8")) is False
+    # 但 IPv4-mapped 的真实内网仍拒绝
+    assert _is_disallowed_ip(ipaddress.ip_address("::ffff:10.0.0.1")) is True

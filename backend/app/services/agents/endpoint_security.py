@@ -97,11 +97,52 @@ def _parse_endpoint(api_endpoint: str) -> Tuple[str, str, Optional[int]]:
     return parsed.scheme, host, port
 
 
+# 基准测试保留段：RFC 2544（198.18.0.0/15）与 IETF（2001:2::/48）。
+#
+# 这两段在现代内网里几乎不会被真实设备使用——它们是给网络设备做吞吐量测试预留的。
+# 但 **本地代理软件（Clash / Surge / sing-box）的 fake-ip 模式恰好用它们当假地址**：
+# 域名被解析成 198.18.x.x，实际连接时由代理转发到真实目标。
+#
+# 实测（2026-10-29）：开启 Clash fake-ip 后，newapi.dragon3api.com 解析为
+# 198.18.1.8，浏览器与 curl 都能正常访问（401 = 可达但需认证），但旧逻辑在
+# 发起连接**之前**就按 is_private 拒绝，导致本地完全无法配置 AI 智能体。
+#
+# 放行理由：这两段不在 RFC 1918 私网范围内，也不会被云厂商元数据服务使用
+# （元数据是 169.254.169.254，仍在拒绝名单里），放行的实际风险很低；
+# 而禁止的代价是本地开发不可用。
+_BENCHMARK_NETWORKS = (
+    ipaddress.ip_network("198.18.0.0/15"),
+    ipaddress.ip_network("2001:2::/48"),
+)
+
+# 云元数据端点：Linux 常见 169.254.169.254，其余云厂商变体在该段内。
+# 这类地址一旦被 SSRF 命中就能拿到临时凭证，是真实的攻击面，永远拒绝。
+_METADATA_HOSTS = frozenset({
+    "169.254.169.254",   # AWS / Azure / GCP / OpenStack
+    "100.100.100.200",   # 阿里云
+    "fd00:ec2::254",     # AWS IPv6
+})
+
+
+def _is_benchmark_range(ip: ipaddress._BaseAddress) -> bool:
+    return any(ip in net for net in _BENCHMARK_NETWORKS)
+
+
 def _is_disallowed_ip(ip: ipaddress._BaseAddress) -> bool:
     # 归一化 IPv4-mapped IPv6（::ffff:127.0.0.1 这类写法可绕过纯 IPv6 判定）
     if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
         ip = ip.ipv4_mapped
-    # 私网/环回/链路本地（含云元数据 169.254.169.254）/保留/组播/未指定，全部拒绝
+
+    # 云元数据永远拒绝，优先于任何放行规则。
+    # 注意它同时落在 link_local（169.254.0.0/16）里，这里显式先判，语义更清楚。
+    if str(ip) in _METADATA_HOSTS:
+        return True
+
+    # 基准测试段放行：本地代理的 fake-ip 会落在这里（见上方说明）。
+    if _is_benchmark_range(ip):
+        return False
+
+    # 其余仍按原规则全拒：私网 / 环回 / 链路本地 / 保留 / 组播 / 未指定。
     return (
         ip.is_private
         or ip.is_loopback
