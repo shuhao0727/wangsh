@@ -216,10 +216,14 @@ async def _create_legacy_baseline(conn, *, schema: str) -> None:
                     f'ON {_qualified_identifier(schema, table_name)} ({columns})'
                 )
             )
+    # 版本表必须带主键：无主键时同一 version_num 可以插入多行，
+    # 直接破坏「单 head」前提，后续 alembic 查询会拿到重复结果。
+    # 约束名与 alembic_compat 保持一致，避免两条路径再分裂。
     await conn.execute(
         text(
             f"CREATE TABLE IF NOT EXISTS {_qualified_identifier(schema, 'alembic_version')} "
-            "(version_num VARCHAR(64) NOT NULL)"
+            "(version_num VARCHAR(64) NOT NULL, "
+            "CONSTRAINT alembic_version_pkc PRIMARY KEY (version_num))"
         )
     )
     print("Legacy baseline tables created; Alembic version remains unset")

@@ -56,6 +56,9 @@ const AdminUsers: React.FC = () => {
   const compact = !screens.lg;
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
+  // 批量删除是破坏性且不可撤销的：点击后直接删掉选中的全部用户，
+  // 与单条删除相比影响面更大，必须同样先确认。
+  const [batchDeleteOpen, setBatchDeleteOpen] = useState(false);
   const {
     handleEdit,
     handleView,
@@ -295,8 +298,9 @@ const AdminUsers: React.FC = () => {
             {state.selectedRowKeys.length > 0 ? (
               <Button
                 variant="ghost"
-                onClick={actions.handleBatchDelete}
+                onClick={() => setBatchDeleteOpen(true)}
                 className="text-destructive"
+                disabled={state.loading}
               >
                 <Trash2 className="h-4 w-4" />
                 删除 ({state.selectedRowKeys.length})
@@ -363,6 +367,19 @@ const AdminUsers: React.FC = () => {
             await actions.handleDelete(deleteTarget);
             setDeleteTarget(null);
           }
+        }}
+      />
+      <ConfirmDialog
+        open={batchDeleteOpen}
+        onOpenChange={setBatchDeleteOpen}
+        title="确认批量删除"
+        description={`确定要删除选中的 ${state.selectedRowKeys.length} 个用户吗？此操作不可撤销。`}
+        confirmText="删除"
+        variant="destructive"
+        loading={state.loading}
+        onConfirm={async () => {
+          await actions.handleBatchDelete();
+          setBatchDeleteOpen(false);
         }}
       />
     </AdminPage>

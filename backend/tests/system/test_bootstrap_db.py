@@ -1,4 +1,6 @@
 import asyncio
+import importlib
+import inspect
 from pathlib import Path
 
 import pytest
@@ -458,3 +460,27 @@ def test_baseline_uses_legacy_xbk_year_before_academic_year_migration():
         assert original.c.year.type is originals[name][0]
         assert str(original.c.year.type) == "VARCHAR(9)"
         assert {id(c) for c in original.constraints} == originals[name][1]
+
+
+def test_alembic_version_table_has_primary_key_on_both_creation_paths():
+    """空库 bootstrap 与常规迁移必须建出同样的版本表。
+
+    历史缺陷：bootstrap_db 的 CREATE TABLE 只有 ``version_num VARCHAR(64)
+    NOT NULL``，而 alembic_compat.ensure_alembic_version_capacity 额外带
+    ``alembic_version_pkc PRIMARY KEY``。
+
+    无主键时同一个 version_num 可以插入多行，直接破坏「单 head」前提——
+    alembic 查询会拿到重复结果，迁移状态判断随之失真。
+    生产库因是 2.1.x 原地升级、从未走过空库 bootstrap，所以这个问题
+    一直没暴露。
+
+    mock engine 抓不到 ``conn.execute(text(...))`` 这条路径（它只接管
+    run_sync 内的 DDL），因此这里直接核对源码中的建表语句。
+    """
+    source = inspect.getsource(bootstrap_db._create_legacy_baseline)
+    assert "CONSTRAINT alembic_version_pkc PRIMARY KEY (version_num)" in source
+
+    compat_source = inspect.getsource(
+        importlib.import_module("app.db.alembic_compat").ensure_alembic_version_capacity
+    )
+    assert "alembic_version_pkc" in compat_source

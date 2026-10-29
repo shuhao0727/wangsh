@@ -182,6 +182,12 @@ export const useUsers = (initialParams: SearchParams = {}) => {
       showMessage.warning("请选择要删除的用户");
       return;
     }
+    // 互斥：请求还在飞时再次点击会重复提交（批量删除是破坏性操作，
+    // 重复提交轻则报错、重则删到刚补选的另一批）。按 Esc 关弹窗、
+    // 双击按钮都会走到这里，因此必须在动作层拦截而不只靠按钮禁用。
+    if (batchDeleteMutation.isPending) {
+      return;
+    }
     const count = selectedRowKeys.length;
     try {
       await batchDeleteMutation.mutateAsync(selectedRowKeys);
