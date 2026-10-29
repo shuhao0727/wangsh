@@ -12,6 +12,63 @@
 
 ---
 
+## v2.2.2：AI 伙伴评分真正可用（2026-10-29 09:50 已部署）
+
+2.2.1 的镜像构建于 2026-10-28 22:17，构建源是 `c0b44b6`；而 tag `2.2.1` 指向
+`a3a5a54`，比镜像新 5 个提交。代码级特征已确认镜像里既没有评分修复
+（`MODEL_HTTP_TIMEOUT_SECONDS`）也没有治理拆分（`classroom_queries.py`）。
+所以 2.2.1 部署后用户访问评分仍是 504/502——**修复从未真正上线**。
+
+本版把修复重新构建并验证到端到端 HTTP 200。
+
+### 评分的三个独立故障（逐个修掉）
+
+1. **`<think>` 思维链污染 JSON**（`5a4c86d`）
+   Dify 的 DeepSeek 插件把推理写进 `<think>…</think>` 并与答案共用同一字符串。
+   评分路径没接平台的 `assistant_answer_sanitizer`，`json.loads` 首字符是 `<`
+   必然失败。改为统一走 sanitizer。
+
+2. **网关 30 秒切断**（`0834433`）
+   `@api` 通用 handler 的 `response_header_timeout 30s` 卡的是「等后端返回响应头」
+   阶段——评分端点整段推理期间不发响应头，30s 一到 Caddy 就断开。
+   实测评分耗时 24–43s，超过一半请求因此失败。
+   给 `/api/v1/ai-partner/evaluate` 单独 handler，放宽到 120s。
+   同时三层预算整体上调：httpx 20→75s、总预算 25→80s、Redis 锁 35→90s、
+   前端 axios 65→110s（前端必须比后端宽，否则用户先看到 abort）。
+
+3. **模型返回 5 个维度**（`e34270f`）
+   模型偶尔把 suggestions 里一条塞进 `dimensions`，而 schema 是
+   `min_length=4/max_length=4` → `ValidationError`。这是「有时能过有时 502」
+   的根源。新增 `_normalize_dimensions`：按 key 白名单精确挑 4 项，
+   多余项与重复 key 丢弃；**缺任何一项仍判无效**，不补 0 分糊过去。
+
+另加 `_extract_json_object`：模型在 JSON 前后多写解释或包 ```json 围栏时，
+用括号配对扫描（正确处理字符串内 `{}` 与转义）截出对象重试。
+
+### 其它修复（相对 2.2.1 镜像）
+
+- `5f6e815` 三个超基线文件真拆，governance errors 3 → 0
+- `3bdb184` `alembic_version` 两条建表路径主键对齐（空库 bootstrap 原先无主键，
+  会破坏单 head 前提）；用户页批量删除补确认弹窗与互斥
+
+### 部署过程中发现的配置问题
+
+- **服务器 `.env` 的 `REDIS_HOST=127.0.0.1`** 覆盖了 compose 默认值
+  `wangsh-redis-1`，容器内 127.0.0.1 指向自己，Redis 连不上、健康检查 degraded。
+  已改为 `wangsh-redis-1`。这也说明 compose 的默认值只在 `.env` 未设置时生效。
+
+### 验证
+
+- `tests/ai_partner`：**127 passed / 1 skipped**（新增 9 项覆盖 think 剥离、
+  前后缀容忍、多余维度收敛、缺维度拒绝、重复 key 去重、超时预算嵌套）
+- 网关合同 61 passed / 0 fail；根脚本 89 passed
+- 生产端到端：**连续 3 次 `POST /api/v1/ai-partner/evaluate` 全部 HTTP 200**，
+  返回 total=35、四维度齐全、6 条建议、evaluation_id 正常
+- 数据完整性：**433 用户 / 55 表 / head `20261026_0001`**，与部署前完全一致
+- 8 容器全 healthy
+
+---
+
 ## v2.2.1：Dify 连续对话与评分修复、S4 缺陷、性能与前端体验（2026-10-28 23:39 已部署）
 
 ### 修复

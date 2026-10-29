@@ -2,9 +2,28 @@
 
 > 状态：active
 > Owner：testing
-> 当前版本：生产正式 2.2.1（2026-10-28 23:39 部署）；含 Dify 评分/连续对话、S4 缺陷、性能与 S5 优化
-> 最近更新：2026-10-28
+> 当前版本：生产正式 2.2.2（2026-10-29 09:50 部署）；AI 伙伴评分端到端 HTTP 200
+> 最近更新：2026-10-29
 > 说明：本文件是当前测试事实的唯一汇总入口；阶段报告只引用本页，不复制新基线。
+
+## 2026-10-29 2.2.2 发布验证
+
+- **为什么发 2.2.2**：2.2.1 镜像构建于 2026-10-28 22:17，构建源是 `c0b44b6`，
+  而 tag `2.2.1` 指向 `a3a5a54`——镜像比标签旧 5 个提交，评分修复从未真正上线。
+  代码级特征已确认（镜像内无 `MODEL_HTTP_TIMEOUT_SECONDS`、无 `classroom_queries.py`）。
+- **后端测试：** `tests/ai_partner` **127 passed / 1 skipped**（新增 9 项：
+  think 剥离、前后缀容忍、多余维度收敛、缺维度拒绝、重复 key 去重、超时预算嵌套）
+- **本地门禁：** 根脚本 89 passed / 0 fail、网关合同 61 passed / 0 fail、
+  版本一致性 2.2.2、governance errors=0
+- **生产端到端：** 连续 3 次 `POST /api/v1/ai-partner/evaluate` **全部 HTTP 200**，
+  返回 total=35、四维度齐全、6 条建议、evaluation_id 正常
+- **数据完整性：** **433 用户 / 55 表 / head `20261026_0001`**，与部署前一致；8 容器全 healthy
+- **修复的三个独立故障：**
+  1. Dify 的 `<think>` 思维链混入 JSON → 接 `assistant_answer_sanitizer`
+  2. Caddy `response_header_timeout 30s` 切断 24–43s 的评分请求 → 该路径单独放宽到 120s
+  3. 模型偶发返回 5 个维度 → `_normalize_dimensions` 按 key 白名单收敛到 4 项
+- **部署中发现的配置问题：** 服务器 `.env` 的 `REDIS_HOST=127.0.0.1` 覆盖了 compose
+  默认值，容器内指向自身导致 Redis 连不上、健康检查 degraded。已改为 `wangsh-redis-1`。
 
 ## 2026-10-28 2.2.1 发布验证
 
