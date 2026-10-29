@@ -64,3 +64,49 @@ def test_cached_agent_is_rebuilt_as_free_standing_instance():
     assert rebuilt.agent_type == "dify"
     assert rebuilt.is_active is True
     assert rebuilt.model_name == ""
+
+
+def test_fernet_key_format_rejects_wrong_length():
+    """Fernet 硬要求 32 字节：错一位就抛错，且只在加密时才暴露。
+
+    踩过的坑：.env.dev 里写成 ZGV2X29ubHlfYWdlbnRfa2V5X2VuY3J5cHRpb25fa2V5XzMy
+    （48 字符，解码 36 字节），服务启动不报错，但用户点「添加智能体」保存 API Key
+    时抛 "Fernet key must be 32 url-safe base64-encoded bytes"。
+    """
+    import base64
+
+    from cryptography.fernet import Fernet
+
+    # 48 字符 / 36 字节：错误写法
+    bad = "ZGV2X29ubHlfYWdlbnRfa2V5X2VuY3J5cHRpb25fa2V5XzMy"
+    assert len(base64.urlsafe_b64decode(bad)) == 36
+    with pytest.raises(ValueError):
+        Fernet(bad.encode())
+
+    # 44 字符 / 32 字节：正确写法
+    good = "ZGV2X29ubHlfYWdlbnRfa2V5X2VuY3J5cHRpb25fMzI="
+    assert len(base64.urlsafe_b64decode(good)) == 32
+    f = Fernet(good.encode())
+    assert f.decrypt(f.encrypt(b"x")) == b"x"
+
+
+def test_env_example_has_valid_fernet_key():
+    """仓库里的 .env.example 必须是可直接使用的合法 Fernet 密钥。
+
+    否则新环境照抄示例，要到「保存智能体」那一步才会炸。
+    """
+    import base64
+    from pathlib import Path
+
+    from cryptography.fernet import Fernet
+
+    root = Path(__file__).resolve().parents[3]
+    text = (root / ".env.example").read_text(encoding="utf-8")
+    value = ""
+    for line in text.splitlines():
+        if line.startswith("AGENT_API_KEY_ENCRYPTION_KEY="):
+            value = line.split("=", 1)[1].strip()
+            break
+    assert value, "示例里缺少 AGENT_API_KEY_ENCRYPTION_KEY"
+    assert len(base64.urlsafe_b64decode(value)) == 32, f"示例密钥解码后应为 32 字节，实际 {value}"
+    Fernet(value.encode())  # 不抛错即合法
