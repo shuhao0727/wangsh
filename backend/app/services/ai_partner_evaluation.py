@@ -53,6 +53,11 @@ DIMENSIONS = {
     "value": "价格性价比", "completion": "任务完成度",
     "suitability": "选择合理性", "validation": "设计验证与风险",
 }
+# Dimension 模型允许的字段（与 schemas/ai_partner.py 的 Dimension 保持一致）。
+# 模型有时会自加字段（实测出现过 suggestions_note），而模型设了 extra="forbid"，
+# 多一个字段整次评分就判无效。白名单过滤比放宽 schema 更安全——放宽会让
+# 任何脏字段都进来，过滤只保留我们认识的。
+_DIMENSION_FIELDS = ("key", "label", "score", "max", "note")
 TASK_DEFINITIONS = {
     "question": "拍摄题目、识别文字、理解并讲解输出",
     "homework": "采集作业、读取答案、批改并反馈",
@@ -384,16 +389,22 @@ def _salvage_sections(text: str) -> dict | None:
 
 
 def _normalize_dimensions(payload: dict) -> dict:
-    """把模型返回的 dimensions 收敛到契约要求的 4 项。
+    """把模型返回的 payload 收敛到契约要求的结构。
 
-    生产实测：模型偶尔返回 5 项——把 suggestions 里的一条当成第 5 个维度
-    塞进 dimensions 数组。schema 是 min_length=4/max_length=4，多一项就
-    ValidationError，用户看到 502。
+    生产实测到两类「JSON 合法但结构不合规」的失败：
 
-    这里按 key 白名单精确挑出 DIMENSIONS 的 4 个 key，不靠位置或长度猜测：
-    - 只保留 key 在契约内的项，多余项（含重复 key）丢弃；
-    - 缺任何一项都视为无效输出，不做「补 0 分」之类的臆测。
-    评分必须严格对应四个维度，宁可失败也不能给出错位的分数。
+    1. **dimensions 多一项**：模型把 suggestions 里的一条当成第 5 个维度塞进去。
+       schema 是 min_length=4/max_length=4，多一项就 ValidationError → 502。
+
+    2. **顶层多出未知字段**：实测抓到一例模型输出带 `suggestions_note`，
+       而 `ModelEvaluation` 设了 `extra="forbid"`，整次评分直接判无效。
+
+    两类都按**白名单**处理，不放宽校验也不猜数据：
+    - 顶层只保留 dimensions / suggestions；
+    - dimensions 只保留 key 在 DIMENSIONS 内的 4 项，多余项（含重复 key）丢弃；
+    - Dimension 内部只保留契约字段，多出的（如模型自加的 `reason`）丢掉；
+    - 缺任何维度都视为无效输出，不做「补 0 分」之类的臆测。
+      评分必须严格对应四个维度，宁可失败也不能给出错位的分数。
     """
     dimensions = payload.get("dimensions")
     if not isinstance(dimensions, list):
@@ -407,7 +418,17 @@ def _normalize_dimensions(payload: dict) -> dict:
             picked[key] = item
     if set(picked) != set(DIMENSIONS):
         return payload
-    return {**payload, "dimensions": [picked[key] for key in DIMENSIONS]}
+
+    # Dimension 内部也只保留契约字段，避免模型自加字段触发 extra="forbid"
+    cleaned_dimensions = []
+    for key in DIMENSIONS:
+        item = picked[key]
+        cleaned_dimensions.append(
+            {field: item[field] for field in _DIMENSION_FIELDS if field in item}
+        )
+
+    # 顶层白名单：只留两个契约字段
+    return {"dimensions": cleaned_dimensions, "suggestions": payload.get("suggestions")}
 
 
 def parse_evaluation(raw: str) -> ModelEvaluation:

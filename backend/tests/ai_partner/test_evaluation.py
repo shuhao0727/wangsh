@@ -601,3 +601,49 @@ def test_salvage_does_not_mask_garbage():
     """抢救不能把垃圾输入也放过。"""
     with pytest.raises(Exception):
         svc.parse_evaluation("这根本不是 JSON，只是一段中文说明")
+
+
+def test_parse_evaluation_drops_unknown_top_level_fields():
+    """顶层多出未知字段时，应白名单过滤而不是整次判无效。
+
+    生产实测：模型输出带 `suggestions_note` 字段，而 ModelEvaluation 设了
+    extra="forbid"，直接 ValidationError → 502。JSON 本身是合法的，
+    这类失败重试也无用（重试多半还是带同样字段）。
+    """
+    payload = {
+        "dimensions": [
+            {"key": k, "label": l, "score": 12, "max": 25, "note": "x"}
+            for k, l in svc.DIMENSIONS.items()
+        ],
+        "suggestions": ["建议"],
+        "suggestions_note": "placeholder",   # 模型自加的未知字段
+    }
+    result = svc.parse_evaluation(json.dumps(payload, ensure_ascii=False))
+    assert sum(d.score for d in result.dimensions) == 48
+    assert len(result.suggestions) == 1
+
+
+def test_parse_evaluation_drops_unknown_dimension_fields():
+    """Dimension 内部多出字段时也应过滤掉，而不是整体失败。"""
+    payload = {
+        "dimensions": [
+            {"key": k, "label": l, "score": 10, "max": 25, "note": "x", "reason": "模型自加"}
+            for k, l in svc.DIMENSIONS.items()
+        ],
+        "suggestions": ["建议"],
+    }
+    result = svc.parse_evaluation(json.dumps(payload, ensure_ascii=False))
+    assert sum(d.score for d in result.dimensions) == 40
+
+
+def test_whitelist_does_not_accept_missing_suggestions():
+    """过滤不能把缺失的 suggestions 也放过——那是真的缺数据。"""
+    payload = {
+        "dimensions": [
+            {"key": k, "label": l, "score": 10, "max": 25, "note": "x"}
+            for k, l in svc.DIMENSIONS.items()
+        ],
+        "some_other_field": "x",
+    }
+    with pytest.raises(Exception):
+        svc.parse_evaluation(json.dumps(payload, ensure_ascii=False))
