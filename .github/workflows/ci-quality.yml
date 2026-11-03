@@ -325,6 +325,9 @@ jobs:
         run: npm run -s token:check:ci
       - name: tests
         run: npm test
+      - name: ai-partner tests
+        # 子应用有独立 vitest 配置，默认 vitest.config.ts 的 include 收集不到它。
+        run: npm run -s test:ai-partner
       - name: type-check
         run: npm run -s type-check
       - name: lint

@@ -179,3 +179,18 @@ AGENT_API_KEY_ENCRYPTION_KEY / SUPER_ADMIN_PASSWORD 已轮换为独立值；下�
 - 所有"事实"条目都用命令复核过；标 ⚠️ 的是我亲自实测确认的
 - 四位 Agent 的原始报告中有 3 条结论经核实**不成立**，已剔除：`MONITORING_QUICKSTART.md` 已不存在、`classroom-scoring.ts` 在溯源清单内、`PyodideTerminal` 确实在用
 - 未验证项：专用 PG/Redis 隔离用例、真实浏览器验收、生产环境状态、真实数据量下的性能
+
+---
+
+## 附二：2026-11-03 优先项复核
+
+本批整理落盘后，把四项候选逐条回到当前源码复核，结论分「证实」与「撤回」记录；撤回项不再作为待办。
+
+| 编号 | 事由 | 结论 |
+|---|---|---|
+| C25 | `ai-partner` 子应用测试从未真正进入 CI | **证实并修复**。`ci-quality.yml` 的 `frontend-quality` 只执行 `npm test`，而 `vitest.config.ts` 的 `include` 不覆盖 `ai-partner/src/**`；该子应用由独立的 `vitest.ai-partner.config.ts` 收集，构建步骤也只做类型检查。已补 `npm run -s test:ai-partner` 步骤，并在 `scripts/workflow-contracts.test.mjs` 增加断言，防止该步骤被静默删除。本批此前把 `ai-partner-service.test.ts` 的断言由 65000 调整到 140000，若无此步骤，实现回退不会让 CI 变红。 |
+| C27 | `start-dev.sh` 按 `.env.local` 覆盖端口误杀进程 | **撤回**。当前停止入口为 `scripts/dev-processes.py stop`：不带 `--port` 时收集全部属于本 checkout 的进程；带 `--port` 时端口仅用于初筛，其后依次核验 UID、启动时间、cwd 与显式启动命令，外来监听者不发送信号并以固定诊断 fail closed。该结论对应按端口/进程名匹配的改写前实现，当前代码已无此路径。 |
+| C29 | `--docker` 模式宿主读到 `DEBUG=False`，误报文档已关闭 | **撤回**。`api_docs_enabled()` 在 `START_MODE=docker` 时直接返回可用，与 `docker-compose.dev.yml` 固定 `DEBUG=True` 的事实一致，提示语与容器实际行为已对齐。 |
+| C32 | Caddy 路由排序使 SSE 路由被通用路由截断 | **撤回**。`@api_stream` 与 `@api` 均为具名 matcher，`sortRoutes` 的稳定排序保持声明顺序；Caddy v2.8.4 中带单个路径的具名 matcher 同样参与路径特化比较，原判断的前提不成立。 |
+
+复核方法为静态核验加隔离用例（`scripts/test_dev_processes.py` 35 项、`node --test scripts/workflow-contracts.test.mjs` 59 项），未启动服务、未操作 Docker、未连接数据库；生产行为仍不在本轮证据范围内。

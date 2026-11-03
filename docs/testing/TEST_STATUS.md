@@ -20,6 +20,7 @@
 | 阶段A代码复核 | 本批修复差异及直接调用方 | 无未解决 P1/P2；修复停止入口 Compose 选择器与 bash 3.2 空数组；2 项 P3 延迟记录 |
 | 阶段C台账核验 | 24 行未结事项；当前源码/文档 | 完成分类：D 6、B 12、C 5；DIFY-02 核验为非缺陷关闭；A 类无待改代码项 |
 | D类修复 | 后端定向 pytest + 前端 Vitest + type-check | 后端24 passed；前端相关10 passed；type-check通过；PRIV导出流式边界未实现 |
+| ai-partner 入 CI | `frontend/` 下 `npm run -s test:ai-partner`；`node --test scripts/workflow-contracts.test.mjs` | 55 passed；CI 新增该步骤并由合同断言锁定；此前该套件不在 `npm test` 收集范围 |
 | 共享进程守卫 | `python3 -I -B scripts/test_dev_processes.py -q` | 35 passed；所有查询、信号与等待为替身 |
 | 本机真实验收 | `bash start-dev.sh` / `stop-dev.sh`；真实 dev 栈 | 通过：health 200 healthy、6608 200、DATABASE_URL→127.0.0.1:5433、浏览器登录页 0 error、停止/二次启动成功、容器 ID 未变 |
 | 保存端点软校验 | `backend/` 下自含 `env -i`、`venv/bin/python -I -B -S tests/ai_agents/test_agent_endpoint_warning.py -q` | 19 passed；未导入正常 app/Settings |

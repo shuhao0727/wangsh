@@ -71,7 +71,7 @@ PR、main push 及 `workflow_call` 触发；普通 PR/push 仅改 `docs/**`、`*
 | 开发安全专项 | fake Docker 容器来源、canonical 配置/有效覆盖、备份父子路径、exact-PID 进程身份；后端端点与网关预算使用自含离线用例 |
 | 数据库 | 单 Alembic head、legacy baseline 后完整升级；专用 PG/Redis |
 | 后端 | dev 依赖、文件规模/复杂度 baseline 防放宽、一次 pytest 同时生成 coverage |
-| 前端 | 干净 npm ci、脚本测试、token、Vitest、type-check、lint、UI baseline、生产构建与 bundle budget |
+| 前端 | 干净 npm ci、脚本测试、token、Vitest（主应用与 ai-partner 子应用各一套配置）、type-check、lint、UI baseline、生产构建与 bundle budget |
 
 测试专用 PG `55433`、Redis `56379` 和安全配置统一在 job env，迁移/bootstrap/pytest
 使用同一环境；不设 `DEBUG=true` 绕过安全校验。密钥使用测试专用非默认值与合法格式。

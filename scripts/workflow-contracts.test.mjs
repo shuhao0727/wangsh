@@ -1534,6 +1534,7 @@ test("CI runs repository governance gates", () => {
     '"$EVENT_NAME" = "workflow_call"',
     "npm run -s test:scripts",
     "npm run -s token:check:ci",
+    "npm run -s test:ai-partner",
     "scripts/rollback.sh",
     "scripts/migrate-db.sh",
     "scripts/health-check-detailed.sh",
