@@ -242,3 +242,76 @@ release-set、源码/静态产物、配对备份/隔离恢复等准入证据。
 - 同一隔离环境合跑退出/刷新、登录、认证合同、运行时替换四文件：36 passed / 8项既有
   Pydantic弃用warning，隔离违规0。只有合成settings、内存/替身存储；不连接业务DB/Redis，
   不读取真实env，不代表本次修复的远端全套已通过。按用户授权提交推送到现有PR，等待新CI。
+
+### PythonLab后续门禁与隔离浏览器复验
+
+- 基线 `9a9e54e`：远端ci-quality run41636903630后端 **3750 passed / 123 skipped**，
+  原子登录替身修复已通过；前端、repo-config、markdown和PhaseC均通过。owner run41636903936
+  在两场景pointer smoke exit1，但未上传artifact，日志仅打印报告路径，无法恢复具体失败阶段。
+  不因同源PhaseC通过认定偶发，也不把下述独立问题冒充该CI根因。
+- 真实DebugController和hook的内存WS交错反例证实：新stopped事件先于旧Continue成功回包时，
+  无条件running回写可覆盖新paused；startup/reconnect成功回包也有相似窗口。首批14项8红6绿，
+  也保留了真实disconnect已拒绝pending的反证，不把纯stub终止序列外推为真实必现。
+- 在既有core增加同步generation/session/lifecycle守卫，Continue/Step/握手保留无continued时
+  的running fallback，stopped、Pause/Reset、终止或会话替换后旧响应失效。三类Step wrapper
+  职责内去重，hook物理行数1169→1169，未挤空行或放宽baseline；新增真实hook回归20项。
+- 原smoke的happy-path只等Continue禁用/变量清空，可在运行中提前PASS；断点helper子串匹配
+  及“任意红点”也不能证明目标行。现改精确行号/对应行marker、明确已停止、精确输出8/5和
+  会话清零，保留5s/15s/10s边界；完成等待使用Playwright waitForFunction原生timeout。
+- 场景stdout只给id/status/stage/固定 `scenario_failed`，不复制原error里的页面、变量、URL或
+  凭据；详细JSON/截图仅在本次0700临时目录受控留存，未自动对外发布。新增5项Node合同，
+  Chrome channel/WebKit参数及两条PR触发路径覆盖helper改动。
+- 使用独立合成账号、tmpfs PostgreSQL/Redis、独立namespace和workspace，从同一tracked源码
+  快照运行真实API/Celery/DAP/TTY。审查frontend16618、backend18009、DB15543、Redis16380，
+  不读取真实env、不接业务库、不重装开发依赖。首轮内部Docker网络未发布宿主端口，命令虽有
+  外层exit0但日志实际ConnectionRefused，未记通过；只重建该run的两个空tmpfs容器和网络，
+  显式逐步检查退出码后，空库bootstrap→Alembic→bootstrap→AUTH enrollment成功。
+- 原始CI两个场景在本地Chromium均PASS，但旧报告的happy结束快照仍显示“运行中”，证实原
+  验收过弱；不证明当次CI失败已重现。最终修复源码在真实Chrome与WebKit各跑两个场景，均
+  PASS、最终已停止、终端精确输出8/5、远端会话0。记录源码哈希与浏览器结果；未增加盲重试。
+- 单元类型验证858 passed/115文件（新增20项hook+2项PDF）、ai-partner55、前端脚本39；
+  type-check通过、lint0 errors/479 warnings（新测试最初净增1项类型导入warning已修）、
+  token0 undefined/2077引用、UI862 hits gate通过/baseline未改，隔离源码build:check exit0，
+  总JS12.37MB/Monaco3541.7KB保留WARN。首次从仓库根错误调用Vitest缺alias而未收集用例，
+  改为 `npm --prefix frontend run test -- ...` 的原配置后22项/完整套件通过，不改测试断言。
+- 临时preview server及子进程已停止，仅按exact ID/label删除本run的两tmpfs容器和网络，清除
+  本次launch条目及合成凭据；18009/16618/15543/16380端口释放。正常开发7容器的ID与启动
+  时间逐一相同，本轮未连接生产。原始日志、报告、截图与source manifest在仓库外scratch，
+  本节保留可长期追溯的范围/结果，不把临时路径当正式发布备份。
+
+### 前端依赖告警分类与PDF最小缓解
+
+分类绑定 `9a9e54e` 与lock SHA-256 `9d414dfe683c98508e960bd805c92212bfcf1e81c273fb0246b731f66427b8ba`。
+只向公开npm审计发送合成根元数据及公共包名/版本，不发送项目源码/env/凭据；未运行audit fix。
+已按原736节点安装投影复现 **34个受影响包条目**（5low/11moderate/18high），其中27包有
+自身公告、7包为传递meta告警，涉及44路径；155个npm source记录按URL去重为143份GHSA。
+不能把34或18high当成对应数量的生产可利用漏洞。完整lock包含安装中缺失的可选
+canvas→node-pre-gyp→tar链，审计为37条/含1critical，不能外推所有平台均缺该可选链。
+
+下表是当前调用边界下的处置候选，不是漏洞已关闭或用户已接受风险；公告条件来自公开元数据
+与定向源码/产物核对，未逐份重放143份载荷，不能给出完整不可利用证明。
+
+| 依赖与锁定版本（34包分组） | 当前边界/影响 | 本轮处置与残余 |
+|---|---|---|
+| pdfjs-dist3.11.174 | 浏览器真实getDocument入口默认eval；恶意PDF可在站点源执行JS，当前输入主要为staff编译/发布缓存，未证实匿名任意PDF链 | 按 [官方CVE-2024-4367公告](https://github.com/advisories/GHSA-wgrm-67xf-hhpq) 显式isEvalSupported:false；2项组件合同及合成1页PDF在Chrome/WebKit均渲染canvas405×270、pageerror0。临时测试页首轮inline回调重复加载使ArrayBuffer detached，稳定测试回调后通过；未改产品其他逻辑，未重放恶意PDF，版本未升级 |
+| dompurify3.3.3/Monaco内嵌3.2.7；monaco-editor0.55.1 | 真实浏览器消毒；若干公告要求IN_PLACE/危险hook/原型污染等，当前完整链未证实 | 兼容补丁优先评估，根升级不能证明内嵌副本已修；不因audit的Monaco候选版本宣称清零 |
+| axios1.15.2；follow-redirects1.15.11；form-data4.0.5 | 浏览器XHR/原生FormData；Node代理/HTTP2项非当前Caddy执行通道，浏览器项另需输入/污染前提 | 兼容更新需鉴权/上传回归，当前未自动升级或扩大Node使用边界 |
+| react-router7.13.0/react-router-dom7.13.0 | 静态BrowserRouter而非SSR/Framework/RSC，登录目的地已有同源与反斜杠拒绝 | 不能套用服务器反序列化影响为当前RCE；浏览器导航仍需兼容补丁与输入边界复核 |
+| echarts5.6.0/echarts-wordcloud2.1.0 | 公告Lines tooltip链；当前只注册Bar/Line/Radar/Scatter，Line不等于Lines，未见wordcloud导入 | 不盲升6或按audit降wordcloud；启用Lines前重新审查 |
+| katex0.16.33；rehype-katex7.0.1；remark-math6.0.0；micromark-extension-math3.1.0 | 默认数学渲染/部分输出再消毒；相关XSS需原型污染等前置，完整链未确认 | 需要上下游兼容更新，不按audit大幅降级，不把未发现前置当修复完成 |
+| zod4.3.6 | staff可编辑活动集合，过大失败校验可能耗尽浏览器内存，UI上限不证明服务端载入有界 | 同4.x补丁/集合边界需后续验证，不声称匿名完整攻击链已证实 |
+| simple-mind-map0.14.0-fix.2；quill2.0.3；uuid9.0.1 | 旧导图runtime生产已排除并404；当前uuid只用无buffer的v4，非所列v3/v5/v6条件 | 恢复生产runtime前重审；不按audit降mindmap，不声称Quill现有latest已修 |
+| ws8.19.0/7.5.10/8.20.0 | Pyodide静态复制确实含Node ws源码，不能说全部未分发；浏览器分支用原生WS、Caddy不执行Node | Node DoS不等于当前浏览器可利用；仍需评估兼容补丁和缩小复制范围 |
+| vite8.0.3；vitest4.1.5；@vitest/mocker4.1.5 | 构建/测试/开发服务器，不是生产Caddy；若开发端口对不可信方可达，文件读/mock接口风险真实存在 | 本轮审查server仅loopback且已停；正常开发网络暴露及工具兼容更新未验，不据此关闭 |
+| ajv6.12.6；js-yaml4.1.1；flatted3.3.3 | ESLint配置/缓存解析，动态schema或不可信YAML/缓存为前提 | 保持受控源码/缓存边界，兼容补丁另验，不复用不可信缓存 |
+| minimatch3.1.2/9.0.5；brace-expansion1.1.12/2.0.2 | Node lint/glob或排除导图链的ReDoS/扩张风险；不同版本/optimizationLevel适用性不同 | 不能为audit清零强升跨主；不处理攻击者glob作为受信配置 |
+| postcss8.5.8；postcss-selector-parser6.1.2；source-map-js1.2.1；nanoid3.3.11 | 构建CSS/selector/sourcemap处理；需不可信输入，当前nanoid固定size6而非恶意size | 受控构建边界不能替代补丁；兼容升级需完整产物回归 |
+| browserslist4.28.1；baseline-browser-mapping2.9.19 | 有限构建查询配置，恶意stats/查询可致OOM/退出，不是当前长期在线服务 | 工具补丁待评估；不把固定配置自动扩成在线任意查询 |
+| undici7.25.0 | jsdom开发测试链，代理/解压/cache/WS等条件不同，不等同生产Node内置fetch或浏览器fetch | Node20兼容补丁另验，不直升要求更高Node的latest |
+
+PDF缓解已单独核准官方workaround与本地API支持，动态渲染通过并不等于恶意PDF完整验证。
+其余分类未授权自动接受风险，也未清零原始audit报告；若运行边界改变或新证据出现须重审。
+本轮未提交/推送、未合并/升版/构建正式镜像或部署，原ownerCI仍需新提交验证。最终根层
+合同152 passed/0 failed、前端脚本39 passed/0 failed；文档109 files/702 links/0 missing及
+`git diff --check`通过。根层首轮151/152唯一失败为文档派生统计过期，更新当前计数后完整
+复验通过，未删失败断言；代码/lock/baseline/Compose及tag边界再次核对。

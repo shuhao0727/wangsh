@@ -102,7 +102,8 @@ const PdfCanvasVirtualViewer = forwardRef<PdfCanvasVirtualViewerHandle, Props>(
       const run = async () => {
         try {
           const pdfjs = await getPdfJs();
-          const nextPdf = await pdfjs.getDocument({ data }).promise;
+          // PDF.js 3.x 的字体动态求值默认开启；显式关闭以缓解 CVE-2024-4367。
+          const nextPdf = await pdfjs.getDocument({ data, isEvalSupported: false }).promise;
           if (loadTokenRef.current !== token) return;
           pdfRef.current = nextPdf;
           onPdfLoaded?.(nextPdf);

@@ -28,6 +28,11 @@
   不改直接依赖版本，不用 `--legacy-peer-deps` 代替CI准入。
 - 端点软保存19项自含测试保留独立 `-I -B -S` 执行，普通pytest只精确排除该模块，避免
   正常app导入冲突；新增workflow合同守住两处，不减少用例或coverage范围。
+- 调试Continue/Step及握手running fallback增加同步世代/session/lifecycle守卫；补真实hook
+  交错回归，防止旧响应覆盖新暂停/停止；不把该独立竞态未经证据归为原owner CI失败根因。
+- pointer smoke核对精确断点行、已停止/输出/会话清零，保留原超时；新增Chrome/WebKit入口、
+  固定错误码/阶段摘要与helper合同，不输出原始错误快照；两项PR门禁同步覆盖helper变更。
+- PDF预览显式关闭PDF.js动态求值，缓解CVE-2024-4367路径；不升级整批依赖或宣称audit清零。
 - 已发2.2.5 tag/镜像保持不变；本地复验不等于远端CI通过，也不解除生产发布阻断。
   实际结果与未覆盖项见[当前测试状态](../testing/TEST_STATUS.md)。
 

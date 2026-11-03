@@ -45,8 +45,9 @@ Celery、sandbox 和 Vite，先跑 Chromium 真实 pointer-click 调试/多断�
 
 Fork PR 使用临时本地账号，不读取仓库 secrets。密码经 step env 传递，不进命令参数；
 浏览器与 Python smoke 通过 `redact_exec.py` 实时脱敏，保留退出码/信号语义。
-失败仅发布限长、脱敏日志并清理资源。共享脱敏实现改动同时触发两条 PR 门禁。
-CI 的 Chromium 覆盖不替代 AGENTS 要求的 Chrome channel / WebKit 专项交互验收。
+失败仅发布限长、脱敏日志并清理资源。pointer smoke逐场景输出固定错误码与阶段，不把原始错误
+或页面/变量快照写stdout；详细报告和截图不自动对外上传。调试、断点及完成条件helper变更
+同时触发两条PR门禁。CI的Chromium不替代CLAUDE要求的Chrome channel/WebKit专项验收。
 
 > 2026-11-01：原远端巡检工作流 `pythonlab-owner-concurrency.yml` 与 `pythonlab-phasec-gate.yml`
 > 已删除；对已部署环境的巡检改在本地用 `backend/scripts/` 下同名 smoke/soak 脚本执行。

@@ -8,7 +8,7 @@
 
 ## 基线与边界
 
-- 当前源码：`/Users/wsh/wangsh`，修复分支 `fix/release-gates`，基线为远端 `main` 的 `aafbf3f`；PR首轮5项通过，后端仅1项旧测试替身签名失败，本次已本地修复，待修后CI验证。tag `2.2.5` 仍为 `189205c`，不覆盖已发镜像；2.2.5 尚未部署。
+- 当前源码：`/Users/wsh/wangsh`，修复分支 `fix/release-gates`；已推送基线 `9a9e54e` 的后端CI3750 passed/123 skipped，owner指针点击smoke失败（原报告未保留，未绑定根因）。本轮调试守卫/严格smoke/PDF缓解作为当前PR候选提交，修后远端CI待验证；tag2.2.5仍为189205c，未覆盖镜像、未部署。
 - 2026-11-03 发布前只读核对：局域网 SSH `192.168.5.3:22` 可用；生产 `/api/health` 为 200 / healthy / 2.2.2，DB/Redis healthy，worker 为 uid 1000。六个 2.2.5 候选镜像已在服务器，不等于源码身份、发布准入或部署验收通过；本次未重启服务。
 - 下表原有合成/开发栈结果为各批历史验证，不代表远端 CI 已通过。2026-11-02 的“未连接生产、未提交”仅适用于当时批次；本轮修复方法与隔离边界见[批次复验](../archive/testing/2026-11-02-maintenance-batches.md#release-01-门禁修复复验2026-11-03)。
 
@@ -19,7 +19,10 @@
 | 根层合同 | `node --test scripts/*.test.mjs`；临时仓库与 fake Docker/进程 | 本轮152 passed / 0 failed（原151项加自含用例分离合同）；workflow单独60 passed |
 | 自含用例收集冲突 | 普通pytest重现19个初始化错误；独立 `-I -B -S` 仍19 passed | 仅在CI普通pytest中精确排除该模块，repo-config独立执行保留；新增workflow合同同时守住两处，未删除断言或扩大排除 |
 | 前端干净安装复验 | Node20.20.2/npm10.8.2；原lock普通 `npm ci` 先红、补全后再跑 | 旧800→803条目，仅新增三个 `@emnapi/*`，已有依赖/版本0变化；干净安装736包，exit0；当前lock与已验候选SHA-256一致 |
-| 前端修后门禁 | 同一干净依赖、无真实env、断网执行八项命令 | 脚本34、主应用836、ai-partner55 passed；token0 undefined、type-check通过；lint0 errors/479 warnings、UI gate通过、build:check exit0/WARN；Linux arm64 Alpine，非远端Ubuntu amd64 |
+| 前端本轮完整门禁 | 类型、Vitest、脚本、lint、token、UI、隔离副本build:check | 115文件858 passed、伙伴55、脚本39；type-check通过，lint0 errors/479 warnings，token0 undefined，UI862 hits gate通过/baseline未改；build exit0/WARN，总JS12.37MB |
+| 原子登录续修远端结果 | `9a9e54e` 的ci-quality run41636903630 | 后端3750 passed/123 skipped、治理/迁移通过；前端/仓库/文档/PhaseC通过，owner run41636903936在pointer smoke exit1，不因同源另一路通过认定偶发 |
+| 调试状态与严格smoke | 真实hook/控制器内存WS20项；Chrome channel与WebKit实际指针点击 | 旧回包覆盖paused等反例先红后绿；两浏览器各2场景通过，精确断点/最终已停止/输出8和5/session0。原helper曾在运行中判PASS，现收紧并保留15s超时、固定错误码摘要；不声称原CI根因已证实 |
+| PDF动态求值缓解 | getDocument显式isEvalSupported:false；组件回归2项、合成一页PDF实际渲染 | Chrome/WebKit均1页canvas405×270、pageerror0；不更改PDF.js版本，未重放恶意PDF，不宣称audit清零 |
 | 发布提交远端 CI | [ci-quality run 41592108696](https://github.com/shuhao0727/wangsh/actions/runs/41592108696)；`189205c` | **历史失败/阻断**：治理2 errors与前端lock缺项；不以修复候选结果覆盖原构建失败 |
 | PR首轮远端CI及续修 | [ci-quality run 41634049631](https://github.com/shuhao0727/wangsh/actions/runs/41634049631)；`1dc0260` | 5项通过，后端3749 passed/123 skipped/1 failed：原子登录测试替身未接受 `include_inactive`；本地先复现同一TypeError，再补显式参数并断言为True，相关4文件36 passed/隔离违规0，待修后远端重跑 |
 | 相对基线复核 | `python3 -I -B backend/scripts/check_python_governance.py check --base-ref 3d05b08` | 修前退出 1：阻塞对话复杂度 18→20、auth.py 612→620；本轮修复后普通、`--base-ref 3d05b08`、`--base-ref aafbf3f` 均退出 0 / errors=0 / warnings=41；复杂度回到18、auth.py 为606行，baseline 字节未变 |
@@ -39,7 +42,7 @@
 | Python 治理 | `python3 -I -B backend/scripts/check_python_governance.py check`，本轮含两份 Git 基线对比 | errors=0 / warnings=41；365文件、2158函数（修前2156）；未放宽 baseline |
 | 迁移守卫 | `python3 -I -B backend/scripts/check_migration_guard.py` | 50文件通过，未运行迁移 |
 | 版本一致性 | `node scripts/check-version-consistency.mjs` | 2.2.5 通过 |
-| 文档门禁 | `node scripts/check-markdown-contracts.mjs` | 109 files / 702 links / 0 missing（新增PR首轮CI证据链接后；历史统计保留于原批次） |
+| 文档门禁 | `node scripts/check-markdown-contracts.mjs` | 本轮109 files / 702 links / 0 missing；首轮因派生计数过期失败，更正当前统计后复验，不覆盖历史记录 |
 | 脚本语法 / 差异 | 已改 shell 的 `bash -n`、Node `--check`、`git diff --check` | 通过 |
 
 根合同首轮为133/134：仅文档派生链接数过期；更新当前统计后全量复验通过。后续增加容器CLI等合同后为151项，未删除失败断言刷绿。
@@ -48,9 +51,9 @@
 
 ## 未验证与保留项
 
-- **发布阻断仍保留**：PR首轮治理、前端及两项PythonLab门禁已通过，但后端1项测试替身签名续修仍待远端重跑；修订候选打包源码/前端产物、release-set及配对备份/隔离恢复未齐，不据此合并或部署。
-- 干净安装另报告34项audit vulnerabilities（5 low/11 moderate/18 high）；尚未逐条复核影响或做自动升级。lint与bundle告警原样保留，不把门禁exit0表述为无安全问题。
-- 历史未覆盖：Caddy 2.8.4 真适配/代理上传、WebKit/窄屏/登录后业务页、完整生产镜像及真实上游；生产只读健康核对不能替代业务验收。
+- **发布阻断仍保留**：本轮本地严格smoke、调试竞态与PDF缓解已验证，按用户授权提交推送到当前PR，修后远端owner及全套门禁仍待验证，原失败未绑定具体根因；修订候选源码/产物、release-set及配对备份/隔离恢复未齐，不据此合并或部署。
+- 依赖分类已复核：34为受影响包条目（5low/11moderate/18high），不是34个独立漏洞；完整锁另含未安装optional链而为37项/含1critical。PDF eval路径已最小缓解，其余按生产浏览器/Node/构建条件记录、仍待兼容升级或显式风险取舍；不以未证实利用链等同安全关闭。
+- 本轮仅合成账号与专用tmpfs PG/Redis/namespace/workspace，正常开发7容器ID/启动时间未变；审查server、测试容器/网络与合成凭据已清理。Chrome/WebKit仅覆盖这两个调试场景及PDF合成渲染，其他登录后业务、窄屏/并发、真实上游及完整生产镜像仍未覆盖。
 - 原生显式上传目录保留；旧文件未搬迁、未证明自动恢复。进程身份核验非原子，PID复用竞态仍有边界；reload父消失且子残留时保守报错。
 - D 类已完成代码与定向回归；PRIV 导出仍为内存组装，未实现游标/临时文件/64KiB 流式发送。B/C 类仍未实施，继续保留在台账。
 

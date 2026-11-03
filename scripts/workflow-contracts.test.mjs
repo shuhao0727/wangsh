@@ -1505,12 +1505,13 @@ test("PythonLab PR runtime provisions, verifies, and cleans local dependencies",
   assert.match(workflow, /--base-url http:\/\/127\.0\.0\.1:6608/);
 });
 
-test("PythonLab PR gates rerun when shared prod-smoke redaction changes", () => {
+test("PythonLab PR gates rerun when smoke predicates or redaction changes", () => {
   for (const workflow of [
     read(".github/workflows/pr-pythonlab-owner-gate.yml"),
     read(".github/workflows/pr-pythonlab-phasec-gate.yml"),
   ]) {
     assert.match(workflow, /scripts\/prod-smoke\/\*\*/);
+    assert.ok(workflow.includes('"frontend/scripts/pythonlab-smoke-contracts*.mjs"'));
   }
 });
 

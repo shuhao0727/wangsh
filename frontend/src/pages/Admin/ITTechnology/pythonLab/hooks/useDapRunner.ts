@@ -9,6 +9,7 @@ import { loadPythonlabPauseSnapshot } from "../core/debugPauseSnapshot";
 import {
   addPythonlabWatchExpression,
   continuePythonlabDebugSession,
+  createPythonlabRunningTransition,
   evaluatePythonlabDebugExpression,
   pausePythonlabDebugSession,
   removePythonlabWatchExpression,
@@ -305,6 +306,13 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
   const debugMapRef = useRef<DebugMap | null>(debugMap);
   const modeRef = useRef<"debug" | "plain">("debug");
   const lifecycleEpochRef = useRef(0);
+  const runControlGenerationRef = useRef(0);
+  const beginRunningTransition = useCallback(() => createPythonlabRunningTransition({
+    generation: runControlGenerationRef,
+    lifecycleEpoch: lifecycleEpochRef,
+    sessionId: sessionIdRef,
+    onRunning: () => dispatch({ type: "SET_STATUS", payload: "running" }),
+  }), []);
   const wsEpochRef = useRef<number | null>(null);
   const wsConnIdRef = useRef<string | null>(null);
   const clientConnIdRef = useRef<string | null>(null);
@@ -422,6 +430,7 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
   }, [resetReconnectState]);
 
   const applyStoppedVisualState = useCallback(() => {
+    runControlGenerationRef.current += 1;
     dispatch({ type: "SET_ACTIVE_LINE", payload: null });
     dispatch({ type: "SET_ACTIVE_EMPHASIS", payload: { activeFlowLine: null, activeFocusRole: null, activeNodeId: null } });
     dispatch({ type: "SET_STATUS", payload: "stopped" });
@@ -645,6 +654,7 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
             token,
           });
 
+          const onRunning = beginRunningTransition();
           const initCaps = await connectPythonlabDapController({
             client: clientRef.current,
             url,
@@ -671,7 +681,7 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
           });
 
           if (params.previousStatus === "starting" || params.previousStatus === "running") {
-            dispatch({ type: "SET_STATUS", payload: "running" });
+            onRunning();
           }
 
           return { ok: true, aborted: false, errorMessage: null };
@@ -697,7 +707,7 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
     } finally {
       reconnectInFlightRef.current = false;
     }
-  }, [refreshBreakpoints, traceLifecycle]);
+  }, [beginRunningTransition, refreshBreakpoints, traceLifecycle]);
 
   const startSession = useCallback(async (mode: "debug" | "plain", options?: DapLaunchOptions) => {
     const stdinText = options?.stdinText;
@@ -861,6 +871,7 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
           dispatch({ type: "APPEND_OUTPUT", payload: output });
         },
         onStopped: (threadId) => {
+          runControlGenerationRef.current += 1;
           resetReconnectState();
           consumeElapsedRuntime();
           dispatch({ type: "SET_STATUS", payload: "paused" });
@@ -927,6 +938,7 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
         },
       });
 
+      const onRunning = beginRunningTransition();
       const initCaps = await connectPythonlabDapController({
         client,
         url,
@@ -939,7 +951,7 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
       });
       resetReconnectState();
       dispatch({ type: "SET_DAP_CAPABILITIES", payload: toDapCapabilitiesState(initCaps) });
-      dispatch({ type: "SET_STATUS", payload: "running" });
+      onRunning();
 
     } catch (e: unknown) {
       if (startTokenRef.current === myToken) {
@@ -959,6 +971,7 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
     }
   }, [
     applyStoppedVisualState,
+    beginRunningTransition,
     clearPauseVisualState,
     clearPlainStatusMonitor,
     cleanup,
@@ -981,6 +994,7 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
   const runPlain = useCallback((stdinText?: unknown) => startSession("plain", { stdinText }), [startSession]);
 
   const stopDebug = useCallback(async () => {
+    runControlGenerationRef.current += 1;
     await stopPythonlabDebugSession({
       client: clientRef.current,
       sessionId: sessionIdRef.current,
@@ -995,40 +1009,26 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
     });
   }, [clearTrackedSessionId, cleanup]);
 
-  const continueRun = useCallback(async () => {
-    await continuePythonlabDebugSession({
-      client: clientRef.current,
-      onRunning: () => dispatch({ type: "SET_STATUS", payload: "running" }),
-    });
-  }, []);
+  const continueRun = useCallback(() => continuePythonlabDebugSession({
+    client: clientRef.current,
+    onRunning: beginRunningTransition(),
+  }), [beginRunningTransition]);
 
   const pauseRun = useCallback(async () => {
+    runControlGenerationRef.current += 1;
     await pausePythonlabDebugSession({ client: clientRef.current });
   }, []);
 
-  const stepOver = useCallback(async () => {
+  const stepRun = useCallback(async (kind: "over" | "into" | "out") => {
     await stepPythonlabDebugSession({
       client: clientRef.current,
-      kind: "over",
-      onRunning: () => dispatch({ type: "SET_STATUS", payload: "running" }),
+      kind,
+      onRunning: beginRunningTransition(),
     });
-  }, []);
-
-  const stepInto = useCallback(async () => {
-    await stepPythonlabDebugSession({
-      client: clientRef.current,
-      kind: "into",
-      onRunning: () => dispatch({ type: "SET_STATUS", payload: "running" }),
-    });
-  }, []);
-
-  const stepOut = useCallback(async () => {
-    await stepPythonlabDebugSession({
-      client: clientRef.current,
-      kind: "out",
-      onRunning: () => dispatch({ type: "SET_STATUS", payload: "running" }),
-    });
-  }, []);
+  }, [beginRunningTransition]);
+  const stepOver = useCallback(() => stepRun("over"), [stepRun]);
+  const stepInto = useCallback(() => stepRun("into"), [stepRun]);
+  const stepOut = useCallback(() => stepRun("out"), [stepRun]);
 
   const evaluate = useCallback(async (expr: string) => {
     return evaluatePythonlabDebugExpression({

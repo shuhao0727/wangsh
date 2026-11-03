@@ -9,7 +9,8 @@
 - `bundle-budget.mjs` - `build:check` / `ui:migration:gate` 包体与最终产物门禁；读取 Vite `build/.vite/manifest.json`，递归扫描 `build/assets/`，将独立 Worker JS 和复制到 `build/pyodide/` 的生产运行时纳入总量，并确认 Mindmap 本地运行时缺失、favicon 与 KaTeX/Monaco 正式字体存在
 - `token-check.mjs` - `token:check:ci` CSS token 完整性门禁；检查 `src/` 中所有 `var(--ws-*)` 引用是否在 `src/styles/index.css` 定义
 - `auth-replaced-login-smoke.mjs` - 同账号二次登录提示烟测；正文提示可见才判 `PASS`，不只检查 storage/detail
-- `pythonlab-debug-smoke.mjs` - PythonLab 运行/调试 UI 专项烟测
+- `pythonlab-debug-smoke.mjs` - PythonLab 运行/调试 UI 专项烟测；`--browser chromium` 为默认，`--browser chrome` 使用真实 Chrome channel，`--browser webkit` 验证 WebKit。CI两场景严格等待已停止、精确输出与会话清零，断点核对目标行标记；场景stdout仅输出id/status/stage及固定错误码，不发布原始错误/页面/变量内容
+- `pythonlab-smoke-contracts.mjs` / `.test.mjs` - 烟测断点、完成条件和安全摘要合同，由 `test:scripts` 执行；原始JSON报告/截图仍含详细诊断，仅限授权合成环境受控保留
 - `prod-smoke-ui.mjs` - 浏览器 UI 烟测；页面加载但预期控件缺失记为 `WARN`
 - `ui-audit.mjs` - UI 审计主脚本
 - `ui-audit-baseline.json` - UI 审计基线

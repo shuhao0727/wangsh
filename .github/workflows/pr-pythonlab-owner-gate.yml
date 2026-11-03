@@ -25,6 +25,7 @@ on:
       - "frontend/src/features/it-technology/python-lab/**"
       - "frontend/src/pages/ITTechnology/PythonLab.tsx"
       - "frontend/scripts/pythonlab-debug-smoke.mjs"
+      - "frontend/scripts/pythonlab-smoke-contracts*.mjs"
       - "frontend/package.json"
       - "frontend/package-lock.json"
       - "frontend/vite.config.*"

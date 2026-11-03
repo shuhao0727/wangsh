@@ -1,6 +1,11 @@
 import fs from "fs";
 import path from "path";
-import { chromium } from "playwright";
+import { chromium, webkit } from "playwright";
+import {
+  breakpointIsVisible,
+  readDebugCompletionSnapshot,
+  smokeResultSummary,
+} from "./pythonlab-smoke-contracts.mjs";
 
 function getArg(name, fallback = "") {
   const idx = process.argv.indexOf(name);
@@ -77,6 +82,10 @@ const screenshotsDir = getArg(
   "--screenshots-dir",
   path.resolve(process.cwd(), "test-results/pythonlab/screenshots"),
 );
+const browserName = getArg("--browser", "chromium");
+if (!["chromium", "chrome", "webkit"].includes(browserName)) {
+  throw new Error("browser must be chromium, chrome or webkit");
+}
 const debugPauseTimeoutMs = Number(getArg("--debug-pause-timeout-ms", process.env.DEBUG_PAUSE_TIMEOUT_MS || "90000")) || 90000;
 const requestedScenarioIds = new Set(
   getArgs("--scenario")
@@ -201,11 +210,11 @@ async function cleanupOwnSessions(page) {
 async function setBreakpoint(page, lineNumber = 2) {
   const lineRow = page
     .locator(".monaco-editor .margin-view-overlays > div")
-    .filter({ has: page.locator(".line-numbers", { hasText: String(lineNumber) }) })
+    .filter({ has: page.locator(".line-numbers", { hasText: new RegExp(`^${lineNumber}$`) }) })
     .first();
   await lineRow.waitFor({ state: "visible", timeout: 5000 });
   await lineRow.click({ position: { x: 5, y: 9 } });
-  await page.locator(".wsMonacoBp").first().waitFor({ state: "visible", timeout: 5000 });
+  await page.waitForFunction(breakpointIsVisible, lineNumber, { timeout: 5000 });
 }
 
 async function clickRunnerButton(page, iconClass, options = {}) {
@@ -791,16 +800,36 @@ async function forcePythonlabSocketClose(page, { code, reason = "" }) {
   }, { closeCode: code, closeReason: reason });
 }
 
+async function waitForDebugCompletion(page, expectedOutput, timeout = 15_000) {
+  const handle = await page.waitForFunction(readDebugCompletionSnapshot, expectedOutput, { timeout });
+  return await handle.jsonValue();
+}
+
+async function waitForNoOwnSessions(page) {
+  let sessions = await listOwnSessions(page);
+  const deadline = Date.now() + 10_000;
+  while (sessions.length > 0 && Date.now() < deadline) {
+    await page.waitForTimeout(250);
+    sessions = await listOwnSessions(page);
+  }
+  if (sessions.length > 0) throw new Error(`debug sessions still active after completion: ${sessions.length}`);
+  return sessions;
+}
+
 async function runHappyPathScenario(context) {
   const page = await context.newPage();
   const diagnostics = await attachDiagnostics(page);
   const screenshotPrefix = path.join(screenshotsDir, "pythonlab-debug-happy");
+  let stage = "open-editor";
 
   try {
     await openSeqBasic(page);
     await cleanupOwnSessions(page);
+    stage = "set-breakpoint";
     await setBreakpoint(page, 2);
+    stage = "start-debug";
     await clickRunnerButton(page, "lucide-bug");
+    stage = "wait-first-pause";
 
     await page.waitForFunction(() => {
       const debugTab = Array.from(document.querySelectorAll('[role="tab"]')).find(
@@ -824,17 +853,12 @@ async function runHappyPathScenario(context) {
     const pausedShot = `${screenshotPrefix}-paused.png`;
     await page.screenshot({ path: pausedShot, fullPage: true });
 
+    stage = "wait-completion";
+    await selectPanelTab(page, "终端交互");
+    await page.waitForFunction(() => Boolean(document.querySelector(".xterm")), undefined, { timeout: 5000 });
     await clickRunnerButton(page, "lucide-fast-forward");
-    await page.waitForFunction(() => {
-      const continueButton = Array.from(document.querySelectorAll("button")).find((button) =>
-        button.querySelector("svg.lucide-fast-forward"),
-      );
-      return (
-        Boolean(continueButton) &&
-        continueButton.disabled === true &&
-        document.body.innerText.includes("暂无变量")
-      );
-    }, undefined, { timeout: 15_000 });
+    const completion = await waitForDebugCompletion(page, "8");
+    const sessions = await waitForNoOwnSessions(page);
 
     const finished = await page.evaluate(() => ({
       bodyText: document.body.innerText,
@@ -851,6 +875,9 @@ async function runHappyPathScenario(context) {
     return {
       id: "debug-happy-path",
       status: "PASS",
+      stage: "complete",
+      completion,
+      remoteSessionCountAfterFinish: sessions.length,
       paused,
       finished,
       playState,
@@ -866,6 +893,7 @@ async function runHappyPathScenario(context) {
     return {
       id: "debug-happy-path",
       status: "FAIL",
+      stage,
       error: String(error),
       finalUrl: page.url(),
       screenshots: [failShot],
@@ -883,16 +911,20 @@ async function runMultiBreakpointContinueScenario(context) {
   const page = await context.newPage();
   const diagnostics = await attachDiagnostics(page);
   const screenshotPrefix = path.join(screenshotsDir, "pythonlab-debug-multi-breakpoint-continue");
+  let stage = "open-editor";
 
   try {
     await openSeqBasic(page);
     await cleanupOwnSessions(page);
     await setEditorCode(page, "a = 1\nb = 2\nc = a + b\nd = c * 2\ne = d - 1\nprint(e)\n");
     await page.waitForTimeout(1000);
+    stage = "set-breakpoints";
     await setBreakpoint(page, 2);
     await setBreakpoint(page, 4);
     await setBreakpoint(page, 6);
+    stage = "start-debug";
     await clickRunnerButton(page, "lucide-bug");
+    stage = "wait-first-pause";
 
     await waitForDebugPause(page, "a1int");
     const firstPause = await collectPauseSnapshot(page);
@@ -902,6 +934,7 @@ async function runMultiBreakpointContinueScenario(context) {
       throw new Error(`first breakpoint variables mismatch: ${JSON.stringify(firstPause.rows)}`);
     }
 
+    stage = "wait-second-pause";
     await clickRunnerButton(page, "lucide-fast-forward");
     await waitForDebugPause(page, "c3int", 15_000);
     const secondPause = await collectPauseSnapshot(page);
@@ -911,6 +944,7 @@ async function runMultiBreakpointContinueScenario(context) {
       throw new Error(`second breakpoint variables mismatch: ${JSON.stringify(secondPause.rows)}`);
     }
 
+    stage = "wait-third-pause";
     await clickRunnerButton(page, "lucide-fast-forward");
     await waitForDebugPause(page, "e5int", 15_000);
     const thirdPause = await collectPauseSnapshot(page);
@@ -920,49 +954,24 @@ async function runMultiBreakpointContinueScenario(context) {
       throw new Error(`third breakpoint variables mismatch: ${JSON.stringify(thirdPause.rows)}`);
     }
 
+    stage = "wait-completion";
     await selectPanelTab(page, "终端交互");
     await page.waitForFunction(() => Boolean(document.querySelector(".xterm")), undefined, { timeout: 5000 });
     await clickRunnerButton(page, "lucide-fast-forward");
-    await page.waitForFunction(() => {
-      const rows = Array.from(document.querySelectorAll(".xterm-rows > div"))
-        .map((row) => (row.textContent || "").replace(/\u00a0/g, " ").trim())
-        .filter(Boolean);
-      const continueButton = Array.from(document.querySelectorAll("button")).find((button) =>
-        button.querySelector("svg.lucide-fast-forward"),
-      );
-      const playButton = Array.from(document.querySelectorAll("button")).find((button) =>
-        button.querySelector("svg.lucide-circle-play"),
-      );
-      const hasSpinner = Boolean(document.querySelector("svg.lucide-loader-circle"));
-      return (
-        rows.includes("5") &&
-        Boolean(continueButton) &&
-        Boolean(playButton) &&
-        continueButton.disabled === true &&
-        playButton.disabled === false &&
-        !hasSpinner
-      );
-    }, undefined, { timeout: 15_000 });
+    const completion = await waitForDebugCompletion(page, "5");
 
     const terminal = await collectTerminalSnapshot(page);
     const playState = await readButtonState(page, "lucide-circle-play");
     const continueState = await readButtonState(page, "lucide-fast-forward");
-    let sessions = await listOwnSessions(page);
-    const sessionsDeadline = Date.now() + 10_000;
-    while (sessions.length > 0 && Date.now() < sessionsDeadline) {
-      await page.waitForTimeout(250);
-      sessions = await listOwnSessions(page);
-    }
+    const sessions = await waitForNoOwnSessions(page);
     const doneShot = `${screenshotPrefix}-done.png`;
     await page.screenshot({ path: doneShot, fullPage: true });
-
-    if (sessions.length > 0) {
-      throw new Error(`debug sessions still active after completion: ${sessions.map((item) => `${item.session_id}:${item.status}`).join(", ")}`);
-    }
 
     return {
       id: "debug-multi-breakpoint-continue-to-end",
       status: "PASS",
+      stage: "complete",
+      completion,
       firstPause,
       secondPause,
       thirdPause,
@@ -981,6 +990,7 @@ async function runMultiBreakpointContinueScenario(context) {
     return {
       id: "debug-multi-breakpoint-continue-to-end",
       status: "FAIL",
+      stage,
       error: String(error),
       finalUrl: page.url(),
       screenshots: [failShot],
@@ -2028,7 +2038,10 @@ async function runSessionLostScenario(context) {
 }
 
 async function main() {
-  const browser = await chromium.launch({ headless: true });
+  const browser = await (browserName === "webkit" ? webkit : chromium).launch({
+    headless: true,
+    ...(browserName === "chrome" ? { channel: "chrome" } : {}),
+  });
   const context = await browser.newContext({
     viewport: { width: 1600, height: 960 },
     ignoreHTTPSErrors: true,
@@ -2036,6 +2049,7 @@ async function main() {
 
   const report = {
     generatedAt: nowIso(),
+    browser: browserName,
     baseUrl,
     requestedScenarios: [...requestedScenarioIds],
     login: null,
@@ -2110,7 +2124,9 @@ async function main() {
       if (requestedScenarioIds.size === 0 && entry.enabledByDefault === false) {
         continue;
       }
-      report.scenarios.push(await entry.run());
+      const result = await entry.run();
+      report.scenarios.push(result);
+      console.log(`PythonLab scenario: ${JSON.stringify(smokeResultSummary(result))}`);
     }
   } finally {
     await context.close();
