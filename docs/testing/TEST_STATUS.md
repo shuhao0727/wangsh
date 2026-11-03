@@ -29,9 +29,9 @@
 | 端点核对脚本 | `pytest tests/ai_agents/test_agent_endpoint_audit.py` | 5 passed；白名单/本机 Ollama/内网/元数据/非法协议分类与出站判定同源，未连数据库 |
 | 网关字节合同 | `python3 -I -B gateway/tests/test_caddy_contract.py -q` | 38 passed；526385152B 覆盖后端502MiB；普通16MB、read_body30s保留 |
 | Compose 真解析 | 5.6.0，临时 HOME/合成 env/复制的两份 Compose；checker local、docker 与实际 setup 函数 | 通过；只执行 config，无 daemon 操作 |
-| Python 治理 | `python3 -I -B backend/scripts/check_python_governance.py check` | errors=0 / warnings=41；365文件、2147函数；未放宽 baseline |
+| Python 治理 | `python3 -I -B backend/scripts/check_python_governance.py check` | errors=0 / warnings=41；365文件、2156函数；未放宽 baseline |
 | 迁移守卫 | `python3 -I -B backend/scripts/check_migration_guard.py` | 50文件通过，未运行迁移 |
-| 版本一致性 | `node scripts/check-version-consistency.mjs` | 2.2.4 通过 |
+| 版本一致性 | `node scripts/check-version-consistency.mjs` | 2.2.5 通过 |
 | 文档门禁 | `node scripts/check-markdown-contracts.mjs` | 109 files / 697 links / 0 missing（新增现行计划后） |
 | 脚本语法 / 差异 | 已改 shell 的 `bash -n`、Node `--check`、`git diff --check` | 通过 |
 
