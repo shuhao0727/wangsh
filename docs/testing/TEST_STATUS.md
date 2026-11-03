@@ -8,7 +8,7 @@
 
 ## 基线与边界
 
-- 当前源码：`/Users/wsh/wangsh`，修复分支 `fix/release-gates`；已推送基线 `9a9e54e` 的后端CI3750 passed/123 skipped，owner指针点击smoke失败（原报告未保留，未绑定根因）。本轮调试守卫/严格smoke/PDF缓解作为当前PR候选提交，修后远端CI待验证；tag2.2.5仍为189205c，未覆盖镜像、未部署。
+- 当前源码：`/Users/wsh/wangsh`，发布准备分支 `release/2.2.6`；修复PR提交 `e7f122a` 的6项必需CI全部通过，已合入 `main` 的 `ef4d517`。当前同步2.2.6版本源及核准lock元数据，发布构建/候选验收/生产切换尚未完成；2.2.5 tag仍为189205c，不覆盖旧镜像。
 - 2026-11-03 发布前只读核对：局域网 SSH `192.168.5.3:22` 可用；生产 `/api/health` 为 200 / healthy / 2.2.2，DB/Redis healthy，worker 为 uid 1000。六个 2.2.5 候选镜像已在服务器，不等于源码身份、发布准入或部署验收通过；本次未重启服务。
 - 下表原有合成/开发栈结果为各批历史验证，不代表远端 CI 已通过。2026-11-02 的“未连接生产、未提交”仅适用于当时批次；本轮修复方法与隔离边界见[批次复验](../archive/testing/2026-11-02-maintenance-batches.md#release-01-门禁修复复验2026-11-03)。
 
@@ -16,6 +16,7 @@
 
 | 检查 | 命令 / 范围 | 结果 |
 |---|---|---|
+| 修复PR远端最终结果 | `e7f122a`；ci-quality41653115601、owner41653115306、PhaseC41653115436、markdown41653115301 | 6项必需检查全部成功，PR已合入ef4d517；不是2.2.6新发布提交的CI或镜像验收结果 |
 | 根层合同 | `node --test scripts/*.test.mjs`；临时仓库与 fake Docker/进程 | 本轮152 passed / 0 failed（原151项加自含用例分离合同）；workflow单独60 passed |
 | 自含用例收集冲突 | 普通pytest重现19个初始化错误；独立 `-I -B -S` 仍19 passed | 仅在CI普通pytest中精确排除该模块，repo-config独立执行保留；新增workflow合同同时守住两处，未删除断言或扩大排除 |
 | 前端干净安装复验 | Node20.20.2/npm10.8.2；原lock普通 `npm ci` 先红、补全后再跑 | 旧800→803条目，仅新增三个 `@emnapi/*`，已有依赖/版本0变化；干净安装736包，exit0；当前lock与已验候选SHA-256一致 |
@@ -41,7 +42,8 @@
 | Compose 真解析 | 5.6.0，临时 HOME/合成 env/复制的两份 Compose；checker local、docker 与实际 setup 函数 | 通过；只执行 config，无 daemon 操作 |
 | Python 治理 | `python3 -I -B backend/scripts/check_python_governance.py check`，本轮含两份 Git 基线对比 | errors=0 / warnings=41；365文件、2158函数（修前2156）；未放宽 baseline |
 | 迁移守卫 | `python3 -I -B backend/scripts/check_migration_guard.py` | 50文件通过，未运行迁移 |
-| 版本一致性 | `node scripts/check-version-consistency.mjs` | 2.2.5 通过 |
+| 版本一致性 | `node scripts/check-version-consistency.mjs` | 发布准备2.2.6通过；lock根版本同步，is-docker元数据恢复为已装包/同integrity tarball实际2.2.1，其他依赖不升级 |
+| 2.2.6干净安装尝试 | 合成目录、Node20.20.2/npm10.8.2普通npm ci，未触碰项目node_modules | 两次分别ECONNRESET与registry.npmjs.org元数据EIDLETIMEOUT；属下载失败，未记通过。后续必须由发布workflow的质量门禁验证，不关闭TLS/不放宽安装参数 |
 | 文档门禁 | `node scripts/check-markdown-contracts.mjs` | 本轮109 files / 702 links / 0 missing；首轮因派生计数过期失败，更正当前统计后复验，不覆盖历史记录 |
 | 脚本语法 / 差异 | 已改 shell 的 `bash -n`、Node `--check`、`git diff --check` | 通过 |
 
@@ -51,7 +53,7 @@
 
 ## 未验证与保留项
 
-- **发布阻断仍保留**：本轮本地严格smoke、调试竞态与PDF缓解已验证，按用户授权提交推送到当前PR，修后远端owner及全套门禁仍待验证，原失败未绑定具体根因；修订候选源码/产物、release-set及配对备份/隔离恢复未齐，不据此合并或部署。
+- **发布准入仍未完成**：修复PR六项检查已成功并合入main；2.2.6发布提交需重新通过CI及正式构建，核准源码/产物/release-set、配对备份/隔离恢复后才部署。当前192.168.5.3可ping但SSH/6608超时，域名SSH握手前断开，尚未现场备份或切换；历史healthy不代表当前实时状态。
 - 依赖分类已复核：34为受影响包条目（5low/11moderate/18high），不是34个独立漏洞；完整锁另含未安装optional链而为37项/含1critical。PDF eval路径已最小缓解，其余按生产浏览器/Node/构建条件记录、仍待兼容升级或显式风险取舍；不以未证实利用链等同安全关闭。
 - 本轮仅合成账号与专用tmpfs PG/Redis/namespace/workspace，正常开发7容器ID/启动时间未变；审查server、测试容器/网络与合成凭据已清理。Chrome/WebKit仅覆盖这两个调试场景及PDF合成渲染，其他登录后业务、窄屏/并发、真实上游及完整生产镜像仍未覆盖。
 - 原生显式上传目录保留；旧文件未搬迁、未证明自动恢复。进程身份核验非原子，PID复用竞态仍有边界；reload父消失且子残留时保守报错。
