@@ -161,3 +161,69 @@ DIFY-02 核验为首页外部 Dify 服务入口（默认 `http://wangsh.cn:6606`
 - SSE-01：useAdminSSE 增加 enabled；学生端仅 auth.isAdmin() 时订阅管理流。
 - 验证：后端定向 pytest 24 passed、前端相关 Vitest 10 passed、type-check 通过、Python 治理
   errors=0/warnings=41（365 文件、2147 函数）。未运行真实 Celery worker、真实浏览器或生产。
+
+## RELEASE-01 门禁修复复验（2026-11-03）
+
+基线 `aafbf3f`，分支 `fix/release-gates`，本轮未提交。发布提交 `189205c` 的远端 CI
+`41592108696` 已证实失败：普通治理通过，但相对 `3d05b08` 的阻塞对话复杂度18→20、
+认证服务文件行数612→620；前端普通 `npm ci` 因缺少三个 `@emnapi/*` lock 条目失败。
+这些失败不以历史本地成功覆盖，2.2.5 tag/镜像保持不变。
+
+### 后端本地修复与实测
+
+- `endpoint_security.py` 统一 Provider 候选地址选择及顺序校验，流式/阻塞调用复用；保留
+  请求前硬校验、拒绝与取消传播、白名单/Ollama 例外及既有熔断顺序，不扩充放行规则。
+- `auth.py` 两处相同身份字典改共用固定十字段投影，保留登录与 legacy 查询合同；未通过
+  删注释、挤空行或提高 ceiling 刷指标。复杂度20→18、文件620→606行。
+- 治理普通 check、`--base-ref 3d05b08` 与 `--base-ref aafbf3f` 均退出0：errors=0、
+  warnings=41、365文件、2158函数。baseline 文件与修前字节相同，SHA-256 为
+  `9c3275bbcd3d19339e59ebef4febb22adccd0eecaf58cbe60c550fcf9ad2e457`。
+- 一次性隔离运行器（仓库外）清空继承环境，导入前阻断 dotenv/secrets，强制 Settings
+  `_env_file=None`、`_secrets_dir=None`；仅合成配置和内存SQLite，禁真实socket/子进程及
+  临时目录外写入。自动pytest插件、conftest、cache禁用，仅显式加载async插件。
+- 8文件121 passed：认证字段投影、停用/删除过滤、正确/错误凭据、歧义、运行时替换、
+  候选顺序、拒绝后不发HTTP、取消传播、流式、SSRF、Dify和端点分类。相邻健康/运行时
+  替换/分类/OpenRouter另26 passed（与前者有重叠，不相加）；隔离违规均为0。
+- 首次隔离运行器因pytest临时文件默认写到隔离域外被守卫中止；将TMPDIR固定为本次
+  临时目录后同一测试选择通过，未放宽隔离规则。测试使用本机Python3.13，不代表CI的
+  Python3.11全套或真实PostgreSQL、Redis、供应商验收。
+- 软保存自含回归19 passed；治理fixture回归29 passed（首轮禁自动插件导致1条
+  `asyncio_mode` 未识别配置warning；用 `-c /dev/null` 独立配置再跑29 passed、无warning）；
+  根层151、网关38、迁移守卫50文件、版本一致性2.2.5均通过，未执行迁移或启动/重启服务。
+
+### 普通pytest与自含入口分离
+
+继续复核被旧治理门禁挡住的后续CI路径，在同一隔离运行器中重现自含端点模块被普通pytest
+收集时的19个初始化错误（正常app已导入，不满足其 `-I -B -S` 约束）；这不是端点断言失败。
+保留 `repo-config` 原有独立执行19项，仅在 `backend-pytest` 的命令精确排除该单文件，其他
+pytest/coverage命令不变。新增workflow合同同时约束独立命令、精确排除与coverage，不能
+只排除而不运行。独立19项再次通过，workflow合同60项通过；根层完整合同152 passed / 0 failed。
+没有删除用例或放宽安全断言。
+
+### 前端lock与干净安装复验
+
+- 独立前端会话仅写回 `frontend/package-lock.json`；父会话核对实际差异、日志退出码与源码
+  哈希。仅新增npm自动解析的 `@emnapi/core@1.11.3`、`@emnapi/runtime@1.11.3`、
+  `@emnapi/wasi-threads@1.2.3` 三条，原有800条目均未修改或删除，应用仍2.2.5；npm顺带
+  生成的73处dev标记变动未带回。候选与当前lock的SHA-256均为
+  `9d414dfe683c98508e960bd805c92212bfcf1e81c273fb0246b731f66427b8ba`。
+- Node20.20.2/npm10.8.2、Linux arm64 Alpine：原lock的普通 `npm ci` exit1（完整重现三个
+  缺项）；无旧node_modules下 `npm install --package-lock-only --ignore-scripts --no-audit
+  --no-fund` 生成缺项，再对最小候选普通 `npm ci` exit0，干净安装736包。没有修改CI安装
+  参数、直接依赖、全局registry或项目真实node_modules。
+- 后续非root/断网、无真实env/业务数据/socket的隔离源码执行：脚本34/34、主应用
+  113文件836 passed、ai-partner4文件55 passed，token0 undefined/2077引用，type-check通过，
+  lint0 errors/479 warnings，UI gate通过（860 baseline hits），build:check exit0、预算WARN。
+  仅隔离副本生成构建产物，当前前端源码与验证副本逐字节比较一致。
+- 脚本首轮被bind目录Git ownership守卫阻断；改用容器内同属主副本后，补齐同一干净
+  node_modules再34/34通过。保留两次失败日志，未配置safe.directory或改断言刷绿。
+- npm安装报告34项audit vulnerabilities（5 low/11 moderate/18 high）；本轮未逐条定性或
+  执行自动升级。构建总JS12.37MB/Monaco3541.7KB告警及Browserslist旧数据提醒仍保留。
+- 临时前端证据目录 `/tmp/wangsh-frontend-lock.AKU9df9f/evidence/` 的 `final-summary.json`
+  包含逐命令退出码，原lock失败、修复安装、同属主脚本重跑与八项门禁日志均核过；后端
+  仓库外临时目录保存隔离运行器、日志与对应源码哈希。临时文件不是长期发布恢复材料，
+  关键范围/结果在本节留存，不把未来提交当作已存在的备份。
+
+本轮已知问题本地验证完成，尚未提交/推送；未执行远端GitHub/Ubuntu amd64或后端CI全套，
+未启动生产、未重建正式镜像或覆盖2.2.5 tag。RELEASE-01仍保留，等待远端CI及修订候选
+release-set、源码/静态产物、配对备份/隔离恢复等准入证据。

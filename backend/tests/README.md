@@ -15,6 +15,9 @@ env -i PATH=/usr/bin:/bin PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 venv/bin/python -I -B
 ```
 
 命令在 `backend/` 执行；它不验证真实 SQLAlchemy 事务、实际 Loguru sink、数据库或 API 启动。
+CI 的 `repo-config` 独立执行这19项；`backend-pytest` 仅排除该自含模块，避免普通 app 导入与
+其隔离守卫冲突，其余 pytest 与 coverage 保留。workflow 合同同时约束独立步骤和该精确排除项，
+不能只排除而不执行自含入口。
 
 ## 运行前提
 

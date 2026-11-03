@@ -239,7 +239,8 @@ jobs:
       # changed-lines coverage gate (审计 T-2 / 治理 §4.3): 单一 pytest 运行同时
       # 产出 coverage.json，避免对已被本 job 改写的 CI 数据库再跑一遍测试。
       - name: pytest
-        run: pytest -q --cov=app --cov-report=json --cov-report=term-missing:skip-covered
+        # 自含端点合同由 repo-config 以 -I -B -S 单独执行，不能与正常 app 导入混跑。
+        run: pytest -q --ignore=tests/ai_agents/test_agent_endpoint_warning.py --cov=app --cov-report=json --cov-report=term-missing:skip-covered
       # changed-lines 覆盖率门禁 —— 本阶段非阻断（continue-on-error）只出报告；
       # 下一阶段按治理 §4.3 收紧为阻断（去掉 continue-on-error 并校准阈值）。
       - name: changed-lines coverage gate

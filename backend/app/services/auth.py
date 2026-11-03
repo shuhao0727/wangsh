@@ -56,6 +56,15 @@ def verify_token(token: str) -> Optional[Dict[str, Any]]:
         return None
 
 
+def _user_identity(user) -> Dict[str, Any]:
+    """登录与 legacy 查询共用固定身份投影，不包含密码或令牌。"""
+    fields = (
+        "id", "role_code", "username", "student_id", "full_name",
+        "class_name", "study_year", "is_active", "created_at", "updated_at",
+    )
+    return {field: getattr(user, field) for field in fields}
+
+
 async def authenticate_user(
     db, identifier: str, credential: str, user_type: str = "admin", *, include_inactive: bool = False
 ) -> Optional[Dict[str, Any]]:
@@ -89,19 +98,7 @@ async def authenticate_user(
         return None
     user = matching_users[0]
 
-    # 返回用户信息
-    return {
-        "id": user.id,
-        "role_code": user.role_code,
-        "username": user.username,
-        "student_id": user.student_id,
-        "full_name": user.full_name,
-        "class_name": user.class_name,
-        "study_year": user.study_year,
-        "is_active": user.is_active,
-        "created_at": user.created_at,
-        "updated_at": user.updated_at
-    }
+    return _user_identity(user)
 
 
 async def authenticate_user_auto(
@@ -154,18 +151,7 @@ async def get_current_user(token: str, db=None) -> Optional[Dict[str, Any]]:
         user = await resolve_legacy_subject(db, subject)
         
         if user:
-            return {
-                "id": user.id,
-                "role_code": user.role_code,
-                "username": user.username,
-                "student_id": user.student_id,
-                "full_name": user.full_name,
-                "class_name": user.class_name,
-                "study_year": user.study_year,
-                "is_active": user.is_active,
-                "created_at": user.created_at,
-                "updated_at": user.updated_at
-            }
+            return _user_identity(user)
         return None
     
     # 没有数据库连接时，返回令牌中的基本用户信息

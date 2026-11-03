@@ -76,6 +76,11 @@ PR、main push 及 `workflow_call` 触发；普通 PR/push 仅改 `docs/**`、`*
 测试专用 PG `55433`、Redis `56379` 和安全配置统一在 job env，迁移/bootstrap/pytest
 使用同一环境；不设 `DEBUG=true` 绕过安全校验。密钥使用测试专用非默认值与合法格式。
 ECharts/词云 peer major、manifest 与 lockfile 由 workflow contracts 校验。
+前端锁文件须在无旧 `node_modules` 的 Node 20 / npm 10 环境中验证普通 `npm ci`；
+生产 Dockerfile 的 `--legacy-peer-deps` 安装结果不能替代此检查，不以宽松参数绕过缺失 peer 条目。
+后端发布前同时运行普通治理检查及相对原发布基线的 `--base-ref`，不能只看默认 check 的 errors=0。
+保存端点软校验的19项自含用例只在 `repo-config` 的隔离Python入口运行；`backend-pytest`
+精确排除该模块以防正常app导入冲突，不排除其他用例或coverage；workflow合同锁定两处。
 
 以下仍为非阻断或有限覆盖，不得写成完整端到端已过：
 
