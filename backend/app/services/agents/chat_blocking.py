@@ -4,6 +4,7 @@ import asyncio
 from typing import Any, Dict, Optional
 
 from app.services.agents.chat_common import prepare_chat_context
+from app.services.agents.endpoint_security import assert_agent_outbound_endpoint
 from app.services.agents.providers import (
     provider_error_message,
     extract_provider_detail,
@@ -53,6 +54,15 @@ async def run_agent_chat_blocking(
     # 熔断检查
     if breaker.is_open(ctx.circuit_key):
         raise ValueError("circuit_open: 该服务暂时不可用（连续失败过多），请稍后重试")
+
+    # 保存时只记告警，真正出站前必须硬校验（与流式路径同一规则）。
+    urls = (
+        ctx.provider.candidate_urls()
+        if hasattr(ctx.provider, "candidate_urls")
+        else [ctx.provider.chat_url()]
+    )
+    for url in urls:
+        await assert_agent_outbound_endpoint(url)
 
     # Dify 阻塞式
     if isinstance(ctx.provider, DifyProvider):

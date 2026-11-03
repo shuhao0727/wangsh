@@ -263,3 +263,17 @@ async def _assert_safe_endpoint_async(
     if allow_local_ollama and allows_local_ollama(host, port):
         return
     _assert_host_safe(host, await _resolve_host_addresses_async(host))
+
+
+async def assert_agent_outbound_endpoint(api_endpoint: str) -> None:
+    """智能体真正出站前的硬校验。
+
+    保存路径是软告警（允许先配置、后补白名单），但发请求前必须硬校验：否则保存时
+    被放过的私网/环回端点会在调用时被实际访问。放行规则与保存路径一致，仅受信内部
+    端点白名单与本机 Ollama 例外，其余按 IP 策略拒绝。
+    """
+    await _assert_safe_endpoint_async(
+        api_endpoint,
+        allow_local_ollama=True,
+        allow_trusted_internal=True,
+    )

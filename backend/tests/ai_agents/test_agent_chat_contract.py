@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from app.schemas.agents.ai_agent import AgentChatRequest
 import app.services.agents.chat_blocking as chat_blocking
 import app.services.agents.chat_common as chat_common
+from app.services.agents.endpoint_security import EndpointNotAllowedError
 from app.services.agents.providers.common import build_messages
 
 
@@ -84,3 +85,29 @@ def test_blocking_chat_rejects_inactive_agent_before_resolving_credentials(monke
         )
 
     assert credentials_resolved is False
+
+
+def test_blocking_chat_rejects_disallowed_outbound_endpoint(monkeypatch):
+    """保存时是软告警，但真正出站前必须硬拒绝私网/元数据地址。"""
+
+    async def fake_context(_db, _agent_id, _message, _history, *, use_cache=False):
+        return chat_common.PreparedChatContext(
+            agent=SimpleNamespace(id=1),
+            provider=SimpleNamespace(chat_url=lambda: "http://169.254.169.254/v1/chat/completions"),
+            circuit_key="fake:agent:1",
+            chat_messages=[{"role": "user", "content": "hi"}],
+            model="gpt-4o-mini",
+            api_endpoint="http://169.254.169.254/v1",
+            api_key="k",
+        )
+
+    monkeypatch.setattr(chat_blocking, "prepare_chat_context", fake_context)
+
+    with pytest.raises(EndpointNotAllowedError):
+        asyncio.run(
+            chat_blocking.run_agent_chat_blocking(
+                object(),
+                agent_id=1,
+                message="hi",
+            )
+        )

@@ -11,6 +11,10 @@ from loguru import logger
 from app.core.config import settings
 from app.core.http_client import get_http_client
 from app.services.agents.chat_common import prepare_chat_context
+from app.services.agents.endpoint_security import (
+    EndpointNotAllowedError,
+    assert_agent_outbound_endpoint,
+)
 from app.services.agents.providers import openrouter_model_candidates
 from app.services.agents.providers.dify_provider import DifyProvider
 from app.services.agents.providers.circuit_breaker import breaker
@@ -83,6 +87,24 @@ async def _prepare_stream(db, agent_id: int, message: str, history):
     if breaker.is_open(ctx.circuit_key):
         raise _StreamSetupError(
             {"error": "circuit_open", "message": "该服务暂时不可用（连续失败过多），请稍后重试"}
+        )
+
+    # 保存时只记告警，真正出站前必须硬校验；否则被放过的私网端点会在调用时被实际访问。
+    urls = (
+        ctx.provider.candidate_urls()
+        if hasattr(ctx.provider, "candidate_urls")
+        else [ctx.provider.chat_url()]
+    )
+    try:
+        for url in urls:
+            await assert_agent_outbound_endpoint(url)
+    except EndpointNotAllowedError:
+        logger.warning("[endpoint-security] 智能体出站端点被拒绝: agent_id={}", agent_id)
+        raise _StreamSetupError(
+            {
+                "error": "endpoint_not_allowed",
+                "message": "该智能体 API 地址被安全策略拒绝，请检查地址或联系管理员",
+            }
         )
 
     return PreparedAgentStream(

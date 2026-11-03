@@ -409,6 +409,14 @@ async def test_agent(
         headers = _build_test_headers(agent, ctx)
         test_endpoint = _resolve_test_endpoint(ctx)
 
+        # 测试连接同样会真实出站，按与对话路径相同的白名单规则硬校验。
+        from app.services.agents.endpoint_security import assert_agent_outbound_endpoint
+
+        if test_endpoint:
+            await assert_agent_outbound_endpoint(str(test_endpoint))
+        else:
+            await assert_agent_outbound_endpoint(str(ctx.api_endpoint))
+
         async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
             if test_endpoint:
                 if ctx.is_dify:

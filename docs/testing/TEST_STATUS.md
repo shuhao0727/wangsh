@@ -24,6 +24,7 @@
 | 共享进程守卫 | `python3 -I -B scripts/test_dev_processes.py -q` | 35 passed；所有查询、信号与等待为替身 |
 | 本机真实验收 | `bash start-dev.sh` / `stop-dev.sh`；真实 dev 栈 | 通过：health 200 healthy、6608 200、DATABASE_URL→127.0.0.1:5433、浏览器登录页 0 error、停止/二次启动成功、容器 ID 未变 |
 | 保存端点软校验 | `backend/` 下自含 `env -i`、`venv/bin/python -I -B -S tests/ai_agents/test_agent_endpoint_warning.py -q` | 19 passed；未导入正常 app/Settings |
+| 出站端点硬校验 | `pytest tests/ai_agents/test_agent_chat_contract.py test_chat_stream.py ...` | 流式/阻塞/测试连接调用前统一硬校验；定向 61 + 32 passed；未连接真实上游，白名单外的私网端点会被拒绝 |
 | 网关字节合同 | `python3 -I -B gateway/tests/test_caddy_contract.py -q` | 38 passed；526385152B 覆盖后端502MiB；普通16MB、read_body30s保留 |
 | Compose 真解析 | 5.6.0，临时 HOME/合成 env/复制的两份 Compose；checker local、docker 与实际 setup 函数 | 通过；只执行 config，无 daemon 操作 |
 | Python 治理 | `python3 -I -B backend/scripts/check_python_governance.py check` | errors=0 / warnings=41；365文件、2147函数；未放宽 baseline |

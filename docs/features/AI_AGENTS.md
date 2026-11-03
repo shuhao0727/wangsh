@@ -119,6 +119,11 @@ DNS 校验与实际连接之间仍有时间差；白名单及 fake-IP 的转发�
 同步 helper 保留给非事件循环调用方。软告警与受信白名单日志不记录 URL、名称、凭据或异常原文；
 专项回归为 `backend/tests/ai_agents/test_agent_endpoint_warning.py`，采用自含离线隔离入口。
 
+保存是软的，**出站是硬的**：流式对话、阻塞对话与测试连接在真正发请求前都会调用
+`assert_agent_outbound_endpoint()`（`chat_stream.py`、`chat_blocking.py`、`ai_agent.py`），
+放行规则与保存路径一致（受信白名单、本机 Ollama），未命中的私网/环回/元数据地址直接拒绝。
+这条校验每次调用都重新解析 DNS，不给保存阶段的旧结论背书。
+
 ### 智能体缓存约定（踩过坑，改动前必读）
 
 `ai_agent.get_agent()` 的进程级 `TTLCache` 有效期由 `AGENT_CACHE_TTL` 配置，默认 60 秒；
