@@ -21,6 +21,7 @@ from scripts.xbk.common import (
     ensure_dir,
     get_http_client,
     get_settings,
+    list_items,
     login_admin,
     utc_now_iso,
 )
@@ -37,26 +38,6 @@ def _write_xlsx(path: Path, headers: List[str], rows: List[Dict[str, Any]]) -> N
     wb.save(path)
 
 
-def _list_items(
-    client,
-    api_base: str,
-    token: str,
-    endpoint: str,
-    *,
-    year: int,
-    term: str,
-) -> List[Dict[str, Any]]:
-    resp = client.get(
-        f"{api_base}{endpoint}",
-        params={"page": 1, "size": 500, "year": year, "term": term},
-        headers=auth_headers(token),
-    )
-    resp.raise_for_status()
-    body = resp.json() or {}
-    items = body.get("items") if isinstance(body, dict) else None
-    if not isinstance(items, list):
-        raise RuntimeError(f"Unexpected list response from {endpoint}: {body}")
-    return [it for it in items if isinstance(it, dict)]
 
 
 def generate_import_samples() -> Dict[str, Any]:
@@ -66,7 +47,7 @@ def generate_import_samples() -> Dict[str, Any]:
     with get_http_client() as client:
         token = login_admin(client, settings)
 
-        students = _list_items(
+        students = list_items(
             client,
             settings.api_base,
             token,
@@ -74,7 +55,7 @@ def generate_import_samples() -> Dict[str, Any]:
             year=settings.year,
             term=settings.term,
         )
-        courses = _list_items(
+        courses = list_items(
             client,
             settings.api_base,
             token,
@@ -82,7 +63,7 @@ def generate_import_samples() -> Dict[str, Any]:
             year=settings.year,
             term=settings.term,
         )
-        selections = _list_items(
+        selections = list_items(
             client,
             settings.api_base,
             token,

@@ -34,7 +34,7 @@ r"""XBK 历史重复有效选课 —— 只读人工裁决清单（audit）。
         --dsn postgresql://user:pass@127.0.0.1:5432/wangsh_dup_test \
         --output test-results/xbk/active-duplicates.csv
 
-    # 生产只读审计（停写/备份/复核要求见 docs/docker/deploy/DEPLOY.md）
+    # 生产只读审计（停写/备份/复核要求见 docs/operations/DEPLOY.md）
     python scripts/xbk/audit_active_duplicates.py --dsn ... --allow-production
 
 输出 CSV 列
@@ -250,7 +250,7 @@ async def run_audit(
         print("下一步（必须由业务方完成，工具不代替裁决）：")
         print("  1. 在导出 CSV 的 keep 列中，为每一组恰好标记一行 yes；")
         print("  2. 复核标记结果并留档；")
-        print("  3. 按 docs/docker/deploy/DEPLOY.md 完成停写与备份后，运行：")
+        print("  3. 按 docs/operations/DEPLOY.md 完成停写与备份后，运行：")
         print("     python scripts/xbk/resolve_active_duplicates.py \\")
         print("         --dsn <DSN> --decisions <CSV>")
         print("     （先看 dry-run 输出，确认后再加 --apply --confirm-stop-writes）")

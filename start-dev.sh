@@ -16,14 +16,15 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # 项目根目录
-PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 BACKEND_DIR="${PROJECT_ROOT}/backend"
 FRONTEND_DIR="${PROJECT_ROOT}/frontend"
 
 # 端口配置
 BACKEND_PORT=8000
 FRONTEND_PORT=6608
-POSTGRES_PORT=5432
+# 宿主机 5432 通常被本机 Homebrew PostgreSQL 占用，开发栈发布在 5433
+POSTGRES_PORT=5433
 REDIS_PORT=6379
 
 # 日志文件
@@ -57,6 +58,16 @@ set_default_env() {
     if [ -z "${!name+x}" ]; then
         export "${name}=${value}"
     fi
+}
+
+# 函数：判断后端是否启用了交互式 API 文档（与 backend/main.py 的 DEBUG 判断一致）
+api_docs_enabled() {
+    # Docker 模式的 DEBUG 由开发 Compose 固定为 True；宿主覆盖仅作用于 local。
+    if [ "${START_MODE:-local}" = "docker" ]; then return 0; fi
+    case "$(printf '%s' "${DEBUG:-False}" | tr '[:upper:]' '[:lower:]')" in
+        1|true|yes|on) return 0 ;;
+        *) return 1 ;;
+    esac
 }
 
 is_docker_local_host_alias() {
@@ -157,10 +168,8 @@ load_env_file() {
 
 # 函数：校验环境文件里的必需变量
 #
-# .env.dev 不受版本控制（被 .gitignore 的 .env.* 规则忽略），
-# 从 .env.example 派生时漏抄几行不会有任何提示，只会在运行时以
-# 奇怪的方式失败：CORS_ORIGINS 解析报 SettingsError、DATABASE_URL 为空、
-# 密钥落到内置默认值。这里在加载后统一检查，缺项直接报错并指出怎么修。
+# .env.dev 不受版本控制，首次从 .env.dev.example 创建；加载个人覆盖后
+# 核对最终必需值，防止空值或缺项落回运行时默认凭据。
 check_required_env() {
     local env_file="$1"
     local missing=()
@@ -173,9 +182,8 @@ check_required_env() {
     local key
     for key in "${required[@]}"; do
         local val
-        val="$(grep -E "^${key}=" "${env_file}" 2>/dev/null | head -1 | cut -d= -f2-)"
-        # 空白或空串都算缺失：配置层用 all([...]) 判断完整性，
-        # 空密码/空密钥会被当成「未配置」而静默回退默认值。
+        val="${!key:-}"
+        # 校验最终生效值（包含 .env.local），不把原文件中的非空值当作覆盖后的保证。
         val="${val#"${val%%[![:space:]]*}"}"
         val="${val%"${val##*[![:space:]]}"}"
         if [ -z "${val}" ]; then
@@ -194,7 +202,7 @@ check_required_env() {
         echo "  空白值会导致：DATABASE_URL 拼装失败、CORS_ORIGINS 解析报错、"
         echo "  或密钥静默回退到内置默认值。"
         echo ""
-        echo "  修法：对照 .env.example 补齐。.env.dev 不在 git 里，"
+        echo "  修法：对照 .env.dev.example 补齐。.env.dev 不在 git 里，"
         echo "  所以这处缺口只能在本机手动修复。"
         exit 1
     fi
@@ -254,226 +262,121 @@ check_port() {
     return 0
 }
 
-# 函数：强制停止占用指定端口的进程
+# 监听者和换端口兜底共用归属判定；未知来源不发送信号。
+dev_processes() {
+    python3 -I -B "${PROJECT_ROOT}/scripts/dev-processes.py" --root "${PROJECT_ROOT}" "$@"
+}
+
 force_stop_port() {
-    local port=$1
-    local service=$2
-    
-    if ! lsof -Pi :${port} -sTCP:LISTEN -t >/dev/null 2>&1; then
-        print_info "${service} 端口 ${port} 未被占用"
-        return 0
-    fi
-    
-    print_warning "强制停止占用 ${service} 端口 ${port} 的进程..."
-    
-    local attempt=1
-    local max_attempts=3
-    
-    while lsof -Pi :${port} -sTCP:LISTEN -t >/dev/null 2>&1; do
-        if [ ${attempt} -gt ${max_attempts} ]; then
-            break
-        fi
-        
-        local pids=$(lsof -Pi :${port} -sTCP:LISTEN -t 2>/dev/null | tr '\n' ' ')
-        for pid in $pids; do
-            if kill -0 $pid > /dev/null 2>&1; then
-                print_info "停止进程 PID: $pid"
-                kill -TERM $pid 2>/dev/null || true
-            fi
-        done
-        
-        sleep 1
-        
-        pids=$(lsof -Pi :${port} -sTCP:LISTEN -t 2>/dev/null | tr '\n' ' ')
-        for pid in $pids; do
-            if kill -0 $pid > /dev/null 2>&1; then
-                print_warning "进程 $pid 仍在运行，强制终止..."
-                kill -KILL $pid 2>/dev/null || true
-                sleep 1
-            fi
-        done
-        
-        ((attempt++))
-    done
-    
-    # 验证端口是否释放
-    sleep 2
-    if lsof -Pi :${port} -sTCP:LISTEN -t >/dev/null 2>&1; then
-        print_error "端口 ${port} 仍被占用，请手动检查"
+    local port="$1"
+    local service="$2"
+    if ! dev_processes stop --port "${port}"; then
+        print_error "${service} 的进程归属或退出状态无法确认，已停止后续启动"
         return 1
     fi
-    
-    print_success "端口 ${port} 已释放"
-    return 0
 }
 
 # 函数：停止已存在的本地进程
 stop_existing_processes() {
-    print_info "检查并停止已存在的本地进程..."
-
-    local ports_to_check=()
-    if [ "${START_MODE:-local}" = "docker" ]; then
-        local docker_web_port="${WEB_PORT:-8080}"
-        ports_to_check=("${docker_web_port}" 8081 5432 6379)
-    else
-        ports_to_check=(${BACKEND_PORT} ${FRONTEND_PORT})
-    fi
-    
-    for p in "${ports_to_check[@]}"; do
-        if lsof -Pi :${p} -sTCP:LISTEN -t >/dev/null 2>&1; then
-            print_warning "端口 ${p} 被占用，强制停止..."
-            if ! force_stop_port ${p} "端口 ${p}"; then
-                print_error "无法停止端口 ${p} 占用，请手动解决"
-                exit 1
+    print_info "检查本项目的本地开发进程..."
+    dev_processes stop || return 1
+    local p
+    if [ "${START_MODE:-local}" = "local" ]; then
+        for p in "${BACKEND_PORT}" "${FRONTEND_PORT}"; do
+            if lsof -Pi :"${p}" -sTCP:LISTEN -t >/dev/null 2>&1; then
+                print_error "端口 ${p} 仍有占用（未授权停止的进程已保留），启动中止"
+                return 1
             fi
-        fi
-    done
-    
-    # 同时检查并停止已知的进程名（双重保障）
-    # 停止后端进程
-    if pgrep -f "uvicorn.*main.*app" > /dev/null; then
-        print_warning "发现已存在的后端进程，正在停止..."
-        pkill -f "uvicorn.*main.*app"
-        sleep 2
+        done
     fi
-    
-    # 停止前端进程
-    if pgrep -f "react-scripts.*start" > /dev/null; then
-        print_warning "发现已存在的前端进程，正在停止..."
-        pkill -f "react-scripts.*start"
-        sleep 2
-    fi
-
-    # 停止 Celery worker（本地模式）
-    if pgrep -f "celery.*app\\.core\\.celery_app:celery_app" > /dev/null; then
-        print_warning "发现已存在的Celery Worker进程，正在停止..."
-        pkill -f "celery.*app\\.core\\.celery_app:celery_app"
-        sleep 2
-    fi
-    
-    for p in "${ports_to_check[@]}"; do
-        if lsof -Pi :${p} -sTCP:LISTEN -t >/dev/null 2>&1; then
-            print_error "端口 ${p} 仍被占用，请手动解决"
-            exit 1
-        fi
-    done
-    
-    print_success "本地进程清理完成，所有端口已释放"
+    print_success "已核准的本项目开发进程已停止"
 }
 
-# 函数：处理环境变量（修复.env文件中的shell变量语法）
+# 函数：加载并核对实际开发配置；检查通过之前不创建数据目录。
 setup_environment() {
-    print_info "设置环境变量..."
-    
-    # 开发环境优先加载 .env.dev
-    if [ -f "${PROJECT_ROOT}/.env.dev" ]; then
-        load_env_file "${PROJECT_ROOT}/.env.dev"
-        check_required_env "${PROJECT_ROOT}/.env.dev"
-    elif [ -f "${PROJECT_ROOT}/.env" ]; then
-        print_warning "未找到 .env.dev，使用 .env (生产配置?) 作为回退"
-        load_env_file "${PROJECT_ROOT}/.env"
+    print_info "设置开发环境变量..."
+    if [ ! -f "${PROJECT_ROOT}/.env.dev" ]; then
+        print_error "缺少 .env.dev；请从 .env.dev.example 创建并填写独立开发凭据，禁止回退生产 .env"
+        return 1
     fi
-
+    load_env_file "${PROJECT_ROOT}/.env.dev"
     if [ -f "${PROJECT_ROOT}/.env.local" ]; then
         load_env_file "${PROJECT_ROOT}/.env.local"
     fi
+    check_required_env "${PROJECT_ROOT}/.env.dev + .env.local"
 
-    if [ "${START_MODE:-local}" = "local" ]; then
-        # 本地开发：确保 PDF 存储目录指向宿主机可访问路径
-        set_default_env TYPST_PDF_STORAGE_DIR "${PROJECT_ROOT}/data/typst_pdfs"
-        mkdir -p "${TYPST_PDF_STORAGE_DIR}"
-        if is_docker_local_host_alias "${POSTGRES_HOST:-}"; then
-            export POSTGRES_HOST="localhost"
-        fi
-        if is_docker_local_host_alias "${REDIS_HOST:-}"; then
-            export REDIS_HOST="localhost"
-        fi
-    fi
-
-    set_default_env POSTGRES_HOST "localhost"
-    set_default_env POSTGRES_PORT "5432"
-    set_default_env POSTGRES_USER "admin"
-    set_default_env POSTGRES_DB "wangsh_db"
-    set_default_env POSTGRES_PASSWORD "dev_postgres_password"
-    set_default_env REDIS_HOST "localhost"
+    set_default_env POSTGRES_HOST "127.0.0.1"
+    set_default_env POSTGRES_PORT "5433"
+    set_default_env REDIS_HOST "127.0.0.1"
     set_default_env REDIS_PORT "6379"
     set_default_env DEPLOYMENT_ENV "development"
     set_default_env DATABASE_DRIVER "asyncpg"
+    set_default_env REACT_APP_ENV "development"
+    export POSTGRES_HOST POSTGRES_PORT POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB DATABASE_DRIVER
+    export REDIS_HOST REDIS_PORT
+    if [ "${DEPLOYMENT_ENV}" != "development" ] || [ "${REACT_APP_ENV}" != "development" ]; then
+        print_error "开发入口要求 DEPLOYMENT_ENV/REACT_APP_ENV=development，请核对开发配置"
+        return 1
+    fi
 
     if [ "${START_MODE:-local}" = "local" ]; then
-        export DATABASE_URL="postgresql+${DATABASE_DRIVER}://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}"
+        if is_docker_local_host_alias "${POSTGRES_HOST:-}"; then export POSTGRES_HOST="127.0.0.1"; fi
+        if is_docker_local_host_alias "${REDIS_HOST:-}"; then export REDIS_HOST="127.0.0.1"; fi
+        set_default_env UPLOAD_FOLDER "${PROJECT_ROOT}/data/dev/uploads"
+        set_default_env TYPST_PDF_STORAGE_DIR "${PROJECT_ROOT}/data/dev/typst_pdfs"
+        if [ "${UPLOAD_FOLDER}" != "${PROJECT_ROOT}/data/dev/uploads" ]; then
+            print_warning "显式 UPLOAD_FOLDER 已保留；它可能与 Docker 开发挂载不同，切换模式前须核对文件来源，本入口不搬迁数据"
+        fi
+        if [ -z "${UPLOAD_FOLDER//[[:space:]]/}" ] || [ -z "${TYPST_PDF_STORAGE_DIR//[[:space:]]/}" ]; then
+            print_error "本地上传/PDF 目录不能显式设为空"
+            return 1
+        fi
+        # 特殊字符交给 URL 编码，不把口令原文输出到日志。
+        DATABASE_URL="$(python3 -I -c 'import os; from urllib.parse import quote; e=os.environ; print("postgresql+"+e["DATABASE_DRIVER"]+"://"+quote(e["POSTGRES_USER"],safe="")+":"+quote(e["POSTGRES_PASSWORD"],safe="")+"@"+e["POSTGRES_HOST"]+":"+e["POSTGRES_PORT"]+"/"+quote(e["POSTGRES_DB"],safe=""))')" || return 1
+        export DATABASE_URL
         export REDIS_URL="redis://${REDIS_HOST}:${REDIS_PORT}/0"
         export REDIS_CACHE_URL="redis://${REDIS_HOST}:${REDIS_PORT}/1"
-        export CELERY_BROKER_URL="${REDIS_URL}"
-        export CELERY_RESULT_BACKEND="${REDIS_URL}"
-    else
-        if [ -z "${DATABASE_URL+x}" ]; then
-            export DATABASE_URL="postgresql+${DATABASE_DRIVER}://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}"
-        fi
-        if [ -z "${REDIS_URL+x}" ]; then
-            export REDIS_URL="redis://${REDIS_HOST}:${REDIS_PORT}/0"
-        fi
-        if [ -z "${REDIS_CACHE_URL+x}" ]; then
-            export REDIS_CACHE_URL="redis://${REDIS_HOST}:${REDIS_PORT}/1"
-        fi
+        export CELERY_BROKER_URL="${REDIS_URL}" CELERY_RESULT_BACKEND="${REDIS_URL}"
     fi
-    
-    # 后端配置
+
     set_default_env BACKEND_HOST "0.0.0.0"
     set_default_env BACKEND_PORT "8000"
     set_default_env BACKEND_RELOAD "True"
     set_default_env DEBUG "True"
     set_default_env LOG_LEVEL "INFO"
-    set_default_env SECRET_KEY "dev_secret_key_only_for_local"
-    set_default_env SUPER_ADMIN_USERNAME "admin"
-    set_default_env SUPER_ADMIN_PASSWORD "dev_admin_password"
-    
-    # 前端配置
     set_default_env FRONTEND_PORT "6608"
     set_default_env PORT "${FRONTEND_PORT}"
     if [ "${START_MODE:-local}" = "docker" ]; then
         set_default_env DEV_PROXY_TARGET "http://backend:8000"
-        set_default_env REACT_APP_API_URL "/api/v1"
     else
-        set_default_env DEV_PROXY_TARGET "http://localhost:${BACKEND_PORT:-8000}"
-        set_default_env REACT_APP_API_URL "/api/v1"
+        set_default_env DEV_PROXY_TARGET "http://localhost:${BACKEND_PORT}"
     fi
-    set_default_env REACT_APP_ENV "development"
-    
-    print_success "环境变量设置完成"
+    set_default_env REACT_APP_API_URL "/api/v1"
+
+    if ! ( cd "${PROJECT_ROOT}" && node scripts/check-env-consistency.mjs --startup "${START_MODE:-local}" ); then
+        print_error "生效配置检查未通过，启动中止"
+        return 1
+    fi
+    if [ "${START_MODE:-local}" = "local" ]; then
+        mkdir -p "${UPLOAD_FOLDER}" "${TYPST_PDF_STORAGE_DIR}"
+    fi
+    print_success "开发配置检查完成"
 }
 
-stop_existing_docker_containers() {
-    local names=(
-        "wangsh-caddy"
-        "wangsh-backend"
-        "wangsh-frontend"
-        "wangsh-postgres"
-        "wangsh-redis"
-        "wangsh-celery-worker"
-        "wangsh-adminer"
-        "wangsh-typst-worker"
-        "wangsh-pythonlab-worker"
-        "wangsh-pythonlab-sandbox"
-    )
-
-    local any_running=0
-    for n in "${names[@]}"; do
-        if docker ps -a --format "{{.Names}}" | grep -qx "${n}"; then
-            any_running=1
-            break
-        fi
-    done
-
-    if [ "${any_running}" -eq 0 ]; then
-        return 0
+dev_compose() {
+    local -a environment_files=(--env-file "${PROJECT_ROOT}/.env.dev")
+    if [ -f "${PROJECT_ROOT}/.env.local" ]; then
+        environment_files+=(--env-file "${PROJECT_ROOT}/.env.local")
     fi
+    # 文件/项目选择与核验一致，不继承另一终端留下的 Compose 选择器。
+    env -u COMPOSE_FILE -u COMPOSE_PROJECT_NAME -u COMPOSE_ENV_FILES -u COMPOSE_PROFILES \
+        -u COMPOSE_PATH_SEPARATOR -u COMPOSE_PROJECT_DIRECTORY \
+        docker compose "${environment_files[@]}" -f "${PROJECT_ROOT}/docker-compose.dev.yml" "$@"
+}
 
-    print_warning "发现已存在的Docker容器，正在停止..."
-    for n in "${names[@]}"; do
-        docker rm -f "${n}" > /dev/null 2>&1 || true
-    done
-    sleep 2
+check_development_containers() {
+    # 只检查归属，不按固定名称 rm；重建由开发 Compose 自己管理。
+    node "${PROJECT_ROOT}/scripts/dev-containers.mjs" --root "${PROJECT_ROOT}" check
 }
 
 # 函数：启动Docker基础设施
@@ -491,12 +394,7 @@ start_docker_infrastructure() {
     if ! docker ps --format "{{.Names}}" | grep -qx "wangsh-postgres"; then
         print_info "启动PostgreSQL容器..."
         cd "${PROJECT_ROOT}"
-        # 使用 .env.dev 如果存在
-        if [ -f ".env.dev" ]; then
-            docker compose --env-file .env.dev -f docker-compose.dev.yml up -d postgres
-        else
-            docker compose -f docker-compose.dev.yml up -d postgres
-        fi
+        dev_compose up -d postgres
         
         # 等待数据库就绪
         print_info "等待PostgreSQL就绪..."
@@ -541,11 +439,7 @@ start_docker_infrastructure() {
     if ! docker ps --format "{{.Names}}" | grep -qx "wangsh-redis"; then
         print_info "启动Redis容器..."
         cd "${PROJECT_ROOT}"
-        if [ -f ".env.dev" ]; then
-            docker compose --env-file .env.dev -f docker-compose.dev.yml up -d redis
-        else
-            docker compose -f docker-compose.dev.yml up -d redis
-        fi
+        dev_compose up -d redis
         
         # 等待Redis就绪
         print_info "等待Redis就绪..."
@@ -559,11 +453,7 @@ start_docker_infrastructure() {
     if ! docker ps --format "{{.Names}}" | grep -qx "wangsh-adminer"; then
         print_info "启动Adminer数据库管理界面..."
         cd "${PROJECT_ROOT}"
-        if [ -f ".env.dev" ]; then
-            docker compose --env-file .env.dev -f docker-compose.dev.yml up -d adminer
-        else
-            docker compose -f docker-compose.dev.yml up -d adminer
-        fi
+        dev_compose up -d adminer
         sleep 2
         print_success "Adminer已启动，访问: http://localhost:8081"
     else
@@ -574,11 +464,7 @@ start_docker_infrastructure() {
         if ! docker ps --format "{{.Names}}" | grep -qx "wangsh-typst-worker"; then
             print_info "启动Typst Worker容器..."
             cd "${PROJECT_ROOT}"
-            if [ -f ".env.dev" ]; then
-                docker compose --env-file .env.dev -f docker-compose.dev.yml up -d typst-worker
-            else
-                docker compose -f docker-compose.dev.yml up -d typst-worker
-            fi
+            dev_compose up -d typst-worker
             print_success "Typst Worker已启动"
         else
             print_info "Typst Worker容器已在运行"
@@ -602,11 +488,7 @@ start_docker_infrastructure() {
             fi
             print_info "启动PythonLab Worker容器..."
             cd "${PROJECT_ROOT}"
-            if [ -f ".env.dev" ]; then
-                docker compose --env-file .env.dev -f docker-compose.dev.yml up -d pythonlab-worker
-            else
-                docker compose -f docker-compose.dev.yml up -d pythonlab-worker
-            fi
+            dev_compose up -d pythonlab-worker
             print_success "PythonLab Worker已启动"
         else
             print_info "PythonLab Worker容器已在运行"
@@ -621,11 +503,7 @@ start_docker_infrastructure() {
 start_docker_stack() {
     print_info "启动Docker开发环境服务栈..."
     cd "${PROJECT_ROOT}"
-    if [ -f ".env.dev" ]; then
-        docker compose --env-file .env.dev -f docker-compose.dev.yml up -d postgres redis adminer backend typst-worker pythonlab-worker frontend
-    else
-        docker compose -f docker-compose.dev.yml up -d postgres redis adminer backend typst-worker pythonlab-worker frontend
-    fi
+    dev_compose up -d postgres redis adminer backend typst-worker pythonlab-worker frontend
 
     print_info "等待前端服务就绪..."
     local max_attempts=60
@@ -634,7 +512,7 @@ start_docker_stack() {
     while ! curl -fsS "http://localhost:${frontend_port}" > /dev/null 2>&1; do
         if [ ${attempt} -ge ${max_attempts} ]; then
             print_error "Docker服务栈启动超时（前端未就绪）"
-            docker compose -f docker-compose.dev.yml ps
+            dev_compose ps
             exit 1
         fi
         print_info "等待入口服务... (${attempt}/${max_attempts})"
@@ -655,6 +533,12 @@ start_local_backend() {
             print_error "无法释放后端端口 ${BACKEND_PORT}，启动失败"
             return 1
         fi
+        # 残留的是非 Python 占用（如 Docker Desktop 的端口代理）。
+        # 本地后端会绑定失败，真正原因在日志里，不在这里武断退出。
+        if lsof -Pi :${BACKEND_PORT} -sTCP:LISTEN -t >/dev/null 2>&1; then
+            print_warning "端口 ${BACKEND_PORT} 仍被非 Python 进程占用，跳过本地后端启动"
+            return 1
+        fi
     fi
     
     # 检查后端目录
@@ -667,19 +551,23 @@ start_local_backend() {
     cd "${BACKEND_DIR}"
     print_info "后端日志: ${BACKEND_LOG}"
     
+    # API 与 worker 共用同一解释器，不依赖用户预先激活虚拟环境。
+    local PYTHON_BIN
+    PYTHON_BIN="$(select_backend_python)"
     # 检查Python依赖
     if [ ! -f "${BACKEND_DIR}/requirements.txt" ]; then
         print_warning "未找到 requirements.txt，跳过依赖检查"
     else
         print_info "检查Python依赖..."
-        python3 -m pip install -r requirements.txt --quiet
+        # 依赖已在 backend/venv 准备好；这里只做探测，避免往系统 Python 装包
+        "${PYTHON_BIN}" -c "import uvicorn" 2>/dev/null || { print_error "后端解释器缺少 uvicorn，请先安装项目依赖"; return 1; }
     fi
     
     # 启动后端服务（使用正确的环境变量）
     BACKEND_PID="$(spawn_detached_process \
         "${BACKEND_DIR}" \
         "${BACKEND_LOG}" \
-        python3 -m uvicorn main:app \
+        "${PYTHON_BIN}" -m uvicorn main:app \
         --host 0.0.0.0 \
         --port "${BACKEND_PORT}" \
         --reload)"
@@ -701,8 +589,8 @@ start_local_backend() {
         ((attempt++))
     done
     
-    # 验证端口确实被新进程占用
-    if kill -0 "${BACKEND_PID}" > /dev/null 2>&1 && pgrep -f "uvicorn main:app" > /dev/null 2>&1; then
+    # 健康检查已确认端点可用；只核对刚启动的 PID 仍存活，避免用宽泛进程名冒充归属。
+    if kill -0 "${BACKEND_PID}" > /dev/null 2>&1; then
         print_success "本地后端服务启动成功 (PID: ${BACKEND_PID})"
     else
         print_error "未检测到本地 uvicorn 进程，后端启动状态异常，请查看日志: ${BACKEND_LOG}"
@@ -710,7 +598,19 @@ start_local_backend() {
         return 1
     fi
     
-    print_info "API文档: http://localhost:${BACKEND_PORT}/docs"
+    if api_docs_enabled; then
+        print_info "API文档: http://localhost:${BACKEND_PORT}/docs"
+    else
+        print_info "API文档已关闭（DEBUG=False）；如需查看，在后端进程的 DEBUG=True 下启动"
+    fi
+}
+
+select_backend_python() {
+    if [ -x "${BACKEND_DIR}/venv/bin/python" ]; then
+        printf '%s' "${BACKEND_DIR}/venv/bin/python"
+    else
+        command -v python3
+    fi
 }
 
 # 函数：启动本地 Celery Worker（用于 PythonLab debug 会话等异步任务）
@@ -726,10 +626,12 @@ start_local_celery_worker() {
     cd "${BACKEND_DIR}"
     print_info "Celery日志: ${CELERY_LOG}"
     
+    local PYTHON_BIN
+    PYTHON_BIN="$(select_backend_python)"
     CELERY_PID="$(spawn_detached_process \
         "${BACKEND_DIR}" \
         "${CELERY_LOG}" \
-        python3 -m celery -A app.core.celery_app:celery_app worker \
+        "${PYTHON_BIN}" -m celery -A app.core.celery_app:celery_app worker \
         -l INFO \
         -c 1 \
         -Q celery,typst \
@@ -875,7 +777,9 @@ show_service_status() {
             echo -e "  ${RED}❌ PythonLab:    未运行${NC}"
         fi
     else
-        if pgrep -f "celery.*app\\.core\\.celery_app:celery_app" > /dev/null; then
+        local worker_pids
+        worker_pids="$(dev_processes list --kind worker 2>/dev/null)" || worker_pids=""
+        if [ -n "${worker_pids}" ]; then
             echo -e "  ${GREEN}✅ Celery Worker: 本地运行中${NC}"
         else
             echo -e "  ${YELLOW}⚠️  Celery Worker: 未运行（部分异步功能可能不可用）${NC}"
@@ -885,10 +789,14 @@ show_service_status() {
     
     echo ""
     echo "🔧 开发工具："
-    if [ "${START_MODE:-local}" = "docker" ]; then
-        echo "  📚 API文档:      http://localhost:${WEB_PORT:-8080}/docs"
+    if api_docs_enabled; then
+        if [ "${START_MODE:-local}" = "docker" ]; then
+            echo "  📚 API文档:      http://localhost:${WEB_PORT:-8080}/docs"
+        else
+            echo "  📚 API文档:      http://localhost:${BACKEND_PORT}/docs"
+        fi
     else
-        echo "  📚 API文档:      http://localhost:${BACKEND_PORT}/docs"
+        echo "  📚 API文档:      已关闭（DEBUG=False，/docs 返回 404）"
     fi
     echo "  🗄️  数据库管理:   Adminer: http://localhost:8081 | PSQL: localhost:${POSTGRES_PORT}"
     echo "  🔍 前端热重载:   修改代码后自动刷新"
@@ -946,9 +854,8 @@ main() {
     # 设置环境变量
     setup_environment
 
-    if [ "${START_MODE}" = "docker" ]; then
-        stop_existing_docker_containers
-    fi
+    # 两种模式都必须先核实已有容器来源，不能借同名生产库继续启动。
+    check_development_containers
     stop_existing_processes
     
     # 启动Docker基础设施
@@ -975,9 +882,10 @@ main() {
     if command -v open > /dev/null; then
         if [ "${START_MODE}" = "docker" ]; then
             open "http://localhost:6608"
-            open "http://localhost:${BACKEND_PORT}/docs"
         else
             open "http://localhost:${FRONTEND_PORT}"
+        fi
+        if api_docs_enabled; then
             open "http://localhost:${BACKEND_PORT}/docs"
         fi
     fi

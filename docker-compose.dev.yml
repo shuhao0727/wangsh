@@ -23,7 +23,7 @@ services:
     command: [ "postgres", "-c", "timezone=${TIMEZONE:-Asia/Shanghai}" ]
     volumes:
       # 数据持久化到本地 data 目录
-      - ./data/postgres:/var/lib/postgresql/data
+      - ./data/dev/postgres:/var/lib/postgresql/data
     networks:
       - wangsh-network
     healthcheck:
@@ -40,7 +40,7 @@ services:
     ports:
       - "6379:6379"
     volumes:
-      - ./data/redis:/data
+      - ./data/dev/redis:/data
     command: redis-server --appendonly yes
     networks:
       - wangsh-network
@@ -126,13 +126,13 @@ services:
       # 代码热重载：将本地代码挂载到容器
       - ./backend:/app
       # 上传文件持久化 - 使用容器内的绝对路径
-      - ./data/uploads:/app/uploads
+      - ./data/dev/uploads:/app/uploads
       # Typst PDF 存储目录（与 worker 共享）
-      - ./data/typst_pdfs:/app/data/typst_pdfs
+      - ./data/dev/typst_pdfs:/app/data/typst_pdfs
       # ⚠️ 安全提醒：docker.sock 赋予容器 root 级别的主机控制权，仅因 PythonLab 沙箱需要动态创建容器
       # 缓解措施见 docker-compose.yml 中 backend 服务的注释
       - /var/run/docker.sock:/var/run/docker.sock
-      - ./data/pythonlab/workspaces:/tmp/pythonlab/workspaces
+      - ./data/dev/pythonlab/workspaces:/tmp/pythonlab/workspaces
     depends_on:
       postgres:
         condition: service_healthy
@@ -191,7 +191,7 @@ services:
       - TYPST_STORE_PDF_IN_DB=false
     volumes:
       - ./backend:/app
-      - ./data/typst_pdfs:/app/data/typst_pdfs
+      - ./data/dev/typst_pdfs:/app/data/typst_pdfs
     depends_on:
       redis:
         condition: service_healthy
@@ -240,14 +240,14 @@ services:
       - PYTHONLAB_ORPHAN_CLEANUP_INTERVAL_SECONDS=${PYTHONLAB_ORPHAN_CLEANUP_INTERVAL_SECONDS:-300}
       - PYTHONLAB_HEARTBEAT_TIMEOUT_SECONDS=${PYTHONLAB_HEARTBEAT_TIMEOUT_SECONDS:-180}
       - PYTHONLAB_IDLE_TIMEOUT_SECONDS=${PYTHONLAB_IDLE_TIMEOUT_SECONDS:-3600}
-      - HOST_WORKSPACE_ROOT=${PWD}/data/pythonlab/workspaces
+      - HOST_WORKSPACE_ROOT=${PWD}/data/dev/pythonlab/workspaces
       - PYTHONLAB_DEFAULT_MEMORY_MB=128
     volumes:
       - ./backend:/app
       # ⚠️ 安全提醒：docker.sock 赋予容器 root 级别的主机控制权，仅因 PythonLab 沙箱需要动态创建容器
       # 缓解措施见 docker-compose.yml 中 backend 服务的注释
       - /var/run/docker.sock:/var/run/docker.sock
-      - ./data/pythonlab/workspaces:/tmp/pythonlab/workspaces
+      - ./data/dev/pythonlab/workspaces:/tmp/pythonlab/workspaces
     ulimits:
       nproc: 65535
       nofile:

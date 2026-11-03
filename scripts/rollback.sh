@@ -5,9 +5,19 @@
 set -euo pipefail
 
 cmd="${1:-}"
-env_file="${ENV_FILE:-.env}"
-compose_file="${COMPOSE_FILE:-docker-compose.yml}"
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+invocation_dir="$(pwd -P)"
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+absolute_input_path() {
+  case "$1" in
+    /*) printf '%s' "$1" ;;
+    *) printf '%s/%s' "${invocation_dir}" "$1" ;;
+  esac
+}
+env_file="$(absolute_input_path "${ENV_FILE:-${repo_root}/.env}")"
+compose_file="$(absolute_input_path "${COMPOSE_FILE:-${repo_root}/docker-compose.yml}")"
+compose_dir="$(cd "$(dirname "${compose_file}")" && pwd -P)"
+export ENV_FILE="${env_file}" COMPOSE_FILE="${compose_file}"
+export BACKUP_DIR="$(absolute_input_path "${BACKUP_DIR:-${repo_root}/backups}")"
 application_write_services=(backend typst-worker pythonlab-worker)
 original_running_write_services=()
 rollback_image_tag=""   # --image-tag <tag> 指定执行 downgrade 的旧版本镜像 tag
@@ -15,11 +25,12 @@ backend_image=""        # 解析后的 backend 镜像（旧版本）
 revision_target=""      # 实际回退到的 Alembic revision（相对值已解析为具体 revision）
 
 compose() {
-  docker compose --env-file "$env_file" -f "$compose_file" "$@"
+  PWD="${compose_dir}" docker compose --env-file "$env_file" -f "$compose_file" "$@"
 }
 
 check_database_container() {
-  if ! compose ps postgres 2>/dev/null | grep -q "Up"; then
+  # 用 --status running 而非 grep "Up"：后者会被容器名或端口里的 "Up" 字样误判。
+  if [ -z "$(compose ps --status running --format '{{.Service}}' postgres 2>/dev/null)" ]; then
     echo "Error: postgres container is not running" >&2
     exit 1
   fi

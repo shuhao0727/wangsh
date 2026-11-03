@@ -31,12 +31,20 @@ jobs:
         run: node --test scripts/workflow-contracts.test.mjs
       - name: env consistency contracts
         # .env / .env.dev 本身是 gitignored，CI 里只跑契约测试（用临时 fixture），
-        # 真正的两栈比对由 check-env-consistency.mjs 在本地/start-dev.sh 执行。
+        # 真正的两栈比对由 start-dev.sh 启动前调用 check-env-consistency.mjs。
         run: node --test scripts/env-consistency.test.mjs
       - name: local cleanup and catalog contracts
         run: |
           node --test scripts/clean-local-artifacts.test.mjs scripts/sync-ai-partner-catalog.test.mjs scripts/prepare-production-simulation.test.mjs
           node scripts/sync-ai-partner-catalog.mjs --check
+      - name: start/stop script process contracts
+        run: |
+          node --test scripts/start-dev-processes.test.mjs scripts/dev-config.test.mjs scripts/deploy-paths.test.mjs scripts/dev-containers.test.mjs scripts/stop-dev-compose.test.mjs
+          python3 -I -B scripts/test_dev_processes.py
+      - name: isolated endpoint and gateway contracts
+        run: |
+          env -i PATH=/usr/bin:/bin PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -I -B -S backend/tests/ai_agents/test_agent_endpoint_warning.py
+          python3 -I -B gateway/tests/test_caddy_contract.py
       - name: shell syntax
         run: |
           for script in \
@@ -47,7 +55,8 @@ jobs:
             scripts/prod-smoke/run.sh \
             start-dev.sh \
             stop-dev.sh \
-            scripts/clean-local-artifacts.sh
+            scripts/clean-local-artifacts.sh \
+            gateway/tests/test_caddy_config.sh
           do
             bash -n "$script"
           done

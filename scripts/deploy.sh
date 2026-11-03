@@ -2,11 +2,32 @@
 set -euo pipefail
 
 cmd="${1:-}"
-env_file="${ENV_FILE:-.env}"
+invocation_dir="$(pwd -P)"
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 
-compose_file="${COMPOSE_FILE:-docker-compose.yml}"
-release_set_default="${RELEASE_SET_FILE:-release-set.txt}"
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# 显式相对路径属于调用目录；默认文件和脚本内部资源属于仓库。
+# 在切目录前固定所有输入，子入口继承同一目标，不回退到仓库同名文件。
+absolute_input_path() {
+  case "$1" in
+    /*) printf '%s' "$1" ;;
+    *) printf '%s/%s' "${invocation_dir}" "$1" ;;
+  esac
+}
+env_file="$(absolute_input_path "${ENV_FILE:-${repo_root}/.env}")"
+compose_file="$(absolute_input_path "${COMPOSE_FILE:-${repo_root}/docker-compose.yml}")"
+compose_dir="$(cd "$(dirname "${compose_file}")" && pwd -P)"
+release_set_default="$(absolute_input_path "${RELEASE_SET_FILE:-${repo_root}/release-set.txt}")"
+export ENV_FILE="${env_file}" COMPOSE_FILE="${compose_file}"
+export RELEASE_SET_FILE="${release_set_default}"
+export BACKUP_DIR="$(absolute_input_path "${BACKUP_DIR:-${repo_root}/backups}")"
+case "${cmd}" in
+  deploy|deploy-amd64|pull-up|pull-up-amd64|up-no-build|verify-release-set)
+    if [ "$#" -ge 2 ]; then
+      set -- "$1" "$(absolute_input_path "$2")" "${@:3}"
+    fi
+    ;;
+esac
+cd "${repo_root}"
 
 release_image_names=(
   wangsh-backend
@@ -28,7 +49,11 @@ release_services=(
 
 require_env_file() {
   if [ ! -f "${env_file}" ]; then
-    echo "${env_file} not found. run: cp .env.example ${env_file}" >&2
+    local template=".env.example"
+    case "${env_file##*/}" in
+      .env.dev) template=".env.dev.example" ;;
+    esac
+    echo "${env_file} not found. run: cp ${template} ${env_file}" >&2
     exit 2
   fi
 }
@@ -56,7 +81,7 @@ raw_env_value() {
 }
 
 resolved_env_value() {
-  docker compose --env-file "${env_file}" -f "${compose_file}" config --environment 2>/dev/null \
+  PWD="${compose_dir}" docker compose --env-file "${env_file}" -f "${compose_file}" config --environment 2>/dev/null \
     | awk -F= -v key="$1" '$1 == key { sub(/^[^=]*=/, ""); print; exit }'
 }
 
@@ -89,7 +114,7 @@ compose() {
     react_version="${app_version}"
   fi
 
-  APP_VERSION="${app_version}" IMAGE_TAG="${tag}" VERSION="${version}" REACT_APP_VERSION="${react_version}" \
+  APP_VERSION="${app_version}" IMAGE_TAG="${tag}" VERSION="${version}" REACT_APP_VERSION="${react_version}" PWD="${compose_dir}" \
     docker compose --env-file "${env_file}" -f "${compose_file}" "$@"
 }
 
@@ -467,7 +492,7 @@ case "${cmd}" in
     ;;
   deploy-amd64)
     require_env_file
-    DOCKER_DEFAULT_PLATFORM=linux/amd64 ENV_FILE="${env_file}" COMPOSE_FILE="${compose_file}" bash scripts/deploy.sh deploy
+    DOCKER_DEFAULT_PLATFORM=linux/amd64 ENV_FILE="${env_file}" COMPOSE_FILE="${compose_file}" bash scripts/deploy.sh deploy "${@:2}"
     ;;
   deploy-local)
     require_env_file
@@ -493,7 +518,7 @@ case "${cmd}" in
     ;;
   pull-up-amd64)
     require_env_file
-    DOCKER_DEFAULT_PLATFORM=linux/amd64 ENV_FILE="${env_file}" COMPOSE_FILE="${compose_file}" bash scripts/deploy.sh pull-up
+    DOCKER_DEFAULT_PLATFORM=linux/amd64 ENV_FILE="${env_file}" COMPOSE_FILE="${compose_file}" bash scripts/deploy.sh pull-up "${@:2}"
     ;;
   simulate-amd64)
     DOCKER_DEFAULT_PLATFORM=linux/amd64 ENV_FILE="${env_file}" COMPOSE_FILE="${compose_file}" bash scripts/deploy.sh simulate
@@ -854,7 +879,8 @@ EOF
 
     # The simulation database is disposable and has no legacy writers. Alembic deliberately
     # creates AUTH with ready=false, so enroll the synthetic database before login-based smoke.
-    # Production must still use the explicit auth/cutover.py stop-drain-freeze workflow.
+    # Production must still use the explicit stop-drain-freeze cutover workflow in
+    # backend/app/api/endpoints/auth/cutover.py.
     run_sim_compose exec -T backend python - <<'PY'
 import asyncio
 
@@ -963,7 +989,7 @@ PY
             echo "restore-db accepts one dump path" >&2
             exit 2
           fi
-          dump_path="${arg}"
+          dump_path="$(absolute_input_path "${arg}")"
           ;;
       esac
     done

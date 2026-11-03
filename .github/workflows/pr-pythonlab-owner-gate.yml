@@ -4,7 +4,6 @@ on:
   pull_request:
     paths:
       - "backend/app/api/pythonlab/**"
-      - "backend/app/api/endpoints/debug/**"
       - "backend/app/api/v2/pythonlab/**"
       - "backend/app/tasks/pythonlab.py"
       - "backend/app/celery_app.py"
@@ -32,7 +31,6 @@ on:
       - "scripts/prod-smoke/**"
       - "docker-compose.yml"
       - "docker-compose.dev.yml"
-      - ".github/workflows/pythonlab-owner-concurrency.yml"
       - ".github/workflows/pythonlab-pr-runtime.yml"
       - ".github/workflows/pr-pythonlab-owner-gate.yml"
   workflow_dispatch:

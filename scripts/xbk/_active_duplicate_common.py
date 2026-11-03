@@ -454,7 +454,7 @@ def enforce_target_guard(
     print(f"[警告] 目标库不是回环测试库：{target.label}")
     print(f"[警告] 即将执行：{action_label}")
     print("[警告] 生产操作必须已完成只读预检、可恢复备份、停写与复核；")
-    print("[警告] 要求见 docs/docker/deploy/DEPLOY.md。")
+    print("[警告] 要求见 docs/operations/DEPLOY.md。")
     print("!" * 68)
     if assume_yes:
         print("[警告] 已通过 --yes 跳过交互确认。")

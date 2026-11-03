@@ -1,128 +1,115 @@
 # 根层脚本说明
 
-> 历史脚本清理记录：`docs/scripts/ARCHIVE_INDEX.md`
-
-仓库根层 `scripts/` 只保留跨模块、运维级和统一入口级脚本。
+`scripts/` 放跨模块、运维和统一入口；模块脚本留在各自目录。
+历史清理记录见 [归档索引](../docs/archive/README.md)。先确认目标配置与授权，
+检查、发布、恢复、重置是不同操作，不要把下列入口当成一串连续命令。
 
 ## 当前结构
 
-- `prod-smoke/` - 生产环境全链路烟测入口；`log_redaction.py` 为纯脱敏模块，由 runner、日志过滤和命令执行 CLI 共用
-- `xbk/` - XBK 重建、导入样例、冒烟脚本
-- `deploy.sh` - 部署入口；生产模拟启动前隔离资源，失败时先采集脱敏服务日志再清理
-- `prepare-production-simulation.py` - 将已解析的 Compose 配置转为隔离模拟配置；移除固定容器名和外部网络，使用专属数据卷，拒绝未知挂载
-- `prepare-production-simulation.test.mjs` - 用临时 JSON/目录验证隔离配置、挂载拒绝与端口边界，不启动 Docker
-- `rollback.sh` - 回滚入口
-- `migrate-db.sh` - 数据库迁移
-- `health-check-detailed.sh` - 细粒度健康检查
-- `clean-local-artifacts.sh` - 本地临时产物与缓存清理（默认只预览，`--apply` 才删除）
-- `clean-local-artifacts.test.mjs` - 清理范围、跟踪文件、证据与符号链接保护的临时仓库回归
-- `sync-ai-partner-catalog.mjs` - 以服务端目录为唯一维护源，检查或生成前端运行副本
-- `sync-ai-partner-catalog.test.mjs` - 目录漂移、只读检查和无效 JSON 保护合同
-- `check-version-consistency.mjs` - CI 版本一致性检查（完整版本号与镜像标签统一使用 SemVer 校验，权威源为 `frontend/package.json`）
-- `check-env-consistency.mjs` - 两栈环境一致性只读比对（`.env` 与 `.env.dev` 共享密钥指纹，绝不打印明文；缺文件时降级跳过）
-- `env-consistency.test.mjs` - 环境一致性检查器的契约测试（CI 使用临时 fixture，不依赖本地 env）
-- `workflow-contracts.test.mjs` - GitHub Actions、发布和日志脱敏合同测试
-- `check-markdown-contracts.mjs` - Markdown 链接、生命周期、归档和派生数字检查
-- `markdown-contracts.test.mjs` - Markdown 合同与独立 workflow 回归测试
+| 入口 | 用途 |
+|---|---|
+| `deploy.sh` | 镜像构建/核验、部署、隔离模拟、备份恢复 |
+| `rollback.sh`、`migrate-db.sh` | 数据库回滚与迁移 |
+| `health-check-detailed.sh` | API 与必要容器健康检查 |
+| `prod-smoke/` | 全链路 smoke 与共享日志脱敏 |
+| `xbk/` | XBK 增量种子、导入样例与 smoke |
+| `prepare-production-simulation.py` | 将 Compose 配置转为独立卷/网络/回环端口的模拟配置，拒绝未知挂载 |
+| `clean-local-artifacts.sh` | 临时产物清理，默认预览 |
+| `sync-ai-partner-catalog.mjs` | 检查/生成 AI 伙伴前端目录副本 |
+| `check-version-consistency.mjs` | 以前端 package 版本为源核对完整 SemVer |
+| `check-env-consistency.mjs` / `compose-config.mjs` | 在内存解析 Compose canonical JSON，按服务核对 bind 与启动生效连接/密钥；未知目标不视为隔离，缺生产配置只做受限 dev-only 核验 |
+| `dev-containers.mjs` | 只读核对同名容器的 Compose 来源与 bind，拒绝生产/外树/未知来源，不执行删除 |
+| `dev-processes.py` | start/stop 共用的 UID/cwd/明确 CLI/进程身份守卫；按具体 PID 停止，不执行全局模式信号 |
+| `check-markdown-contracts.mjs` | 文档链接、生命周期、归档和派生数字 |
+| `*.test.mjs`、`test_dev_processes.py` | 临时合成配置和假 Docker/进程替身合同；不启停真实服务。后端与网关另有自含隔离专项入口 |
 
 ## 常用入口
 
+### 检查与隔离模拟
+
 ```bash
-# 隔离生产模拟中的全链路烟测（推荐）
-SIM_RUN_PROD_SMOKE=true SIM_CLEANUP=true bash scripts/deploy.sh simulate
-
-# 直接对已确认的专用环境运行状态型 smoke；生产目标必须显式授权
-PROD_SMOKE_ALLOW_LIVE=true ./scripts/prod-smoke/run.sh
-
-# PythonLab smoke 子脚本统一凭据（不要写入命令行参数）
-PROD_SMOKE_ALLOW_LIVE=true \
-PYTHONLAB_SMOKE_USERNAME=admin \
-PYTHONLAB_SMOKE_PASSWORD='从 secret 注入' \
-./scripts/prod-smoke/run.sh
-
-# 部署后健康检查；默认访问网关 6608，并要求 frontend、gateway、数据库、Redis 和两个 worker 健康
-./scripts/health-check-detailed.sh
-
-# 宿主依赖 Bash、Docker CLI、curl 和基础 Unix 工具，不依赖宿主 Python
-# HTTP 2xx 后由已运行的 backend 容器使用 Python 标准库校验 JSON；
-# 仅顶层对象包含唯一 status=healthy 时通过
-# 所有列出的必需容器都必须为 Docker Health=healthy，未定义 healthcheck 同样失败
-
-# 生产镜像构建、推送与部署
-bash scripts/deploy.sh build
-bash scripts/deploy.sh push
-bash scripts/deploy.sh verify-release-set release-set.txt
-# 只拉六个业务镜像，校验 digest，以 --pull never 启动并等待全部服务健康
-bash scripts/deploy.sh deploy
-
-# 迁移前只读检查 + Alembic 升级
-bash scripts/migrate-db.sh upgrade
-
-# 默认先记录并停止 backend、typst-worker、pythonlab-worker，建立数据库无写入窗口，
-# 再备份并用一次性 backend 容器回退一个 revision；停止或备份失败时只重启原先运行的
-# 写服务，恢复失败会明确报错且绝不 downgrade；--no-backup 是显式危险选项，会跳过备份；
-# 成功回滚后写服务保持停止，直到旧 release-set 部署并通过健康检查
-bash scripts/rollback.sh rollback -1
-
-# 恢复数据库必须显式确认目标库
-bash scripts/deploy.sh restore-db ./backups/your-backup.dump --yes
-
-# 通过已确认的 Compose postgres 服务备份；支持 full/schema/data
-bash scripts/deploy.sh backup-db full
-bash scripts/deploy.sh backup-db schema
-
-# 当前入口不包含自动轮转或独立恢复演练，要求见 DEPLOY.md。
-# restore-db 会写入配置选中的现有目标库，不是演练命令。
-
-# 使用当前 .env 版本镜像做本地生产模拟（端口 16608）
-bash scripts/deploy.sh simulate
-
-# 运行完整生产 smoke，并在成功或失败后清理隔离模拟栈
-SIM_RUN_PROD_SMOKE=true SIM_CLEANUP=true bash scripts/deploy.sh simulate
-
-# 验证远端 release-set，并确认本地镜像 RepoDigest 完全一致后启动，不拉取、不构建；
-# PostgreSQL/Redis 也不会被隐式拉取
-bash scripts/deploy.sh up-no-build
-
-# XBK 增量种子 + 样例导入 + 冒烟；默认不清空已有数据
-python scripts/xbk/run_all.py
-
-# 只有明确需要重建本地 XBK 数据时才清空
-python scripts/xbk/run_all.py --reset
-
-# Markdown 文档合同
+node scripts/check-version-consistency.mjs
+node scripts/check-markdown-contracts.mjs
 node --test scripts/markdown-contracts.test.mjs
+bash scripts/health-check-detailed.sh
+```
 
-# 预览本地临时产物与测试缓存占用（默认不删除任何文件）
-bash scripts/clean-local-artifacts.sh
+健康脚本默认访问网关 6608：API 要求 HTTP 2xx 且唯一顶层 `status=healthy`，
+frontend、gateway、数据库、Redis 和两个 worker 须有健康状态。宿主不需 Python，
+由 backend 容器解析 JSON；健康通过不证明代码版本和业务验收完成。
 
-# 清理白名单源码目录内的 Python/测试缓存及 backend/.coverage；
-# 只删除被 .gitignore 忽略且不含跟踪文件的路径，默认保留浏览器证据
-bash scripts/clean-local-artifacts.sh --apply
+```bash
+# 使用本地生产镜像，运行完整 smoke 后清理本次隔离栈
+SIM_RUN_PROD_SMOKE=true SIM_CLEANUP=true bash scripts/deploy.sh simulate
+```
 
-# 已保留验收证据后，显式纳入 .playwright-mcp、.playwright-cli 和 output/playwright
-bash scripts/clean-local-artifacts.sh --include-browser-artifacts
+只启动模拟可用 `bash scripts/deploy.sh simulate`，默认端口 16608、保留成功栈。
+模拟不读正式 release-set，不代替真实供应商或生产验收。
 
-# AI 伙伴目录：只编辑 backend/app/services/ai_partner_catalog.json，
-# 然后生成并提交 frontend/ai-partner/src/catalog.json；CI 拦截双端漂移
-node scripts/sync-ai-partner-catalog.mjs --write
+### 对已确认环境运行 smoke
+
+```bash
+PROD_SMOKE_ALLOW_LIVE=true ./scripts/prod-smoke/run.sh
+```
+
+该 smoke 会改变状态，目标和范围须获准；开关本身不代表授权。
+PythonLab 凭据经 secret 注入 `PYTHONLAB_SMOKE_USERNAME` / `PYTHONLAB_SMOKE_PASSWORD`，
+不用明文命令参数。小组分析可用 `ANALYSIS_AGENT_ID` 指定现有分析智能体；
+隔离环境使用供应商桩时须标明，不能据此宣称真实模型通过。
+
+### 发布入口
+
+| 命令 | 用途 |
+|---|---|
+| `bash scripts/deploy.sh build` | 本地生产构建 |
+| `bash scripts/deploy.sh verify-local-images` | 核对本地镜像与平台 |
+| `bash scripts/deploy.sh push` | 推送本地业务镜像；须有推送授权 |
+| `bash scripts/deploy.sh verify-release-set release-set.txt` | 校验清单、版本、Compose 与远端 digest |
+| `bash scripts/deploy.sh deploy` | 拉六个业务镜像，复核 RepoDigest，禁止隐式拉取启动并等待健康 |
+| `bash scripts/deploy.sh up-no-build` | 同时核对远端清单/本地 RepoDigest 后启动，不拉取或构建 |
+
+正式发布优先用 CI；手工 push 不自动产生 release-set。构建、推送和服务器部署分别
+按授权执行，完整步骤见 [部署指南](../docs/operations/DEPLOY.md)。
+
+### 数据操作
+
+| 命令 | 影响 |
+|---|---|
+| `bash scripts/migrate-db.sh current` / `history` | 查看迁移状态/历史 |
+| `bash scripts/migrate-db.sh upgrade <revision>` | 预检后升级已审核 revision |
+| `bash scripts/deploy.sh backup-db full` | 备份配置选中的 postgres；也支持 schema/data |
+| `bash scripts/deploy.sh restore-db <备份文件> --yes` | 写入已确认目标库，可能清理同名对象；不是演练 |
+| `bash scripts/rollback.sh rollback -1 --image-tag <旧版本>` | 停写、备份后用旧镜像回退；须核对目标 revision 与旧 release-set |
+| `python scripts/xbk/run_all.py` | 增量种子、样例导入与 smoke，仍会写数据 |
+| `python scripts/xbk/run_all.py --reset` | 清空并重建本地 XBK，仅在明确获准时使用 |
+
+rollback 停止/备份失败不执行 downgrade，只恢复原先运行的写服务；恢复失败单独报错。
+进入 downgrade 后写服务保持停止，待数据库核证及旧 release-set 部署验收；
+`--no-backup` 仅在明确获准跳过新备份时使用。备份轮转和隔离恢复演练没有自动入口。
+
+### 清理与目录同步
+
+```bash
+bash scripts/clean-local-artifacts.sh            # 只预览
+bash scripts/clean-local-artifacts.sh --apply    # 按已确认范围删除
 node scripts/sync-ai-partner-catalog.mjs --check
 ```
 
-需要验证小组对比分析时，可用 `ANALYSIS_AGENT_ID` 指定该环境内已配置的分析智能体，
-runner 会将此非敏感 ID 传给原烟测脚本，保留真实请求、落库和缓存断言。
-隔离环境可使用临时本地供应商桩；桩验证须单独注明，不能据此宣称真实模型能力通过。
+清理限源码白名单中已忽略、无跟踪文件的缓存及 `backend/.coverage`；不进入工作树、
+虚拟环境、业务数据、上传、依赖和构建目录，不跟随符号链接，始终保护 `.codex/`。
+默认保留浏览器证据；`--include-browser-artifacts` 可纳入预览，另加 `--apply` 才删除，
+先确认 `.playwright-mcp`、`.playwright-cli`、`output/playwright` 的证据已保留。
 
-清理脚本只扫描明确的后端源码和脚本目录，不进入工作树、虚拟环境、业务数据、
-上传目录、依赖或构建输出，也不跟随符号链接。`.codex/` 始终保留。
-AI 伙伴双端 JSON 都随源码提交，前后端 Docker 上下文独立构建，运行时不跨目录读取。
+AI 伙伴只编辑 `backend/app/services/ai_partner_catalog.json`，再运行
+`node scripts/sync-ai-partner-catalog.mjs --write` 生成 `frontend/ai-partner/src/catalog.json`。
+两份随同一次变更审查，提交另按授权；运行时后端不跨目录读取前端副本。
 
-`prod-smoke/log_redaction.py` 只处理传入的文本和配置，不加载环境文件或执行命令。
-`run.py` 保留既有脱敏函数入口，`redact.py` 与 `redact_exec.py` 直接复用纯模块；
-修改脱敏行为时运行 workflow contracts 和后端生产 smoke 合同测试，并保留流式输出、
-退出码、信号和已知敏感值的覆盖。CLI 可独立于 smoke 编排导入，是发布失败日志的公共依赖。
+## 维护边界
 
-生产模拟隔离、release-set、日志脱敏、证据权限和失败清理合同由
-[`docs/docker/deploy/DEPLOY.md`](../docs/docker/deploy/DEPLOY.md)与
-[`docs/docker/testing/README.md`](../docs/docker/testing/README.md)维护，本页不复制
-实现细节。
+`prod-smoke/log_redaction.py` 只处理传入文本/配置，不加载 env 或执行命令。
+runner 保留兼容入口，`redact.py` / `redact_exec.py` 直接复用纯模块，可独立于编排器导入。
+修改时运行 workflow 与后端 smoke 合同，覆盖流式输出、退出码、信号和敏感值脱敏。
+
+生产模拟的隔离、凭据/证据权限与失败清理由 [DEPLOY](../docs/operations/DEPLOY.md)
+维护；测试覆盖和结果归 [测试说明](../docs/testing/README.md)及 TEST_STATUS，
+本页只保留脚本入口。

@@ -13,7 +13,8 @@ compose() {
 }
 
 check_backend_container() {
-  if ! compose ps backend 2>/dev/null | grep -q "Up"; then
+  # 用 --status running 而非 grep "Up"：后者会被容器名或端口里的 "Up" 字样误判。
+  if [ -z "$(compose ps --status running --format '{{.Service}}' backend 2>/dev/null)" ]; then
     echo "Error: backend container is not running" >&2
     exit 1
   fi

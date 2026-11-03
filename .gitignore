@@ -9,11 +9,13 @@
 .env.*.local
 .env.*
 !.env.example
+!.env.dev.example
 
 # ==================== 数据目录 ====================
-# Docker数据持久化目录
-data/
-!data/.gitkeep  # 如果需要保留空目录，可以添加此文件
+# Docker 数据持久化目录。先排除内容再放行目录本身，
+# 否则 `data/` 一旦被排除，Git 无法再重新包含其中的 .gitkeep。
+data/*
+!data/.gitkeep
 
 # 备份/导出（不要提交到仓库）
 backups/
@@ -64,6 +66,7 @@ htmlcov/
 .cache
 nosetests.xml
 coverage.xml
+coverage.json
 *.cover
 *.py.cover
 .hypothesis/

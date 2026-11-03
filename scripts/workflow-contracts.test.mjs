@@ -463,6 +463,10 @@ exit ${backupStatus}
     `#!/usr/bin/env bash
 set -euo pipefail
 printf 'docker %s\\n' "$*" >> '${operationLogFile}'
+if [[ "$*" == *" ps --status running --format "*" postgres" ]]; then
+  echo "postgres"
+  exit 0
+fi
 if [[ "$*" == *" ps postgres" ]]; then
   echo "postgres Up"
   exit 0
@@ -746,7 +750,7 @@ test("production simulation enrolls synthetic auth authority before smoke", () =
   assert.match(simulateBody, /if ready is not True:/);
   assert.match(
     simulateBody,
-    /Production must still use the explicit auth\/cutover\.py/,
+    /cutover workflow in[\s\S]{0,200}backend\/app\/api\/endpoints\/auth\/cutover\.py/,
   );
 });
 
@@ -858,92 +862,8 @@ test("PythonLab PR browser smoke passes credentials through environment only", (
   assert.doesNotMatch(workflow, /--password\s+["']?\$PYTHONLAB_SMOKE_PASSWORD/);
 });
 
-test("PythonLab remote workflows pass canonical smoke credential variables", () => {
-  const workflows = [
-    read(".github/workflows/pythonlab-owner-concurrency.yml"),
-    read(".github/workflows/pythonlab-phasec-gate.yml"),
-  ];
-
-  for (const workflow of workflows) {
-    assert.match(
-      workflow,
-      /PYTHONLAB_SMOKE_USERNAME:\s*\$\{\{\s*secrets\.PYTHONLAB_SMOKE_USERNAME\s*\}\}/,
-    );
-    assert.match(
-      workflow,
-      /PYTHONLAB_SMOKE_PASSWORD:\s*\$\{\{\s*secrets\.PYTHONLAB_SMOKE_PASSWORD\s*\}\}/,
-    );
-    assert.doesNotMatch(
-      workflow,
-      /^\s+(?:USERNAME|PASSWORD):\s*\$\{\{\s*secrets\.PYTHONLAB_SMOKE_/m,
-    );
-  }
-});
-
-test("PythonLab optional remote workflows validate the complete environment", () => {
-  const workflows = [
-    read(".github/workflows/pythonlab-owner-concurrency.yml"),
-    read(".github/workflows/pythonlab-phasec-gate.yml"),
-  ];
-
-  for (const workflow of workflows) {
-    assert.doesNotMatch(workflow, /api_url:[\s\S]*?default:\s*["']?http:\/\/localhost:8000/);
-    assert.match(workflow, /PYTHONLAB_SMOKE_USERNAME:\s*\n\s*required:\s*false/);
-    assert.match(workflow, /PYTHONLAB_SMOKE_PASSWORD:\s*\n\s*required:\s*false/);
-    assert.match(
-      workflow,
-      /CONFIGURED_API_URL:\s*\$\{\{\s*inputs\.api_url\s*\|\|\s*github\.event\.inputs\.api_url\s*\|\|\s*vars\.PYTHONLAB_API_URL\s*\}\}/,
-    );
-    assert.match(
-      workflow,
-      /\[ -z "\$\{CONFIGURED_API_URL\}" \].*PYTHONLAB_SMOKE_USERNAME.*PYTHONLAB_SMOKE_PASSWORD/,
-    );
-    assert.match(workflow, /echo "available=false" >> "\$GITHUB_OUTPUT"/);
-    assert.match(workflow, /echo "available=true" >> "\$GITHUB_OUTPUT"/);
-    const missingConfigBranch = workflow.match(
-      /if \[ -z "\$\{CONFIGURED_API_URL\}" \][\s\S]*?; then([\s\S]*?)\n\s*else/,
-    );
-    assert.ok(missingConfigBranch, "missing the incomplete-environment branch");
-    assert.doesNotMatch(
-      missingConfigBranch[1],
-      /^\s*(?:exit\s+[1-9]\d*|false)\s*$/m,
-      "missing remote configuration must finish successfully",
-    );
-
-    const validateIndex = workflow.indexOf("- name: validate required secrets");
-    for (const stepName of ["checkout", "setup python", "install dependencies"]) {
-      const marker = `- name: ${stepName}`;
-      const stepIndex = workflow.indexOf(marker);
-      assert.ok(stepIndex > validateIndex, `${stepName} must run after environment validation`);
-      const stepBlock = workflow.slice(stepIndex, workflow.indexOf("\n\n", stepIndex));
-      assert.match(stepBlock, /steps\.validate\.outputs\.available == 'true'/);
-    }
-  }
-
-  const owner = workflows[0];
-  for (const stepName of [
-    "run owner concurrency smoke",
-    "auto create issue for gate failure",
-    "auto close resolved gate issues",
-    "fail when smoke failed",
-  ]) {
-    const stepIndex = owner.indexOf(`- name: ${stepName}`);
-    const stepBlock = owner.slice(stepIndex, owner.indexOf("\n\n", stepIndex));
-    assert.match(stepBlock, /steps\.validate\.outputs\.available == 'true'/);
-  }
-
-  const phasec = workflows[1];
-  for (const stepName of ["run phase c warmup probe", "run phase c soak gate"]) {
-    const stepIndex = phasec.indexOf(`- name: ${stepName}`);
-    const stepBlock = phasec.slice(stepIndex, phasec.indexOf("\n\n", stepIndex));
-    assert.match(stepBlock, /steps\.validate\.outputs\.available == 'true'/);
-  }
-});
-
-test("PythonLab workflows stream smoke output through the redacting executor", () => {
+test("PythonLab PR runtime streams smoke output through the redacting executor", () => {
   const prRuntime = read(".github/workflows/pythonlab-pr-runtime.yml");
-  const ownerRuntime = read(".github/workflows/pythonlab-owner-concurrency.yml");
-  const phasecRuntime = read(".github/workflows/pythonlab-phasec-gate.yml");
 
   assert.match(
     prRuntime,
@@ -956,21 +876,6 @@ test("PythonLab workflows stream smoke output through the redacting executor", (
   ]) {
     assert.match(
       prRuntime,
-      new RegExp(
-        `python scripts/prod-smoke/redact_exec\\.py --\\s*\\\\\\s*\\n\\s*python backend/scripts/${script.replaceAll(".", "\\.")}`,
-      ),
-    );
-  }
-  assert.match(
-    ownerRuntime,
-    /python scripts\/prod-smoke\/redact_exec\.py --\s*\\\s*\n\s*python backend\/scripts\/smoke_pythonlab_ws_owner_concurrency\.py/,
-  );
-  for (const script of [
-    "smoke_pythonlab_print_visibility_probe.py",
-    "soak_pythonlab_phasec.py",
-  ]) {
-    assert.match(
-      phasecRuntime,
       new RegExp(
         `python scripts/prod-smoke/redact_exec\\.py --\\s*\\\\\\s*\\n\\s*python backend/scripts/${script.replaceAll(".", "\\.")}`,
       ),

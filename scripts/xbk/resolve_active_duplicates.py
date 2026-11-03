@@ -3,7 +3,7 @@ r"""XBK 历史重复有效选课 —— 按完整人工裁决执行软删除（r
 
 前置流程（必须遵守）
 ====================
-本脚本遵循 ``docs/docker/deploy/DEPLOY.md`` 的迁移前要求：先只读预检重复、完成可恢复
+本脚本遵循 ``docs/operations/DEPLOY.md`` 的迁移前要求：先只读预检重复、完成可恢复
 备份、**停止并排空所有旧版选课 writer**、在批准的维护窗口中复核后再处理。
 
 裁决来源
@@ -763,7 +763,7 @@ def main() -> int:
     if args.apply and not args.confirm_stop_writes:
         print(
             "[错误] --apply 必须同时提供 --confirm-stop-writes，"
-            "确认已完成停写、备份与复核（见 docs/docker/deploy/DEPLOY.md）。",
+            "确认已完成停写、备份与复核（见 docs/operations/DEPLOY.md）。",
             file=sys.stderr,
         )
         return 2

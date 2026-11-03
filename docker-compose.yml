@@ -101,9 +101,9 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       TZ: ${TIMEZONE:-Asia/Shanghai}
     volumes:
-      # 2026-10-09 数据源统一：与 dev compose 共用宿主机目录（D-5）。
-      # 此前这里用 named volume（wangsh_postgres_data），与 dev 的 bind mount
-      # ./data/postgres 是两个不同的库 —— 切栈即静默换库。
+      # 2026-11-02 起与 dev 分离：dev 用 ./data/dev/postgres，本栈保留 ./data/postgres。
+      # 此前两栈共用同一目录（D-5），导致 dev 可污染生产数据、且两栈密钥必须一致。
+      # 分离后 check-env-consistency.mjs 才允许两套 env 使用不同密钥。
       - ./data/postgres:/var/lib/postgresql/data
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB" ]
@@ -447,7 +447,7 @@ networks:
     name: docker_default
 
 volumes:
-  # postgres_data / redis_data 已随 D-5 数据源统一移除（2026-10-09）：
-  # 两服务改用宿主机目录 ./data/postgres 与 ./data/redis（与 dev compose 一致）。
+  # postgres_data / redis_data 已移除：两服务改用宿主机目录 ./data/postgres 与 ./data/redis。
+  # 2026-11-02 起 dev compose 改用 ./data/dev/*，两栈数据目录不再共用。
   typst_pdfs:
   uploads_data:

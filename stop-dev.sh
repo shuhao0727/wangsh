@@ -1,8 +1,9 @@
 #!/bin/bash
 # ============================================
 # WangSh 项目本地开发停止脚本
-# 版本：2.0.0
-# 改进：增强端口状态检查，确保端口完全释放
+# 版本：3.0.0
+# 改进：只停止本项目可识别的开发进程（Python 监听者、本树 Vite），
+#       不再按端口无条件 kill，避免误杀 Docker 端口代理和其他项目
 # ============================================
 
 set -euo pipefail
@@ -17,6 +18,10 @@ NC='\033[0m' # No Color
 # 端口配置
 BACKEND_PORT=8000
 FRONTEND_PORT=6608
+
+# 项目根目录与前端目录（用于识别本树 Vite 监听者）
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+FRONTEND_DIR="${PROJECT_ROOT}/frontend"
 
 # 函数：打印带颜色的消息
 print_info() {
@@ -58,133 +63,43 @@ check_port() {
     return 0
 }
 
-# 函数：强制停止占用指定端口的进程
-force_stop_port() {
-    local port=$1
-    local service=$2
-    
-    if ! lsof -Pi :${port} -sTCP:LISTEN -t >/dev/null 2>&1; then
-        print_info "${service} 端口 ${port} 未被占用"
-        return 0
-    fi
-    
-    print_warning "强制停止占用 ${service} 端口 ${port} 的进程..."
-    
-    # 获取所有占用该端口的进程PID
-    local pids=$(lsof -ti:${port})
-    local killed_count=0
-    
-    for pid in $pids; do
-        if kill -0 $pid > /dev/null 2>&1; then
-            print_info "停止进程 PID: $pid"
-            
-            # 先尝试优雅停止
-            kill $pid 2>/dev/null || true
-            sleep 1
-            
-            # 如果进程仍在运行，强制停止
-            if kill -0 $pid > /dev/null 2>&1; then
-                print_warning "进程 $pid 仍在运行，强制终止..."
-                kill -9 $pid 2>/dev/null || true
-                sleep 1
-            fi
-            
-            # 检查是否成功停止
-            if ! kill -0 $pid > /dev/null 2>&1; then
-                print_success "进程 $pid 已停止"
-                ((killed_count++))
-            else
-                print_error "无法停止进程 $pid"
-            fi
-        fi
-    done
-    
-    # 验证端口是否释放
-    sleep 2
-    if lsof -Pi :${port} -sTCP:LISTEN -t >/dev/null 2>&1; then
-        print_error "端口 ${port} 仍被占用，请手动检查"
-        return 1
-    fi
-    
-    print_success "已停止 ${killed_count} 个进程，端口 ${port} 已释放"
-    return 0
+# 所有信号都经共享归属守卫；无进程为正常结果，查询失败不能冒充成功。
+dev_processes() {
+    python3 -I -B "${PROJECT_ROOT}/scripts/dev-processes.py" --root "${PROJECT_ROOT}" "$@"
 }
 
 # 函数：停止所有本地进程
 stop_all_local_processes() {
-    print_info "停止所有本地开发进程..."
-    
-    local all_stopped=true
-    
-    # 1. 停止后端端口占用
-    if lsof -Pi :${BACKEND_PORT} -sTCP:LISTEN -t >/dev/null 2>&1; then
-        print_warning "后端端口 ${BACKEND_PORT} 被占用，正在停止..."
-        if ! force_stop_port ${BACKEND_PORT} "后端服务"; then
-            all_stopped=false
-        fi
-    else
-        print_info "后端端口 ${BACKEND_PORT} 未被占用"
-    fi
-    
-    # 2. 停止前端端口占用
-    if lsof -Pi :${FRONTEND_PORT} -sTCP:LISTEN -t >/dev/null 2>&1; then
-        print_warning "前端端口 ${FRONTEND_PORT} 被占用，正在停止..."
-        if ! force_stop_port ${FRONTEND_PORT} "前端服务"; then
-            all_stopped=false
-        fi
-    else
-        print_info "前端端口 ${FRONTEND_PORT} 未被占用"
-    fi
-    
-    # 3. 同时停止已知的进程名（双重保障）
-    # 停止后端进程
-    if pgrep -f "uvicorn.*main.*app" > /dev/null; then
-        print_warning "发现后端进程，正在停止..."
-        pkill -f "uvicorn.*main.*app"
-        sleep 2
-    fi
-    
-    # 停止前端进程
-    if pgrep -f "react-scripts.*start" > /dev/null; then
-        print_warning "发现前端进程，正在停止..."
-        pkill -f "react-scripts.*start"
-        sleep 2
-    fi
-
-    # 停止 Celery worker（本地模式）
-    if pgrep -f "celery.*app\\.core\\.celery_app:celery_app" > /dev/null; then
-        print_warning "发现Celery Worker进程，正在停止..."
-        pkill -f "celery.*app\\.core\\.celery_app:celery_app"
-        sleep 2
-    fi
-    
-    # 4. 最终验证端口状态
-    print_info "验证端口状态..."
-    
-    local backend_stopped=true
-    local frontend_stopped=true
-    
-    if lsof -Pi :${BACKEND_PORT} -sTCP:LISTEN -t >/dev/null 2>&1; then
-        print_error "❌ 后端端口 ${BACKEND_PORT} 仍被占用"
-        backend_stopped=false
-    else
-        print_success "✅ 后端端口 ${BACKEND_PORT} 已释放"
-    fi
-    
-    if lsof -Pi :${FRONTEND_PORT} -sTCP:LISTEN -t >/dev/null 2>&1; then
-        print_error "❌ 前端端口 ${FRONTEND_PORT} 仍被占用"
-        frontend_stopped=false
-    else
-        print_success "✅ 前端端口 ${FRONTEND_PORT} 已释放"
-    fi
-    
-    if $backend_stopped && $frontend_stopped; then
-        print_success "所有本地进程已停止，所有端口已释放"
-        return 0
-    else
-        print_error "部分进程停止失败，请手动检查"
+    print_info "停止已核准的本项目开发进程..."
+    if ! dev_processes stop; then
+        print_error "部分进程归属或退出状态无法核实，未确认停止成功"
         return 1
     fi
+    local port
+    for port in "${BACKEND_PORT}" "${FRONTEND_PORT}"; do
+        if lsof -Pi :"${port}" -sTCP:LISTEN -t >/dev/null 2>&1; then
+            print_warning "端口 ${port} 仍有其他或无法核准的进程，已保留"
+        fi
+    done
+    print_success "已核准的本项目开发进程已停止"
+}
+
+# 与启动入口一致：显式选择文件与项目，不继承另一终端留下的 COMPOSE_* 选择器。
+stop_dev_compose() {
+    local -a env_files=()
+    [ -f "${PROJECT_ROOT}/.env.dev" ] && env_files+=(--env-file "${PROJECT_ROOT}/.env.dev")
+    [ -f "${PROJECT_ROOT}/.env.local" ] && env_files+=(--env-file "${PROJECT_ROOT}/.env.local")
+    env -u COMPOSE_FILE -u COMPOSE_PROJECT_NAME -u COMPOSE_ENV_FILES -u COMPOSE_PROFILES \
+        -u COMPOSE_PATH_SEPARATOR -u COMPOSE_PROJECT_DIRECTORY \
+        docker compose ${env_files[@]+"${env_files[@]}"} -f "${PROJECT_ROOT}/docker-compose.dev.yml" "$@"
+}
+
+stop_prod_compose() {
+    local -a env_files=()
+    [ -f "${PROJECT_ROOT}/.env" ] && env_files+=(--env-file "${PROJECT_ROOT}/.env")
+    env -u COMPOSE_FILE -u COMPOSE_PROJECT_NAME -u COMPOSE_ENV_FILES -u COMPOSE_PROFILES \
+        -u COMPOSE_PATH_SEPARATOR -u COMPOSE_PROJECT_DIRECTORY \
+        docker compose ${env_files[@]+"${env_files[@]}"} -f "${PROJECT_ROOT}/docker-compose.yml" "$@"
 }
 
 # 函数：停止Docker容器
@@ -197,9 +112,6 @@ stop_docker_containers() {
     fi
     
     # 检查项目根目录
-    PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    
-    # 检查docker compose文件是否存在
     if [ ! -f "${PROJECT_ROOT}/docker-compose.dev.yml" ]; then
         print_error "未找到 docker-compose.dev.yml 文件"
         return 1
@@ -207,11 +119,11 @@ stop_docker_containers() {
     
     # 停止开发 Docker 容器
     cd "${PROJECT_ROOT}"
-    docker compose -f docker-compose.dev.yml down --remove-orphans || true
+    stop_dev_compose down --remove-orphans || true
 
     # 如存在生产 compose，也一并停止（避免端口冲突）
     if [ -f "${PROJECT_ROOT}/docker-compose.yml" ]; then
-        docker compose -f docker-compose.yml down --remove-orphans || true
+        stop_prod_compose down --remove-orphans || true
     fi
     
     # 验证容器是否已停止
@@ -297,15 +209,19 @@ show_current_status() {
     echo ""
     echo "📊 进程状态:"
     
-    local backend_processes=$(pgrep -f "uvicorn.*main.*app" | wc -l)
+    local backend_pids backend_processes
+    backend_pids="$(dev_processes list --kind backend)" || return 1
+    backend_processes="$(printf '%s\n' "${backend_pids}" | grep -c '[0-9]' || true)"
     if [ $backend_processes -gt 0 ]; then
         echo -e "  ${RED}❌ 后端进程: $backend_processes 个${NC}"
     else
         echo -e "  ${GREEN}✅ 后端进程: 0 个${NC}"
     fi
     
-    local frontend_processes=$(pgrep -f "react-scripts.*start" | wc -l)
-    if [ $frontend_processes -gt 0 ]; then
+    local frontend_pids frontend_processes
+    frontend_pids="$(dev_processes list --kind frontend)" || return 1
+    frontend_processes="$(printf '%s\n' "${frontend_pids}" | grep -c '[0-9]' || true)"
+    if [ "${frontend_processes}" -gt 0 ]; then
         echo -e "  ${RED}❌ 前端进程: $frontend_processes 个${NC}"
     else
         echo -e "  ${GREEN}✅ 前端进程: 0 个${NC}"
@@ -374,7 +290,7 @@ show_help() {
 main() {
     echo ""
     echo "============================================"
-    echo "     WangSh 项目本地开发环境停止器 v2.0"
+    echo "     WangSh 项目本地开发环境停止器 v3.0"
     echo "      增强端口管理，确保完全释放"
     echo "============================================"
     
@@ -415,9 +331,10 @@ main() {
         exit 0
     fi
     
-    # 停止本地进程
+    # 不能把归属查询失败或残存进程报告成停止成功。
+    local failed=0
     if ! stop_all_local_processes; then
-        print_warning "部分本地进程停止失败，继续执行..."
+        failed=1
     fi
     
     # 停止Docker容器（如果指定了--all参数）
@@ -429,6 +346,7 @@ main() {
         
         if ! stop_docker_containers; then
             print_warning "部分Docker容器停止失败"
+            failed=1
         fi
     else
         print_info "跳过Docker容器停止（使用 --all 参数停止Docker容器）"
@@ -436,8 +354,11 @@ main() {
     
     # 显示最终状态
     echo ""
-    show_current_status
-    
+    show_current_status || failed=1
+    if [ "${failed}" -ne 0 ]; then
+        print_error "停止操作未全部完成，请核对未处理项"
+        return 1
+    fi
     echo ""
     print_success "停止操作完成！"
     echo ""

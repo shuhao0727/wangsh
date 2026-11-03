@@ -21,6 +21,7 @@ from scripts.xbk.common import (
     ensure_dir,
     get_http_client,
     get_settings,
+    list_items,
     login_admin,
     utc_now_iso,
 )
@@ -33,33 +34,6 @@ def _find_exact(items: List[Dict[str, Any]], key: str, value: str) -> Dict[str, 
     raise RuntimeError(f"Cannot find row with {key}={value}")
 
 
-def _list_items(
-    client,
-    api_base: str,
-    token: str,
-    endpoint: str,
-    *,
-    year: int,
-    term: str,
-    search_text: str = "",
-) -> List[Dict[str, Any]]:
-    resp = client.get(
-        f"{api_base}{endpoint}",
-        params={
-            "page": 1,
-            "size": 500,
-            "year": year,
-            "term": term,
-            "search_text": search_text,
-        },
-        headers=auth_headers(token),
-    )
-    resp.raise_for_status()
-    body = resp.json() or {}
-    items = body.get("items") if isinstance(body, dict) else None
-    if not isinstance(items, list):
-        raise RuntimeError(f"Unexpected list response from {endpoint}: {body}")
-    return [it for it in items if isinstance(it, dict)]
 
 
 def _preview_import(client, api_base: str, token: str, scope: str, file_path: Path) -> Dict[str, Any]:
@@ -239,7 +213,7 @@ def run_smoke(manifest_path: Path | None = None) -> Dict[str, Any]:
         update_student_no = str(entities.get("update_student_no") or "")
         students = run_step(
             "list-students-for-update",
-            lambda: _list_items(
+            lambda: list_items(
                 client,
                 settings.api_base,
                 auth_token,
@@ -275,7 +249,7 @@ def run_smoke(manifest_path: Path | None = None) -> Dict[str, Any]:
         update_course_code = str(entities.get("update_course_code") or "")
         courses = run_step(
             "list-courses-for-update",
-            lambda: _list_items(
+            lambda: list_items(
                 client,
                 settings.api_base,
                 auth_token,
@@ -314,7 +288,7 @@ def run_smoke(manifest_path: Path | None = None) -> Dict[str, Any]:
         selection_course_code = str(update_selection.get("course_code") or "")
         selection_rows = run_step(
             "list-selections-for-update",
-            lambda: _list_items(
+            lambda: list_items(
                 client,
                 settings.api_base,
                 auth_token,
@@ -360,7 +334,7 @@ def run_smoke(manifest_path: Path | None = None) -> Dict[str, Any]:
 
         delete_student_no = str(new_student_nos[0])
         delete_course_code = str(new_course_codes[0])
-        target_rows = _list_items(
+        target_rows = list_items(
             client,
             settings.api_base,
             auth_token,
@@ -382,7 +356,7 @@ def run_smoke(manifest_path: Path | None = None) -> Dict[str, Any]:
             lambda: _delete_selection(client, settings.api_base, auth_token, int(target_selection["id"])),
         )
 
-        check_rows = _list_items(
+        check_rows = list_items(
             client,
             settings.api_base,
             auth_token,

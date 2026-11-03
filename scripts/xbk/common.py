@@ -146,3 +146,30 @@ def login_admin(client: httpx.Client, settings: Settings) -> str:
 
 def auth_headers(token: str) -> Dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
+
+
+def list_items(
+    client: httpx.Client,
+    api_base: str,
+    token: str,
+    endpoint: str,
+    *,
+    year: int,
+    term: str,
+    search_text: str = "",
+) -> list[dict[str, Any]]:
+    """分页拉取 XBK 列表端点，返回其中的 dict 项。
+
+    import_samples 与 smoke 两个脚本此前各有一份实现，差异只在本函数多出的
+    可选 search_text；合并后两边共用同一套分页与响应校验。
+    """
+    params: dict[str, Any] = {"page": 1, "size": 500, "year": year, "term": term}
+    if search_text:
+        params["search_text"] = search_text
+    resp = client.get(f"{api_base}{endpoint}", params=params, headers=auth_headers(token))
+    resp.raise_for_status()
+    body = resp.json() or {}
+    items = body.get("items") if isinstance(body, dict) else None
+    if not isinstance(items, list):
+        raise RuntimeError(f"Unexpected list response from {endpoint}: {body}")
+    return [it for it in items if isinstance(it, dict)]
