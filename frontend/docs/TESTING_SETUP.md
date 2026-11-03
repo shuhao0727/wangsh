@@ -5,7 +5,7 @@
 > 最近复核：2026-07-22
 
 本文只说明 WangSh 当前真实的前端测试配置。全项目最新测试数字、证据和待执行门禁见
-[TEST_STATUS.md](../../docs/docker/testing/TEST_STATUS.md)。
+[TEST_STATUS.md](../../docs/testing/TEST_STATUS.md)。
 
 ## 当前配置
 
@@ -33,7 +33,7 @@ src/services/**/*.test.{ts,tsx}
 
 新增测试应放入对应 owner 目录。扩大默认范围时，必须同步更新
 `frontend/vitest.config.ts`、本文件和
-[CI/CD 文档](../../docs/docker/deploy/CICD.md)。
+[CI/CD 文档](../../docs/operations/CICD.md)。
 
 ## 常用命令
 
@@ -79,8 +79,8 @@ Run、Debug、Pause、Continue、Step、tooltip、hover、pointer 或 focus 时�
 
 ## 相关文档
 
-- [测试状态](../../docs/docker/testing/TEST_STATUS.md)
-- [测试与验证入口](../../docs/docker/testing/README.md)
+- [测试状态](../../docs/testing/TEST_STATUS.md)
+- [测试与验证入口](../../docs/testing/README.md)
 - [前端脚本](../scripts/README.md)
-- [CI/CD](../../docs/docker/deploy/CICD.md)
-- [前端 UI 文档](../../docs/docker/frontend/README.md)
+- [CI/CD](../../docs/operations/CICD.md)
+- [前端 UI 文档](../../docs/ui/README.md)

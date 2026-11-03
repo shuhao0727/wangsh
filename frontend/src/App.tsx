@@ -48,6 +48,7 @@ const PersonalProgramsPage = lazy(() => import("./pages/PersonalPrograms"));
 const ArticlesPage = lazy(() => import("./pages/Articles"));
 const ArticleDetailPage = lazy(() => import("./pages/Articles/Detail"));
 const XbkPage = lazy(() => import("./pages/Xbk"));
+const PrivacyPage = lazy(() => import("./pages/Privacy"));
 const NotFoundPage = lazy(() => import("./pages/NotFound"));
 
 // 管理员页面懒加载
@@ -162,6 +163,7 @@ function App() {
               <Route path="/it-technology/python-lab" element={<PageErrorBoundary pageName="python-lab"><ITTechnologyPythonLabPage /></PageErrorBoundary>} />
               <Route path="/it-technology/python-lab/:id" element={<PageErrorBoundary pageName="python-lab"><ITTechnologyPythonLabPage /></PageErrorBoundary>} />
               <Route path="/personal-programs" element={<PageErrorBoundary pageName="personal-programs"><PersonalProgramsPage /></PageErrorBoundary>} />
+              <Route path="/privacy" element={<AuthenticatedGuard><PageErrorBoundary pageName="privacy"><PrivacyPage /></PageErrorBoundary></AuthenticatedGuard>} />
               <Route path="/xbk" element={<PageErrorBoundary pageName="xbk"><XbkPage /></PageErrorBoundary>} />
               <Route path="/articles" element={<PageErrorBoundary pageName="articles"><ArticlesPage /></PageErrorBoundary>} />
               <Route path="/articles/:slug" element={<PageErrorBoundary pageName="article-detail"><ArticleDetailPage /></PageErrorBoundary>} />

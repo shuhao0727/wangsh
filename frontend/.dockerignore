@@ -24,6 +24,5 @@ src/**/__tests__/
 src/**/*.test.*
 src/**/*.spec.*
 build
-dist
 public/pyodide
 public/mindmap-demo

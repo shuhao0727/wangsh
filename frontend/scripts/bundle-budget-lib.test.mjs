@@ -94,33 +94,67 @@ test("keeps heavy vendor chunks limited to Monaco and ECharts core packages", as
   );
 
   assert.ok(loadedConfig, "Vite config should load through Vite's TS loader");
-  const manualChunkForModule =
-    loadedConfig.config.build.rollupOptions.output.manualChunks;
+  const groups =
+    loadedConfig.config.build.rollupOptions.output.codeSplitting?.groups;
+  assert.ok(Array.isArray(groups) && groups.length > 0, "codeSplitting groups must be configured");
 
+  for (const group of groups) {
+    assert.equal(typeof group.name, "string", `group ${String(group)} must have a name`);
+    assert.equal(typeof group.test, "function", `group ${group.name} must expose a test function`);
+  }
+  const names = groups.map((group) => group.name);
+  assert.equal(new Set(names).size, names.length, "group names must be unique");
+
+  const groupFor = (id) => groups.find((group) => group.test(id))?.name;
+
+  // Monaco 与 echarts-for-react/zrender 不进任何分组，保持按需加载。
   assert.equal(
-    manualChunkForModule(
-      "/repo/node_modules/monaco-editor/esm/vs/editor/editor.api.js",
-    ),
+    groupFor("/repo/node_modules/monaco-editor/esm/vs/editor/editor.api.js"),
     undefined,
   );
   assert.equal(
-    manualChunkForModule("/repo/node_modules/echarts/core.js"),
-    "echarts-vendor",
-  );
-  assert.equal(
-    manualChunkForModule(
-      "/repo/node_modules/@monaco-editor/react/lib/index.js",
-    ),
+    groupFor("/repo/node_modules/@monaco-editor/react/lib/index.js"),
     undefined,
   );
   assert.equal(
-    manualChunkForModule("/repo/node_modules/echarts-for-react/lib/core.js"),
+    groupFor("/repo/node_modules/echarts-for-react/lib/core.js"),
     undefined,
   );
   assert.equal(
-    manualChunkForModule("/repo/node_modules/zrender/lib/core.js"),
+    groupFor("/repo/node_modules/zrender/lib/core.js"),
     undefined,
   );
+  assert.equal(groupFor("/repo/node_modules/echarts/core.js"), "echarts-vendor");
+
+  // 一个模块最多命中一个分组，避免同一模块被重复打进多个 chunk。
+  const sampleModules = [
+    "/repo/node_modules/react/index.js",
+    "/repo/node_modules/react-dom/client.js",
+    "/repo/node_modules/react-router-dom/index.js",
+    "/repo/node_modules/pdfjs-dist/build/pdf.js",
+    "/repo/node_modules/xterm/lib/xterm.js",
+    "/repo/node_modules/react-markdown/lib/index.js",
+    "/repo/node_modules/remark-gfm/index.js",
+    "/repo/node_modules/katex/dist/katex.mjs",
+  ];
+  for (const id of sampleModules) {
+    const hits = groups.filter((group) => group.test(id));
+    assert.ok(hits.length <= 1, `${id} matched ${hits.length} groups: ${hits.map((g) => g.name)}`);
+  }
+
+  // 重型分组优先级必须高于 markdown-vendor，否则依赖会被 markdown 组递归吸收。
+  const markdown = groups.find((group) => group.name === "markdown-vendor");
+  assert.ok(markdown, "markdown-vendor group must exist");
+  for (const name of ["react-vendor", "pdf-vendor", "graphviz-vendor", "terminal-vendor", "echarts-vendor"]) {
+    const group = groups.find((item) => item.name === name);
+    assert.ok(group, `${name} group must exist`);
+    assert.ok(
+      group.priority > markdown.priority,
+      `${name} priority must be higher than markdown-vendor`,
+    );
+  }
+
+  assert.equal(loadedConfig.config.build.modulePreload, false);
 });
 
 test("fails when build/assets contains no JavaScript files", () => {

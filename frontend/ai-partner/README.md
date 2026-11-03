@@ -56,4 +56,4 @@ npm run test:ai-partner
 - 覆盖方案修改使旧评分失效、评分中修改方案或切换账号、迟到响应不能覆盖新方案，以及课堂检查、核心测试与课堂记录未完成时不可提交的行为。
 - 分开验证模型已配置、模型未配置、模型调用失败和 Redis 不可用的路径。未配置可用 AI 必须显示不可评分；不得通过规则分数或固定返回伪装成功。
 - jsdom 与 mock 响应仅验证交互和合同，不能证明真实供应商模型已调用。真实模型验收须另行记录实际请求、响应与失败边界，证据需脱敏；不在截图或报告中暴露凭据。
-- jsdom 不替代真实 Chrome 双账号、Three 交互或 Redis/后端轮次联调。当前测试与构建结果统一记录在 [TEST_STATUS](../../docs/docker/testing/TEST_STATUS.md)，发布结论由 [RELEASE_NOTES](../../docs/docker/RELEASE_NOTES.md) 维护。
+- jsdom 不替代真实 Chrome 双账号、Three 交互或 Redis/后端轮次联调。当前测试与构建结果统一记录在 [TEST_STATUS](../../docs/testing/TEST_STATUS.md)，发布结论由 [RELEASE_NOTES](../../docs/operations/RELEASE_NOTES.md) 维护。

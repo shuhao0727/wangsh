@@ -28,7 +28,6 @@ import { PythonLabStatusBar } from "../PythonLabStatusBar";
 import XtermTerminal from "../XtermTerminal";
 import PyodideTerminal from "../PyodideTerminal";
 import { FloatingPopup } from "../FloatingPopup";
-// import { AIAssistantModal } from "../AIAssistantModal";
 import type { RightPanelTabKey } from "../rightPanelTabPolicy";
 import { useCode } from "@/pages/Admin/ITTechnology/pythonLab/stores/CodeContext";
 import { useFlow } from "@/pages/Admin/ITTechnology/pythonLab/stores/FlowContext";
@@ -113,8 +112,6 @@ export const RightPanel = React.memo(function RightPanel() {
 
   const [editorOpen, setEditorOpen] = useState(false);
   const [debugOpen, setDebugOpen] = useState(false);
-  // const [aiOpen, setAiOpen] = useState(false);
-  // const [aiAnchorRect, setAiAnchorRect] = useState<DOMRect | null>(null);
   const [activeTab, setActiveTab] = useState<RightPanelTabKey>("terminal");
   const [rebuildError, setRebuildError] = useState<string | null>(null);
 
@@ -680,15 +677,6 @@ export const RightPanel = React.memo(function RightPanel() {
           />
         </div>
       </FloatingPopup>
-      {/* <AIAssistantModal
-        open={aiOpen}
-        onClose={() => setAiOpen(false)}
-        code={code}
-        flow={flow}
-        anchorRect={aiAnchorRect}
-        autoOptimizeCode={autoOptimizeCode}
-        setAutoOptimizeCode={setAutoOptimizeCode}
-      /> */}
       </div>
   );
 });

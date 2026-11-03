@@ -2,37 +2,12 @@
 
 import { api } from "../api";
 import { logger } from "../logger";
+import { asApiError, toDetailMessage } from "./errors";
 
 const ADMIN_BASE = "/assessment/admin";
 const BASE = "/assessment";
 
-interface ApiErrorShape {
-  message?: string;
-  response?: { data?: { detail?: unknown } };
-}
-interface ValidationErrorItem {
-  loc?: unknown;
-  msg?: unknown;
-  message?: unknown;
-}
-const asApiError = (e: unknown): ApiErrorShape =>
-  (e && typeof e === "object" ? e : {}) as ApiErrorShape;
 
-const toDetailMessage = (detail: unknown): string | undefined => {
-  if (!detail) return undefined;
-  if (typeof detail === "string") return detail;
-  if (Array.isArray(detail)) {
-    return detail.map((d: string | ValidationErrorItem) => {
-      if (typeof d === "string") return d;
-      const loc = Array.isArray(d?.loc) ? d.loc.join(".") : "";
-      const msg = String(d?.msg || d?.message || "");
-      return [loc, msg].filter(Boolean).join(": ");
-    }).filter(Boolean).join("；") || undefined;
-  }
-  return String(detail);
-};
-
-// ─── 类型定义 ───
 
 export interface StudentProfile {
   id: number;

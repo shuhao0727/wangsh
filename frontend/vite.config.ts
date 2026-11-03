@@ -201,7 +201,6 @@ export default defineConfig(async ({ mode }) => {
         "@services": path.resolve(__dirname, "src/services"),
         "@utils": path.resolve(__dirname, "src/utils"),
         "@hooks": path.resolve(__dirname, "src/hooks"),
-        "@assets": path.resolve(__dirname, "src/assets"),
         "@styles": path.resolve(__dirname, "src/styles"),
       },
     },

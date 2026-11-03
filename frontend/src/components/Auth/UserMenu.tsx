@@ -1,5 +1,5 @@
 import React from "react";
-import { User, LayoutDashboard, Bot, Home, LogOut } from "lucide-react";
+import { User, LayoutDashboard, Bot, Home, LogOut, ShieldCheck } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import {
   DropdownMenu,
@@ -193,6 +193,18 @@ const UserMenu: React.FC<UserMenuProps> = ({
             我的AI助手
           </DropdownMenuItem>
         ) : null}
+
+        {auth.isLoggedIn() && (
+          <DropdownMenuItem
+            onClick={() => {
+              handleMenuClick("/privacy");
+              void navigate("/privacy");
+            }}
+          >
+            <ShieldCheck className="mr-2 h-4 w-4" />
+            隐私与同意
+          </DropdownMenuItem>
+        )}
 
         <DropdownMenuSeparator />
 

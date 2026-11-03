@@ -81,9 +81,12 @@ export const gamesAdminApi = {
     ),
 
   /** 上传游戏 */
+  // 包体可达 500MB（IT_GAME_MAX_UPLOAD_BYTES），全局 15s 默认超时会先取消传输；
+  // 这里按体积给足时间，仍保留上限以免请求永久挂起。
   create: (data: FormData) =>
     api.post<GameResource>("/admin/it/games", data, {
       headers: { "Content-Type": undefined as unknown as string },
+      timeout: 10 * 60 * 1000,
     }).then((r) => r.data as unknown as GameResource),
 
   /** 编辑游戏 */

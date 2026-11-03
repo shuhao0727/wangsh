@@ -9,6 +9,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import type { SectionKey, TabKey } from "../shared-types";
 import { useSearchParams } from "react-router-dom";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -59,8 +60,6 @@ import {
 // 类型定义与内置数据
 // ────────────────────────────────────────
 
-type TabKey = "book" | "knowledge" | "experiments" | "tools";
-
 interface NormalizedProgress {
   overall_percent: number;
   completedItems: Record<string, boolean>;
@@ -83,8 +82,6 @@ interface AILearningContentPayload {
 // ────────────────────────────────────────
 // 子组件
 // ────────────────────────────────────────
-
-type SectionKey = "steps" | "code" | "data" | "reflection";
 
 const TAB_CONFIG: { key: SectionKey; label: string; icon: React.ReactNode }[] = [
   { key: "steps", label: "实验步骤", icon: <ClipboardList className="h-4 w-4" /> },

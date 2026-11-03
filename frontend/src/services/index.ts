@@ -63,6 +63,9 @@ export type {
 export { systemMetricsApi } from "./system/typstMetrics";
 export type { TypstMetricsResponse } from "./system/typstMetrics";
 
+export { privacyApi } from "./privacy";
+export type { ConsentState, ConsentType } from "./privacy";
+
 // Informatics（信息学）模块服务
 export { typstNotesApi } from "./informatics";
 export { publicTypstNotesApi } from "./informatics";

@@ -1,19 +1,16 @@
 # 前端脚本说明
 
-> 历史脚本清理记录：`docs/scripts/ARCHIVE_INDEX.md`
-
-`frontend/scripts/` 只保留当前仍接入 npm 命令、CI 或生产烟测链路的脚本。
+本目录维护 npm、CI、烟测脚本及其配置。命令均从 `frontend/` 运行；
+历史清理见[归档索引](../../docs/archive/README.md)，实测结果见 [TEST_STATUS](../../docs/testing/TEST_STATUS.md)。
 
 ## 当前入口
 
-- `copy-pyodide.js` - `predev` / `prebuild` 复制 Pyodide 资源；仅在目标目录包含
-  当前依赖版本 marker 和全部非空核心文件时跳过
+- `copy-pyodide.js` - `predev` / `prebuild` 复制 Pyodide；跳过条件见下方完整性合同
 - `bundle-budget.mjs` - `build:check` / `ui:migration:gate` 包体与最终产物门禁；读取 Vite `build/.vite/manifest.json`，递归扫描 `build/assets/`，将独立 Worker JS 和复制到 `build/pyodide/` 的生产运行时纳入总量，并确认 Mindmap 本地运行时缺失、favicon 与 KaTeX/Monaco 正式字体存在
 - `token-check.mjs` - `token:check:ci` CSS token 完整性门禁；检查 `src/` 中所有 `var(--ws-*)` 引用是否在 `src/styles/index.css` 定义
-- `auth-replaced-login-smoke.mjs` - 同账号二次登录踢下线提示专项生产烟测；先等待提示文案在页面正文可见，再判定 `PASS`，避免仅凭 storage/detail 回放通过而 UI 未渲染的误判
+- `auth-replaced-login-smoke.mjs` - 同账号二次登录提示烟测；正文提示可见才判 `PASS`，不只检查 storage/detail
 - `pythonlab-debug-smoke.mjs` - PythonLab 运行/调试 UI 专项烟测
-- `prod-smoke-ui.mjs` - 生产烟测的浏览器 UI 步骤入口；页面加载成功但预期操作控件
-  缺失时记录为 `WARN`，不会误记为 `PASS`
+- `prod-smoke-ui.mjs` - 浏览器 UI 烟测；页面加载但预期控件缺失记为 `WARN`
 - `ui-audit.mjs` - UI 审计主脚本
 - `ui-audit-baseline.json` - UI 审计基线
 - `ui-visual-routes.json` - UI 审计页面清单
@@ -36,21 +33,22 @@ npm run token:check:ci
 npm run test:scripts
 ```
 
-元信息专项测试：在 `frontend/` 下运行 `npm test -- src/hooks/useAppMeta.metadata.test.tsx`，
-验证本地构建版本、环境标签及无网络请求行为；该文件已由 `vitest.config.ts` 的 `include` 显式纳入默认测试收集。
+专项用例均已纳入 `vitest.config.ts` 默认收集，也可单独选择：
 
-后台交互与权限专项：在 `frontend/` 下运行
-`npm test -- src/layouts/AdminLayout.mobile.test.tsx src/pages/Admin/Dashboard/index.permissions.test.tsx`。
-这两个文件已由 `vitest.config.ts` 的 `include` 显式列入默认测试收集；组件测试检查交互状态及按身份取数，
-不能替代真实浏览器中侧栏层级、指针命中、版本标签裁切和网关权限的验收。
+```bash
+npm test -- src/hooks/useAppMeta.metadata.test.tsx
+npm test -- src/layouts/AdminLayout.mobile.test.tsx src/pages/Admin/Dashboard/index.permissions.test.tsx
+```
 
+前者验证构建版本、环境标签及无网络请求；后者验证交互状态与按身份取数。
+组件测试不替代真实浏览器侧栏层级、指针命中、标签裁切及网关权限验收。smoke 按授权连接专用环境，不凭命令名默认连接生产。
 
 ## 生成产物与配置文件
 
 - `ui-audit-baseline.json` 是 UI 审计基线文件，属于受控生成产物；只有在确认 UI 变化符合预期后才更新基线。刷新时必须先审计当前 `HEAD`，新基线不得高于修复前快照，不能用抬高阈值掩盖本轮新增命中。
 - `ui-visual-routes.json` 是 UI 审计路由清单；新增、删除或重命名页面后必须同步更新。
 - Vite 生产构建必须生成 `build/.vite/manifest.json`；包体预算从 `isEntry` 沿静态 `imports` 计算 Entry，从 `dynamicImports` 沿动态分支计算 Deferred，同一 chunk 同时被静态和动态引用时按 Entry 计，Worker 始终独立按 Deferred 计。
-- Monaco 及其 React 包装器由 Rollup 跟随 PythonLab 动态入口自然分包，避免手工
+- Monaco 及其 React 包装器由构建器跟随 PythonLab 动态入口自然分包，避免手工
   `monaco-vendor` 吸收共享 helper 后反向进入首屏；`echarts-vendor` 只包含 ECharts
   核心包，`echarts-for-react` 与 `zrender` 跟随按需页面分包。
 - 包体预算会单独报告 Entry、Deferred 和 Worker JS；Pyodide 静态运行时按
@@ -73,7 +71,7 @@ npm run test:scripts
 
 ## AI伙伴独立源码入口（未发布）
 
-以下 npm 入口在 `frontend/` 下使用，由主线程接入；此处不记录执行结果：
+此标题保留已有引用；实际发布状态以 [发布记录](../../docs/operations/RELEASE_NOTES.md) 为准。
 
 | 命令 | 职责 |
 |---|---|
@@ -83,13 +81,10 @@ npm run test:scripts
 | `npm run dev:ai-partner` | 独立源码开发入口 |
 | `npm run test:ai-partner` | AI伙伴专项测试入口 |
 
-页面 URL 仍为 `/games/ai-partner/index.html`。旧 `public/games/ai-partner/` 仅移除
-`index.html` 和两份已打包 JS/CSS；`favicon.svg` 保留原位置以维持静态白名单，不迁往
-`ai-partner/public/`。独立 Vite 的 `publicDir` 复用 `public/games/ai-partner/`，
-将保留的 favicon 复制到 `build/games/ai-partner/`。
-
-本轮仅同步未发布说明，不构建或推送镜像、不部署；实际测试数字由主线程写入
-[TEST_STATUS](../../docs/docker/testing/TEST_STATUS.md)，功能边界见
+页面 URL 为 `/games/ai-partner/index.html`。旧 `public/games/ai-partner/` 的 `index.html`
+与两份打包 JS/CSS 已移除；`favicon.svg` 保留原位及静态白名单。独立 Vite 的 `publicDir`
+复用该目录，将 favicon 复制到 `build/games/ai-partner/`，不另迁到 `ai-partner/public/`。
+功能边界见
 [AI 智能体 owner](../../docs/features/AI_AGENTS.md#ai伙伴临时共享榜单未发布)。
 
 ## 维护规则
@@ -100,9 +95,8 @@ npm run test:scripts
 - 分块规则应跟随实际构建依赖。`remark-parse` 由 `react-markdown` 和 `remark-gfm`
   传递引入，继续归入 `markdown-vendor`，无需重复声明直接依赖；Typst 采用后端编译
   与 PDF 预览，不保留未接入的浏览器 Typst WASM 分块。
-- 未接入 `package.json`、CI 或 `prod-smoke` 的一次性脚本不再保留。
-- 截图采集、手工调试、临时验证脚本统一清理，不回流到本目录。
-- PythonLab 调试控制区一旦涉及 `tooltip / hover / pointer / focus` 相关改动，必须补跑真实 Chrome channel 与 WebKit。
+- 一次性截图、调试和探针放临时目录；移除旧脚本前核对调用、用途和证据保留需要，不按未接入 npm/CI 单独判定可删。
+- PythonLab 涉及 `tooltip / hover / pointer / focus` 或调试切换时，验证真实 Chrome channel 与 WebKit 的点击、多断点连续 Continue，不以 JS click 或默认 Chromium 代替。
 
 ## 前端静态独立入口合同（Caddy 目录条目）
 
@@ -112,8 +106,8 @@ AI Partner 的裸路径 `/games/ai-partner`、目录 `/games/ai-partner/` 和显
 仍为 404，不回退主站 SPA。它也约束 `/assets/*` 等静态资源不回退 index.html，
 以及主站 SPA 兜底规则仍然保留。
 
-原提交 `51cf5c0` 的这次修复在 `9f84619` 中被回滚，本文件按当前 CSP（脚本源仍
-允许 `cdn.jsdelivr.net` 供内容运行时使用）重新建立合同。
+历史线索：`51cf5c0` 的修复曾在 `9f84619` 回滚。当前合同同时保留 CSP 的
+`cdn.jsdelivr.net` 内容运行时来源；历史提交不能代替当前候选配置验证。
 
 **静态源码合同不替代实际 Caddy HTTP 验证**：200/404、`Cache-Control` 与
-`Content-Type` 必须用同一候选配置起容器逐条请求核对（实测命令见提交说明）。
+`Content-Type` 必须在获准的隔离容器中用同一候选配置逐条请求核对，记录配置身份与结果。

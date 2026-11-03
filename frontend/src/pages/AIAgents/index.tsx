@@ -252,10 +252,10 @@ const AIAgentsPage: React.FC = () => {
     void loadAgents();
   }, [loadAgents]);
 
-  // 监听 agent_changed SSE 事件，自动刷新列表
+  // 仅管理员订阅管理端事件；学生端不请求 /admin/stream（避免反复 403）。
   useAdminSSE("agent_changed", () => {
     void loadAgents();
-  });
+  }, auth.isAdmin());
 
   // 监听认证状态变化，登录后显示欢迎消息
   useEffect(() => {

@@ -3,7 +3,8 @@ import { config } from '@services';
 
 export function useAdminSSE(
   eventType: string,
-  onEvent: () => void
+  onEvent: () => void,
+  enabled = true
 ) {
   const onEventRef = useRef(onEvent);
 
@@ -12,6 +13,7 @@ export function useAdminSSE(
   }, [onEvent]);
 
   useEffect(() => {
+    if (!enabled) return;
     let stopped = false;
     let stream: EventSource | null = null;
     let retryTimer: NodeJS.Timeout | null = null;
@@ -88,5 +90,5 @@ export function useAdminSSE(
         debounceTimer = null;
       }
     };
-  }, [eventType]);
+  }, [eventType, enabled]);
 }

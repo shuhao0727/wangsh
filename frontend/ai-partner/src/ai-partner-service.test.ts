@@ -36,7 +36,7 @@ describe('platform service boundary', () => {
     const result = {evaluation_id: 'receipt', round_id: 'r', total: 50, level: '待完善', dimensions: [], suggestions: []};
     mocks.post.mockResolvedValue({data: result});
     expect(await aiPartnerService.evaluate(payload, signal)).toBe(result);
-    expect(mocks.post).toHaveBeenCalledWith('/ai-partner/evaluate', payload, expect.objectContaining({signal, silent: true, timeout: 65000}));
+    expect(mocks.post).toHaveBeenCalledWith('/ai-partner/evaluate', payload, expect.objectContaining({signal, silent: true, timeout: 140000}));
     expect(payload).not.toHaveProperty('score'); expect(payload).not.toHaveProperty('api_key');
   });
 

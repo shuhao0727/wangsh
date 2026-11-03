@@ -25,6 +25,47 @@ type NormalizedAnalysisRecord = AnalysisRecord & {
   compareKey: string;
 };
 
+export const bloomSeriesData = (records: NormalizedAnalysisRecord[], key: string) =>
+  records.map((record) => {
+    const value = record.normalizedResult?.bloom?.[key];
+    // 缺失层级保持空值，不用 0 冒充“没有提问”。
+    return typeof value === "number" ? value : null;
+  });
+
+export const timelineSeriesData = (records: NormalizedAnalysisRecord[]) => {
+  const prepared = records.map((record) => {
+    const buckets = Array.isArray(record.normalizedResult?.timeline_buckets)
+      ? record.normalizedResult.timeline_buckets
+      : [];
+    const points = buckets
+      .map((bucket: any) => {
+        const ms = Date.parse(bucket?.bucket_start);
+        return Number.isFinite(ms)
+          ? { ms, count: Number(bucket?.question_count) || 0 }
+          : null;
+      })
+      .filter((point: { ms: number; count: number } | null): point is { ms: number; count: number } => point !== null);
+    return {
+      name: record.title.slice(0, 12) || `#${record.id}`,
+      points,
+    };
+  });
+  const allTimes = prepared.flatMap((series) =>
+    series.points.map((point: { ms: number; count: number }) => point.ms),
+  );
+  if (allTimes.length === 0) {
+    return prepared.map((series) => ({ name: series.name, data: [] as [number, number][] }));
+  }
+  const origin = Math.min(...allTimes);
+  return prepared.map((series) => ({
+    name: series.name,
+    data: series.points.map((point: { ms: number; count: number }) => [
+      (point.ms - origin) / 60000,
+      point.count,
+    ] as [number, number]),
+  }));
+};
+
 const normalizeRecord = (record: AnalysisRecord, index: number): NormalizedAnalysisRecord => ({
   ...record,
   normalizedResult: record?.result?.result || record?.result || {},
@@ -101,7 +142,7 @@ const TaskAnalysisComparePage: React.FC = () => {
     const chart = echarts.init(bloomRef.current);
     const series = BLOOM_KEYS.map((key) => ({
       name: key, type: "bar", stack: "bloom",
-      data: records.map((r) => (r.normalizedResult?.bloom || {})[key] || 0),
+      data: bloomSeriesData(records, key),
     }));
     chart.setOption({
       tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
@@ -121,16 +162,13 @@ const TaskAnalysisComparePage: React.FC = () => {
     if (!timelineRef.current || records.length < 2) return;
     const chart = echarts.init(timelineRef.current);
     const COLORS = compareColors();
-    const series = records.map((r, idx) => {
-      const buckets = r.normalizedResult?.timeline_buckets || [];
-      return {
-        name: r.title.slice(0, 12) || `#${r.id}`,
-        type: "line", smooth: true,
-        data: buckets.map((b: any, i: number) => [i * 3, b.question_count || 0]),
-        lineStyle: { color: COLORS[idx % COLORS.length], width: 2.5 },
-        itemStyle: { color: COLORS[idx % COLORS.length] },
-      };
-    });
+    const series = timelineSeriesData(records).map((recordSeries, idx) => ({
+      name: recordSeries.name,
+      type: "line", smooth: true,
+      data: recordSeries.data,
+      lineStyle: { color: COLORS[idx % COLORS.length], width: 2.5 },
+      itemStyle: { color: COLORS[idx % COLORS.length] },
+    }));
     chart.setOption({
       tooltip: { trigger: "axis" },
       legend: { top: 4, textStyle: { fontSize: 11 } },

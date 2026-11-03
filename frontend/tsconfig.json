@@ -36,7 +36,6 @@
       "@services/*": ["src/services/*"],
       "@utils/*": ["src/utils/*"],
       "@hooks/*": ["src/hooks/*"],
-      "@assets/*": ["src/assets/*"],
       "@styles/*": ["src/styles/*"]
     }
   },

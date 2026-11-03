@@ -2,6 +2,7 @@
 
 import { api } from "../api";
 import { logger } from "../logger";
+import { asApiError, toDetailMessage } from "./errors";
 
 const BASE = "/assessment";
 const ADMIN_BASE = "/assessment/admin";
@@ -12,32 +13,7 @@ interface ValidationErrorItem {
   message?: unknown;
 }
 
-interface ApiErrorShape {
-  message?: string;
-  response?: { data?: { detail?: unknown } };
-}
-const asApiError = (e: unknown): ApiErrorShape =>
-  (e && typeof e === "object" ? e : {}) as ApiErrorShape;
 
-const toDetailMessage = (detail: unknown): string | undefined => {
-  if (!detail) return undefined;
-  if (typeof detail === "string") return detail;
-  if (Array.isArray(detail)) {
-    return detail.map((d: string | ValidationErrorItem) => {
-      if (typeof d === "string") return d;
-      const loc = Array.isArray(d?.loc) ? d.loc.join(".") : "";
-      const msg = String(d?.msg || d?.message || "");
-      return [loc, msg].filter(Boolean).join(": ");
-    }).filter(Boolean).join("；") || undefined;
-  }
-  if (typeof detail === "object") {
-    const obj = detail as Record<string, unknown>;
-    return String(obj.msg || obj.message || JSON.stringify(detail));
-  }
-  return String(detail);
-};
-
-// ─── 类型定义 ───
 
 export interface AvailableAssessment {
   id: number;
