@@ -227,3 +227,18 @@ pytest/coverage命令不变。新增workflow合同同时约束独立命令、精
 本轮已知问题本地验证完成，尚未提交/推送；未执行远端GitHub/Ubuntu amd64或后端CI全套，
 未启动生产、未重建正式镜像或覆盖2.2.5 tag。RELEASE-01仍保留，等待远端CI及修订候选
 release-set、源码/静态产物、配对备份/隔离恢复等准入证据。
+
+### PR首轮远端结果与原子登录替身续修
+
+- 修复提交 `1dc0260` 已推送并开PR。首轮远端5项门禁通过：repo-config、markdown、
+  frontend-quality及两项PythonLab专项；后端治理与迁移/bootstrap已通过，pytest为
+  3749 passed / 123 skipped / 1 failed。唯一失败用例
+  `tests/auth/test_auth_logout_refresh.py::test_login_uses_atomic_refresh_token_issue` 的
+  `fake_authenticate` 未接受真实登录端点传入的 `include_inactive=True`，抛TypeError。
+- 在原受保护隔离运行器中先单跑该用例，复现同一TypeError（1 failed，隔离违规0）；
+  然后仅为替身增加keyword-only `include_inactive=False` 并断言 `is True`。原来用户行锁、
+  refresh原子签发、commit=False、发布在commit之后及禁止独立撤销/创建的断言全部保留，
+  未修改生产代码、pytest选择或任何门禁阈值。
+- 同一隔离环境合跑退出/刷新、登录、认证合同、运行时替换四文件：36 passed / 8项既有
+  Pydantic弃用warning，隔离违规0。只有合成settings、内存/替身存储；不连接业务DB/Redis，
+  不读取真实env，不代表本次修复的远端全套已通过。按用户授权提交推送到现有PR，等待新CI。
