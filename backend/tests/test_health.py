@@ -78,6 +78,43 @@ def test_health_db_down(monkeypatch):
         assert e.status_code == 503
 
 
+def test_health_db_error_hides_details_when_not_debug(monkeypatch):
+    """非 DEBUG 环境下 detail 只返回固定文案，不泄漏异常原文"""
+    monkeypatch.setattr(settings, "DEBUG", False)
+
+    raw_error = "连接失败: postgresql://user:pass@db-host:5432/wangsh"
+    mock_db = AsyncMock()
+    mock_db.execute.side_effect = Exception(raw_error)
+
+    try:
+        asyncio.run(health_api.health_check(db=mock_db))
+        assert False, "应该抛出 HTTPException"
+    except HTTPException as e:
+        assert e.status_code == 503
+        assert e.detail["error"] == "服务健康检查失败"
+        assert "postgresql://user:pass@db-host:5432/wangsh" not in e.detail["error"]
+        # 其他字段保持不变
+        assert e.detail["status"] == "unhealthy"
+        assert e.detail["service"] == settings.PROJECT_NAME
+        assert "timestamp" in e.detail
+
+
+def test_health_db_error_keeps_details_in_debug(monkeypatch):
+    """DEBUG 环境下 detail 保留异常原文，便于本地排障"""
+    monkeypatch.setattr(settings, "DEBUG", True)
+
+    raw_error = "连接失败: postgresql://user:pass@db-host:5432/wangsh"
+    mock_db = AsyncMock()
+    mock_db.execute.side_effect = Exception(raw_error)
+
+    try:
+        asyncio.run(health_api.health_check(db=mock_db))
+        assert False, "应该抛出 HTTPException"
+    except HTTPException as e:
+        assert e.status_code == 503
+        assert "postgresql://user:pass@db-host:5432/wangsh" in e.detail["error"]
+
+
 def test_config_blocked_in_production(monkeypatch):
     monkeypatch.setattr(settings, "DEBUG", False)
 

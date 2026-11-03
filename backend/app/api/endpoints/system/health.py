@@ -9,6 +9,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 
+from loguru import logger
+
 from app.db.database import get_db
 from app.core.config import settings
 from app.utils.cache import cache
@@ -66,11 +68,13 @@ async def health_check(db: AsyncSession = Depends(get_db)) -> Dict[str, Any]:
         }
 
     except Exception as e:
+        # 异常原文只写日志；非 DEBUG 环境对外返回固定文案，避免 /health 泄漏连接串、主机名等内部信息
+        logger.exception("健康检查失败")
         raise HTTPException(
             status_code=503,
             detail={
                 "status": "unhealthy",
-                "error": str(e),
+                "error": str(e) if settings.DEBUG else "服务健康检查失败",
                 "service": settings.PROJECT_NAME,
                 "timestamp": datetime.now().isoformat(),
             }

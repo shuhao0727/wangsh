@@ -277,3 +277,29 @@ async def assert_agent_outbound_endpoint(api_endpoint: str) -> None:
         allow_local_ollama=True,
         allow_trusted_internal=True,
     )
+
+
+async def classify_agent_endpoint(api_endpoint: str) -> Tuple[str, str]:
+    """按与出站硬校验完全相同的规则给端点分类，供部署前核对使用。
+
+    返回 (分类, 说明)：
+    - ``whitelisted`` 命中受信内部端点白名单，出站放行
+    - ``allowed`` 公网端点或本机 Ollama，出站放行
+    - ``blocked`` 解析到内网/环回/保留地址，出站会被拒绝
+    - ``invalid`` 协议或端口非法，出站会被拒绝
+
+    只做判定，不发请求；DNS 解析失败按 ``blocked`` 处理，与运行时行为一致。
+    """
+    if matches_trusted_endpoint(api_endpoint, _trusted()):
+        return "whitelisted", "命中受信内部端点白名单"
+    try:
+        _scheme, host, port = _parse_endpoint(api_endpoint)
+    except EndpointNotAllowedError as exc:
+        return "invalid", str(exc)
+    if allows_local_ollama(host, port):
+        return "allowed", "本机 Ollama"
+    try:
+        _assert_host_safe(host, await _resolve_host_addresses_async(host))
+    except EndpointNotAllowedError as exc:
+        return "blocked", str(exc)
+    return "allowed", "公网端点"
