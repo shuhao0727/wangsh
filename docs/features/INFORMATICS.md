@@ -86,6 +86,10 @@
 
 ## PDF 编译流程
 
+前端PDF预览的 `PdfCanvasVirtualViewer` 在 `getDocument` 显式设置 `isEvalSupported:false`，
+缓解旧PDF.js字体动态求值的CVE-2024-4367路径；编译/下载权限不因此放宽。该配置不是依赖
+升级，不能据此声称旧版PDF.js所有公告已清零；生产候选仍需绑定渲染与静态产物证据。
+
 ### 核心机制
 
 1. **Per-note 锁**：每个笔记有独立的 `asyncio.Lock`，防止同一笔记并发编译

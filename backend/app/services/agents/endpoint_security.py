@@ -279,6 +279,13 @@ async def assert_agent_outbound_endpoint(api_endpoint: str) -> None:
     )
 
 
+async def assert_agent_provider_endpoints(provider) -> None:
+    """按原有顺序校验 Provider 的全部候选地址，拒绝时不进入出站请求。"""
+    urls = provider.candidate_urls() if hasattr(provider, "candidate_urls") else [provider.chat_url()]
+    for url in urls:
+        await assert_agent_outbound_endpoint(url)
+
+
 async def classify_agent_endpoint(api_endpoint: str) -> Tuple[str, str]:
     """按与出站硬校验完全相同的规则给端点分类，供部署前核对使用。
 

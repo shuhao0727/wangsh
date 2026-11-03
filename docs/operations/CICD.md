@@ -45,8 +45,9 @@ Celery、sandbox 和 Vite，先跑 Chromium 真实 pointer-click 调试/多断�
 
 Fork PR 使用临时本地账号，不读取仓库 secrets。密码经 step env 传递，不进命令参数；
 浏览器与 Python smoke 通过 `redact_exec.py` 实时脱敏，保留退出码/信号语义。
-失败仅发布限长、脱敏日志并清理资源。共享脱敏实现改动同时触发两条 PR 门禁。
-CI 的 Chromium 覆盖不替代 AGENTS 要求的 Chrome channel / WebKit 专项交互验收。
+失败仅发布限长、脱敏日志并清理资源。pointer smoke逐场景输出固定错误码与阶段，不把原始错误
+或页面/变量快照写stdout；详细报告和截图不自动对外上传。调试、断点及完成条件helper变更
+同时触发两条PR门禁。CI的Chromium不替代CLAUDE要求的Chrome channel/WebKit专项验收。
 
 > 2026-11-01：原远端巡检工作流 `pythonlab-owner-concurrency.yml` 与 `pythonlab-phasec-gate.yml`
 > 已删除；对已部署环境的巡检改在本地用 `backend/scripts/` 下同名 smoke/soak 脚本执行。
@@ -76,6 +77,11 @@ PR、main push 及 `workflow_call` 触发；普通 PR/push 仅改 `docs/**`、`*
 测试专用 PG `55433`、Redis `56379` 和安全配置统一在 job env，迁移/bootstrap/pytest
 使用同一环境；不设 `DEBUG=true` 绕过安全校验。密钥使用测试专用非默认值与合法格式。
 ECharts/词云 peer major、manifest 与 lockfile 由 workflow contracts 校验。
+前端锁文件须在无旧 `node_modules` 的 Node 20 / npm 10 环境中验证普通 `npm ci`；
+生产 Dockerfile 的 `--legacy-peer-deps` 安装结果不能替代此检查，不以宽松参数绕过缺失 peer 条目。
+后端发布前同时运行普通治理检查及相对原发布基线的 `--base-ref`，不能只看默认 check 的 errors=0。
+保存端点软校验的19项自含用例只在 `repo-config` 的隔离Python入口运行；`backend-pytest`
+精确排除该模块以防正常app导入冲突，不排除其他用例或coverage；workflow合同锁定两处。
 
 以下仍为非阻断或有限覆盖，不得写成完整端到端已过：
 

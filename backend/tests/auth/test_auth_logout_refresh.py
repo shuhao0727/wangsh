@@ -221,7 +221,8 @@ def test_login_uses_atomic_refresh_token_issue(monkeypatch):
     async def fake_rate_limiter_check(key, interval_seconds):
         pass
 
-    async def fake_authenticate(db, username, password):
+    async def fake_authenticate(db, username, password, *, include_inactive=False):
+        assert include_inactive is True
         return {
             "id": 7,
             "username": "teacher",

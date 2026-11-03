@@ -12,6 +12,27 @@ export interface DebugWatchResult extends DebugEvalResult {
   expr: string;
 }
 
+// Capture synchronously: React state refs can still describe the previous pause
+// when a stopped event and an earlier request response arrive in the same turn.
+export function createPythonlabRunningTransition(params: {
+  generation: { current: number };
+  lifecycleEpoch: { current: number };
+  sessionId: { current: string | null };
+  onRunning: () => void;
+}): () => void {
+  const generation = ++params.generation.current;
+  const epoch = params.lifecycleEpoch.current;
+  const sessionId = params.sessionId.current;
+  return () => {
+    if (
+      params.generation.current !== generation ||
+      params.lifecycleEpoch.current !== epoch ||
+      params.sessionId.current !== sessionId
+    ) return;
+    params.onRunning();
+  };
+}
+
 async function requestRunningTransition(params: {
   request: () => Promise<unknown>;
   onRunning: () => void;

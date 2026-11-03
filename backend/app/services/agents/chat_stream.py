@@ -13,7 +13,7 @@ from app.core.http_client import get_http_client
 from app.services.agents.chat_common import prepare_chat_context
 from app.services.agents.endpoint_security import (
     EndpointNotAllowedError,
-    assert_agent_outbound_endpoint,
+    assert_agent_provider_endpoints,
 )
 from app.services.agents.providers import openrouter_model_candidates
 from app.services.agents.providers.dify_provider import DifyProvider
@@ -90,14 +90,8 @@ async def _prepare_stream(db, agent_id: int, message: str, history):
         )
 
     # 保存时只记告警，真正出站前必须硬校验；否则被放过的私网端点会在调用时被实际访问。
-    urls = (
-        ctx.provider.candidate_urls()
-        if hasattr(ctx.provider, "candidate_urls")
-        else [ctx.provider.chat_url()]
-    )
     try:
-        for url in urls:
-            await assert_agent_outbound_endpoint(url)
+        await assert_agent_provider_endpoints(ctx.provider)
     except EndpointNotAllowedError:
         logger.warning("[endpoint-security] 智能体出站端点被拒绝: agent_id={}", agent_id)
         raise _StreamSetupError(

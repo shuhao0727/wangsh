@@ -21,6 +21,10 @@
 
 ## 调试终端切页与输出归属
 
+- 调试Continue/Step及启动、重连握手的成功回包保留running fallback（DAP不保证另发continued），
+  但仅在同步动作generation、session ID与lifecycle epoch仍一致时回写；较新的stopped、
+  Pause/Reset/终止或会话替换使旧回包失效，不能把新paused/stopped覆盖回running。
+
 - 后端终端在切换到调试器/参考页时保持挂载与 TTY 连接，避免 Docker attach 的实时输出因组件卸载丢失，尤其是到达 `input()` 后才打开终端的提示。非活动页保留可测量尺寸，但使用 `visibility`、`inert` 与 `aria-hidden` 隔离显示、焦点和辅助技术；后台 WS 建连不得抢走调试器焦点。本地 Pyodide 终端沿用原有按页挂载生命周期。
 - Python 调试 attach 关闭 `redirectOutput`，程序 stdout/stderr 由 TTY 单路显示，避免 DAP 与 TTY 双路写入导致重复行或提示被插入其他输出；DAP 的协议诊断输出仍按既有通道保留。终端生命周期结束时仍须释放 WS 与 Xterm，不能为了保留输出而跨 session 保留旧连接。
 - 控制按钮与浏览器验收统一遵循下文“调试控制区交互约束”和“调试控制区真实浏览器验证”。
