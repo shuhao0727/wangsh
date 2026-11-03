@@ -210,7 +210,10 @@ services:
       dockerfile: Dockerfile.dev
     container_name: wangsh-pythonlab-worker
     restart: unless-stopped
-    user: "0:0" # 需要 root 权限操作 docker socket
+    # 与生产一致：按镜像里的 appuser 运行，docker.sock 靠补充组访问。
+    group_add:
+      - "0"
+      - "${DOCKER_SOCK_GID:-984}"
     environment:
       - DEPLOYMENT_ENV=docker
       - DOCKER_POSTGRES_HOST=postgres

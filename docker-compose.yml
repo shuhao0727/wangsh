@@ -311,7 +311,11 @@ services:
     environment:
       <<: *common-with-pythonlab-env
       PYTHONPATH: "/app"
-    user: "0:0"
+    # 运行身份与 backend 一致（镜像里已是 appuser），不再用 user: "0:0" 提权；
+    # 访问宿主 docker.sock 靠补充组，见 DEPLOY.md「生产发布目录与运行身份」。
+    group_add:
+      - "0"
+      - "${DOCKER_SOCK_GID:-984}"
     command: [ "sh", "-c", "celery -A app.celery_app:celery worker -l INFO -Q celery -c ${PYTHONLAB_WORKER_CONCURRENCY:-3} --include app.tasks.pythonlab -B" ]
     healthcheck:
       test: [ "CMD-SHELL", "celery -A app.celery_app:celery inspect ping -d celery@$$HOSTNAME || exit 1" ]
