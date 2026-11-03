@@ -1,6 +1,8 @@
 # XBK 校本课选课系统
 
-> 最后更新：2026-10-20（源码/配置核对；历史候选与裁决流程原文保留）
+> 状态：active
+> Owner：xbk
+> 最近复核：2026-11-02
 
 ## 第一、二阶段未发布候选：统一裁决、统一工作簿与唯一约束（2026-09-14）
 
@@ -10,7 +12,7 @@
 > 状态更新（2026-10-20）：上述源码已随提交 `ce3f2b2`（"release WangSh 2.1..."）入库，并为
 > `2.1.2` 发布提交 `296ba42` 的祖先；`shuhao-Virtual-Machine` 生产栈的六个业务容器当前为
 > `2.1.2`（2026-09-27 验收），该次发布明确“未执行数据库迁移”（见
-> [发布记录](../docker/RELEASE_NOTES.md)、[TEST_STATUS](../docker/testing/TEST_STATUS.md)）。
+> [发布记录](../operations/RELEASE_NOTES.md)、[TEST_STATUS](../testing/TEST_STATUS.md)）。
 > 因此下文“未发布/未提交”的限定仅对**正常数据库迁移与生产库发布**继续有效；候选唯一索引
 > `20260914_0001_xbk_active_selection_unique` 仍不得视为已在生产库应用。
 
@@ -90,7 +92,7 @@
   陈子轩（438，课程 8/18）、朱子涵（728，课程 21/7）。**保留哪一门属于业务决定**，
   模型没有 `source` 字段，`created_at`/`updated_at` 不是业务权威，`is_deleted` 是唯一状态信号，
   代码无法推断正确记录。记录见
-  [TEST_STATUS](../docker/testing/TEST_STATUS.md)（2026-09-15 生产部署只读预检与恢复演练）。
+  [TEST_STATUS](../testing/TEST_STATUS.md)（2026-09-15 生产部署只读预检与恢复演练）。
 - `TEST_STATUS.md` 明确要求：**必须由业务方明确每名学生保留哪一门，再在停写、备份和复核后
   处理；不得自动猜测或直接删除。** 本节所述工具即为此流程准备，工具本身不做任何裁决。
 
@@ -174,7 +176,7 @@ netloc 主机为空时会采纳 `?host=` / `?port=` / `?service=` 等参数，�
 
 ### 停写、备份与复核要求
 
-处理动作不是普通业务写入，必须按 [部署文档](../docker/deploy/DEPLOY.md) 的迁移前要求执行：
+处理动作不是普通业务写入，必须按 [部署文档](../operations/DEPLOY.md) 的迁移前要求执行：
 
 - 先做**只读预检**（`audit` 脚本）并留档重复组清单；
 - 完成**可恢复备份**后再动数据；
@@ -202,11 +204,11 @@ netloc 主机为空时会采纳 `?host=` / `?port=` / `?service=` 等参数，�
 - 正常请求的真实 `get_db` 依赖退出仍经 `AsyncSession.__aexit__/close` 清理。R4 的 SQLite retained-caller 失败曾属于更强合同缺口，并不证明正常 HTTP 持久化损坏；R5 在此基础上补充 PostgreSQL/asyncpg 在途查询、父行锁等待和延迟提交内取消的维护回归，验证独立 reader、锁释放及重试。
 - **重复取消与提交确认边界**：第二次 `Task.cancel()` 可中断 rollback；本函数不使用无界 shield 或吞掉取消来承诺绝对清理。保留 session 的调用方此时仍须在自身清理上下文中 rollback/close，再复用。维护用例另核验 rollback 被第二次取消中断后真实 ASGI 依赖退出的清理。数据库已经提交、但客户端未收到响应时，不能靠后续 rollback 撤回提交，也不能把“请求断开”等同于“导入未生效”。
 - 真实 TCP 断连测试区分两条路径：已上传请求的客户端离开后，服务端可继续完成导入；显式服务端任务取消时，依赖退出结束未完成事务并可重试。测试中的显式取消不是声称 Uvicorn 会自动取消断连请求，也不改变当前请求生命周期策略。
-- 维护入口：`backend/tests/xbk/test_r4_import_restore_transaction.py` 保留 SQLite 故障模型；`backend/tests/xbk/test_xbk_import_cancellation_pg.py` 仅允许专用 `postgresql+asyncpg` 测试库和唯一合成 schema，TCP 分支还要求显式分配回环端口。必须经清环境、禁 dotenv、限制连接与写路径的外部运行器执行，不能普通未隔离 pytest 直跑。动态结果与证据统一见 [TEST_STATUS](../docker/testing/TEST_STATUS.md)。
+- 维护入口：`backend/tests/xbk/test_r4_import_restore_transaction.py` 保留 SQLite 故障模型；`backend/tests/xbk/test_xbk_import_cancellation_pg.py` 仅允许专用 `postgresql+asyncpg` 测试库和唯一合成 schema，TCP 分支还要求显式分配回环端口。必须经清环境、禁 dotenv、限制连接与写路径的外部运行器执行，不能普通未隔离 pytest 直跑。动态结果与证据统一见 [TEST_STATUS](../testing/TEST_STATUS.md)。
 
 ### 导出文件与 Excel 客户端验收
 
-应用导出采用同一筛选条件和显式文本单元格，保留前导零、长学号及以 `= + - @` 开头的字面文本；合成名册的 HTTP 导出产物与工作簿结构核验不能代替 Microsoft Excel 实际打开。通用导出的 `data` 与孤立选课 `diagnostics` 分表，后者不冒充有效名单；打印用分发表不要求具有通用导出相同的自动筛选布局。Excel 客户端实际打开、筛选与文本显示的本批证据由 [TEST_STATUS](../docker/testing/TEST_STATUS.md) 统一记录，真实业务名册与大规模性能不由合成样本推断。
+应用导出采用同一筛选条件和显式文本单元格，保留前导零、长学号及以 `= + - @` 开头的字面文本；合成名册的 HTTP 导出产物与工作簿结构核验不能代替 Microsoft Excel 实际打开。通用导出的 `data` 与孤立选课 `diagnostics` 分表，后者不冒充有效名单；打印用分发表不要求具有通用导出相同的自动筛选布局。Excel 客户端实际打开、筛选与文本显示的本批证据由 [TEST_STATUS](../testing/TEST_STATUS.md) 统一记录，真实业务名册与大规模性能不由合成样本推断。
 
 ## 并发写入与父实体删除（2026-09-09）
 
@@ -216,7 +218,7 @@ netloc 主机为空时会采纳 `?host=` / `?port=` / `?service=` 等参数，�
 - preview 只是快照，不预留名额或承诺 execute 成功；execute 的严格校验失败或全部行无效时立即 rollback 释放预检锁。其他请求业务错误仍要求调用方结束事务。
 - 保证限于 PostgreSQL READ COMMITTED 下使用此协议的合作入口。导入持锁至事务结束，删除可能等待；未做生产规模性能和混版本验证。没有新增 FK 或 schema migration，直接 SQL/旧代码绕过入口不受保证。
 - **自然键更名仍待规则决定**：有关联选课时修改学号、课程代码或期间应拒绝还是事务同步迁移，不能由本次锁修复替用户决定；锁本身不能防止更名造成历史关联失联。真实名册与 Excel 实际打开仍独立验收。
-- 测试结果统一见 [TEST_STATUS](../docker/testing/TEST_STATUS.md)。
+- 测试结果统一见 [TEST_STATUS](../testing/TEST_STATUS.md)。
 
 ## 概述
 
@@ -319,7 +321,7 @@ CSV/Excel 输入解析和预览/执行共同使用的整文件校验 helper 位�
 `operator does not exist: integer = character varying`，先只读检查实际列类型和
 `alembic_version`，不要通过返回空数据或临时截取请求年份规避结构不匹配。
 备份、目标 revision 升级及回滚要求见
-[部署文档的数据库迁移策略](../docker/deploy/DEPLOY.md#数据库迁移策略)。
+[部署文档的数据库迁移策略](../operations/DEPLOY.md#数据库迁移策略)。
 
 ### 虚拟行处理
 
@@ -417,7 +419,7 @@ CSV/Excel 输入解析和预览/执行共同使用的整文件校验 helper 位�
 - 无有效学生名册的有效选课（含学生已软删除）单列于 `diagnostics`，不混入 `data`，也不删除数据库记录。诊断表按选课快照学年、学期、年级筛选，保留快照姓名及旧搜索口径：学号、课程代码、快照姓名；`course_results` 还匹配课程名、教师、地点。指定非空班级筛选时，诊断表为空，因为孤立选课不能归入有效名册班级。
 - 有有效学生但课程缺失/软删除的选课仍在 `data`，保留原课程代码；`course_results` 的课程名称按既有逻辑回退为 `未选`，不误归为名册孤立诊断。
 - **两 sheet 兼容提醒**：这两个 scope 始终输出 `data`、`diagnostics`，空表也保留各 scope 的稳定列头，并同样应用样式与文本安全处理。原先只读第一 sheet 获取孤立诊断的消费者必须改读 `diagnostics`；主表搜索与行集合也已调整，不能宣称完全向后兼容或把两个 sheet 合并后当作页面列表。
-- 主表与诊断表分别查询，不承诺并发写入时二者来自同一数据库快照；大名册性能、Excel 实际打开及最终镜像/浏览器下载另行验收，结果见 [TEST_STATUS](../docker/testing/TEST_STATUS.md)。
+- 主表与诊断表分别查询，不承诺并发写入时二者来自同一数据库快照；大名册性能、Excel 实际打开及最终镜像/浏览器下载另行验收，结果见 [TEST_STATUS](../testing/TEST_STATUS.md)。
 - **course-selection**（学生选课表）：按名册与课程目录生成待填写的空白选课表，含课程代码/限额校验；课程目录及班级表启用工作表编辑保护，仅课程代码填写区域解锁；标题学年直接由规范 `year` 解析，前端不再单独提交 `yearStart` / `yearEnd`（后端 `GET /xbk/export/{export_type}` 仍保留这两个可选 query 参数用于覆盖标题年份，`backend/app/api/endpoints/xbk/exports.py:27-28`）
 - **distribution**（各班分发表）：按班级分布的选课统计
 - **teacher-distribution**（教师分发表）：按教师分布的选课统计
@@ -572,3 +574,7 @@ CSV/Excel 输入解析和预览/执行共同使用的整文件校验 helper 位�
 ### 文本导出的 XML writer 兼容边界
 
 所有当前 XBK 导出须在填充工作表完成后执行 `force_text_cells` 或 `force_text_workbook`，数值统计保持数值。含 CR 的工作簿仅在该实例的 `save` 路径增加 ZIP XML 适配，将原始 CR 写为字符引用，避免无 lxml 时 CR/CRLF 在回读中归一成 LF；不修改全局 openpyxl writer。该保证限合法 XML/Excel 长度内文本，不承诺非法控制字符、write-only 工作簿或绕过实例直接调用底层保存函数。含 CR 会增加一次内存缓冲与重压缩，大名册峰值内存/耗时及真实 Excel 打开仍需验收。
+
+### 批量调班边界（2026-10-31）
+
+现有学生名册支持单行编辑和按合同导入更新。本批真实名册没有多选与批量调班动作，定向源码亦无该流程；原验收清单6.6按 XBK-01 保留功能缺口，不以批量导入更新班级冒充已实现该操作。

@@ -1,6 +1,8 @@
 # 信息学笔记系统文档
 
-> 最后更新：2026-07-18
+> 状态：reference
+> Owner：informatics
+> 最近复核：2026-11-02
 
 ## 概述
 
@@ -223,7 +225,6 @@
 
 Typst 编辑器侧栏与正文共享工作区边界，侧栏独立滚动。进入窄屏时，分屏模式自动切换为编辑模式；预览编译、保存和资源管理仍遵循原有流程。
 
-
 - `/informatics` — 公开笔记列表与内嵌阅读器（`pages/Informatics/index.tsx` 转出 `Reader.tsx`）
 - `/informatics/:id` — PDF 阅读器（`Detail.tsx`）
 - `/admin/informatics` — 笔记管理后台（`pages/Admin/Informatics/index.tsx`）
@@ -234,7 +235,7 @@ Typst 编辑器侧栏与正文共享工作区边界，侧栏独立滚动。进�
 ## 相关文档
 
 - [API 参考](../development/API.md) — 第九章：信息学笔记
-- [AUTO_REFRESH.md](./AUTO_REFRESH.md) — SSE 实时推送
+- [AUTO_REFRESH.md](AUTO_REFRESH.md) — SSE 实时推送
 
 ## 相关文件
 

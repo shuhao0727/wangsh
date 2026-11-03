@@ -1,69 +1,49 @@
 # WangSh
 
-高中信息技术教学管理平台，集成 AI 智能体、PythonLab 调试环境、信息学竞赛笔记、课堂互动等功能。
+高中信息技术教学管理平台，包含 AI 智能体、PythonLab、课堂互动、测评和竞赛笔记。
 
-## 快速启动
+## 本地开发
 
-### 本地开发
+首次创建开发配置；已有 `.env.dev` 时保留原文件，按开发模板核对所需项。生产模板 `.env.example` 不能直接用于本地启动。
 
 ```bash
-# 复制开发配置
-cp .env.example .env.dev
+test -e .env.dev || cp .env.dev.example .env.dev
+```
 
-# 启动开发环境（前端 6608，后端 8000）
+填写 `.env.dev` 中的 `POSTGRES_PASSWORD`、`SUPER_ADMIN_PASSWORD`、`SECRET_KEY` 和合法的
+`AGENT_API_KEY_ENCRYPTION_KEY`，使用独立开发凭据；模板已指定 `127.0.0.1:5433` 和 development。
+
+```bash
 bash start-dev.sh
+```
 
-# 停止
+结束本次开发环境：
+
+```bash
 bash stop-dev.sh
 ```
 
-**开发端口**：前端 `http://localhost:6608`，后端 `http://localhost:8000`
+默认前端 `6608`、后端 `8000`。启动前核对当前工作树和已有服务，避免端口及数据挂载冲突。
 
-### 生产部署
+## 生产部署
 
-```bash
-# 复制生产配置并修改密钥
-cp .env.example .env
-
-# 部署（校验 + 拉取 + 启动）
-bash scripts/deploy.sh deploy
-```
-
-**详细文档**：[docs/docker/deploy/DEPLOY.md](./docs/docker/deploy/DEPLOY.md)
-
----
+按 [部署指南](docs/operations/DEPLOY.md) 核对授权、发布来源、配置、备份与回退方式后，
+使用 `scripts/deploy.sh` 对应入口。不要照抄开发配置覆盖生产环境。
 
 ## 文档导航
 
-| 类型 | 链接 | 说明 |
-|------|------|------|
-| **总索引** | [docs/README.md](./docs/README.md) | 所有文档的导航入口 |
-| **部署运维** | [docs/docker/README.md](./docs/docker/README.md) | Docker 完整指南 |
-| **开发规范** | [AGENTS.md](./AGENTS.md) | Agent 协作与项目工程规则 |
-| **API 接口** | [docs/development/API.md](./docs/development/API.md) | 后端接口清单 |
+| 用途 | 入口 |
+|---|---|
+| 文档总索引 | [docs/README.md](docs/README.md) |
+| Agent 工作规则 | [CLAUDE.md](CLAUDE.md) |
+| API 合同 | [API.md](docs/development/API.md) |
+| 部署与发布 | [运维入口](docs/operations/README.md) |
+| 当前验证与待办 | [测试状态](docs/testing/TEST_STATUS.md)、[项目台账](docs/plans/project-consolidation.md) |
 
-**功能模块文档**：`docs/features/` 目录包含所有功能详细说明（AI 智能体、PythonLab、课堂系统等）
+## 技术与目录
 
----
+- 前端：React、TypeScript、Vite、Tailwind、TanStack；版本以 `frontend/package.json` 为准。
+- 后端：FastAPI、SQLAlchemy async、PostgreSQL、Redis、Celery；依赖见 `backend/requirements.txt`。
+- `frontend/`、`backend/`：应用源码；`gateway/`：网关；`scripts/`：跨模块和运维入口；`docs/`：文档。
 
-## 技术栈
-
-- **前端**: React 19 + TypeScript + Vite + Tailwind CSS + TanStack Query/Table
-- **后端**: FastAPI + SQLAlchemy async + PostgreSQL + Redis + Celery
-- **容器**: Docker + Docker Compose + Caddy
-- **AI**: OpenRouter、Dify、SiliconFlow 和自定义 OpenAI 兼容端点
-
----
-
-## 项目结构
-
-```
-wangsh/
-├── frontend/          # React 前端
-├── backend/           # FastAPI 后端
-├── gateway/           # Caddy 网关
-├── docs/              # 文档中心
-└── scripts/           # 部署与验证脚本
-```
-
-完整说明见 [docs/README.md](./docs/README.md)
+开发和生产分别使用 `docker-compose.dev.yml`、`docker-compose.yml`，不要混用。

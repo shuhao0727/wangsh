@@ -6,7 +6,7 @@
 > 复核周期：每 90 天
 
 本文维护 KNN 学生采集、教师管理、数据库与课堂数据导出的当前源码合同。发布、迁移和实际验证状态以
-[发布记录](../docker/RELEASE_NOTES.md)及[当前测试状态](../docker/testing/TEST_STATUS.md)为准。
+[发布记录](../operations/RELEASE_NOTES.md)及[当前测试状态](../testing/TEST_STATUS.md)为准。
 
 ## 页面与使用流程
 
@@ -113,7 +113,7 @@ JSON 不含学号、提交时间或重填记录。此功能准备课堂数据，
 
 迁移应先在隔离 PostgreSQL 验证升级、降级、再次升级及并发约束，再在目标环境执行。
 降级会删除这三张表及其采集、历史和冻结数据，不能用于有业务数据时的无损回滚；
-目标环境迁移前按[部署指南](../docker/deploy/DEPLOY.md)备份数据库。
+目标环境迁移前按[部署指南](../operations/DEPLOY.md)备份数据库。
 仅改源码或开发环境迁移，不代表服务器完成升级。
 
 ## 代码入口与验证
@@ -123,4 +123,4 @@ JSON 不含学号、提交时间或重填记录。此功能准备课堂数据，
 - 学生界面：`frontend/src/pages/Games/Knn/`；请求与查询：`frontend/src/services/knn.ts`、`frontend/src/hooks/queries/useKnnQuery.ts`。
 - 接口字段、响应与错误码见 [API 契约](../development/API.md#knn-运动习惯采集itknn)。
 - 维护测试遵循 [后端测试说明](../../backend/tests/README.md)，当前执行结果只记录在
-  [TEST_STATUS](../docker/testing/TEST_STATUS.md)。
+  [TEST_STATUS](../testing/TEST_STATUS.md)。

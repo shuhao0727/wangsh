@@ -1,8 +1,12 @@
 # AI 智能体系统文档
 
-> 最后更新：2026-10-24
-> 
-> **注意**：SSE流式输出修复已于2026-03-23完成，Dify集成已支持完整流式效果。
+> 状态：active
+> Owner：AI agents
+> 最近复核：2026-10-31（文档与源码合同核对）
+
+本文维护功能、权限与流式边界。接口字段见 [API](../development/API.md)，
+部署配置见 [DEPLOY](../operations/DEPLOY.md)，实测与发布状态分别见
+[TEST_STATUS](../testing/TEST_STATUS.md) 和 [RELEASE_NOTES](../operations/RELEASE_NOTES.md)。
 
 ## 概述
 
@@ -44,36 +48,22 @@ AI 智能体系统是项目的核心功能模块，支持多平台 AI 对话、�
 
 ## AI伙伴临时共享榜单（未发布）
 
-> 发布状态更新（2026-10-20 复核）：本节对应源码已随 `2.1.4` 及后续发布构建进入镜像
-> （`0797303` 为 `2.1.3` 版本准备提交，其后是 `2.1.4` 发布准备 `78b86de`；当前
-> `frontend/package.json` 为 `2.1.6`）。标题保留原文以维持既有链接锚点；“未发布”只适用于
-> 本节记录的候选阶段，不代表当前构建内容。服务器是否已部署仍以发布记录为准。
+标题保留历史名称以兼容链接；以下为当前源码合同，不表示目标环境已部署或完成真实模型验收。
 
-- 独立页面入口仍为 `/games/ai-partner/index.html`。源码维护于 `frontend/ai-partner/`，
-  来源为 `/Users/wsh/Documents/Codex/项目/img2threejs-试用/robot-v1`；保留三维展示、选型与课堂检查。
-  本轮将原前端规则评分改为后端调用平台已配置模型，评价价格/性价比、完成度、选型合理性和验证风险；
+- 独立页面入口为 `/games/ai-partner/index.html`，源码维护于 `frontend/ai-partner/`，
+  包含三维展示、选型与课堂检查。评分由后端调用平台已配置模型，评价价格/性价比、完成度、选型合理性和验证风险；
   课堂参考价格不是实时采购报价，课堂检查也不等于真实硬件或模型验证。
 - 前端通过 `POST /ai-partner/evaluate` 获取服务端评分与 `evaluation_id`，榜单提交不再传入客户端 `score`。
   未配置可用 AI 或评分调用失败时必须明确提示不可评分，不使用本地规则或固定分数冒充模型结果。
   四维各 `25` 分，总分由服务端求和；价格依据后端目录而非客户端传价。
   字段、模型配置和凭证限制分别以 API 与部署 owner 为准。
 - 评分智能体 ID 留空或仅空白时视为未配置，后端正常启动；非空值继续要求正整数。
-- **评分的耗时与容错**（2026-10-29 实测后确定，改动前请先读）：
-  - 单次推理实测 24–43s（中位数约 25s）。四层超时必须严格嵌套：
-    httpx 单次 50s < 总预算 110s < Redis 锁 120s < 前端 140s < 网关该路径 180s。
-    任何一层比上一层短，都会在上一层的预算用完前先断开。
-  - 网关必须为 `/api/v1/ai-partner/evaluate` 单独放宽 `response_header_timeout`
-    （默认 30s）。注意：这个评分接口是普通 JSON 响应，响应头要等整段推理结束才会发出
-    （`/ai-agents/stream` 这类 SSE 接口是流式返回、头会先发出，不受这一层约束），
-    用默认值会在 30s 断开。
-  - 模型偶发输出语法损坏的 JSON 或多余维度。解析失败会**重试一次**（`MODEL_ATTEMPTS=2`）；
-    超时与上游 5xx **不重试**——重试只会翻倍延迟且多半仍失败。
-    实测重试能挽回约 2/3 的坏输出，但无法完全消除：模型侧损坏概率仍在。
-  - Dify 的 DeepSeek 插件会把思维链写进 `<think>…</think>`，与答案共用同一字符串；
-    解析前必须过 `assistant_answer_sanitizer`，否则 `json.loads` 必然失败。
+- **评分的耗时与容错**：httpx 单次 50s < 总预算 110s < Redis 锁 120s < 前端 140s < 网关该路径 180s。
+  评分使用普通 JSON 响应，网关的响应头等待预算必须覆盖完整推理；配置由部署指南维护。
+  模型输出先清理推理内容，再提取和校验四维结果；解析/校验失败最多重试一次，超时与上游 HTTP 错误不重试。
+  实际延迟和失败样本见测试及发布记录，不能作为稳定性能承诺。
 - 桌面左上角入口与浮窗标题统一为“榜单”，浮窗不额外展示说明段落；保留状态与错误反馈。
 - 页面精简重复介绍和装饰文字，选型规则折叠查看；操作引导、配置缺项、风险提醒、评分理由及数据说明保留，选型/测试/评分/上榜/草稿与导出规则不变。
-  本轮桌面优先、不测手机，不将这项范围选择写成移动端验收通过。
 - 修改方案会使已有评分失效；评分中修改方案或切换账号后，旧响应不能覆盖当前方案。
   前端仍在课堂检查、核心测试和课堂记录满足条件后允许提交，但这些前端门槛不是服务端实测证明。
 - 榜单面向正式登录用户，拒绝 `guest`；前端复用原平台 auth 客户端，不另建登录或 token 来源。
@@ -82,15 +72,14 @@ AI 智能体系统是项目的核心功能模块，支持多平台 AI 对话、�
 - 仅当榜单浮窗开启且页面可见时，每 `5` 秒轮询；关闭浮窗或页面不可见时停止轮询。
 - 榜单是 Redis 共享的课堂临时展示，不是防作弊或考试评分系统；不永久记录姓名和成绩，
   不新增管理员、数据库表或 migration。排名、有效期及错误码以 [API 合同](../development/API.md#ai伙伴临时共享榜单未发布) 为准。
-- 新一课通过更换轮次配置开始，不增加管理员操作入口；见 [配置说明](../docker/deploy/DEPLOY.md#ai伙伴临时共享榜单配置未发布)。
+- 新一课通过更换轮次配置开始，不增加管理员操作入口；见 [配置说明](../operations/DEPLOY.md#ai伙伴临时共享榜单配置未发布)。
   独立源码构建与静态资源边界见 [前端脚本说明](../../frontend/scripts/README.md#ai伙伴独立源码入口未发布)。
 - AI 伙伴选型目录的唯一维护源为 `backend/app/services/ai_partner_catalog.json`。修改后在仓库根目录运行
   `node scripts/sync-ai-partner-catalog.mjs --write`，生成 `frontend/ai-partner/src/catalog.json` 并同时保留两份变更；
   前后端各自携带运行资源，继续独立构建。CI 使用 `node scripts/sync-ai-partner-catalog.mjs --check` 检查副本漂移，
   不直接编辑前端派生副本；脚本入口见 [scripts/README.md](../../scripts/README.md)。
 
-以上为候选阶段的变更记录；当前构建状态见本节开头说明。本节不复制测试数字，实际结果
-由主线程统一写入 [TEST_STATUS](../docker/testing/TEST_STATUS.md)。
+桌面、移动端和真实模型的验收范围分别记录，不从界面实现推断通过。
 
 ## 历史加载与会话身份边界
 
@@ -104,49 +93,38 @@ AI 智能体系统是项目的核心功能模块，支持多平台 AI 对话、�
 
 ### SSRF 防护的放行边界（改动前必读）
 
-智能体端点、模型发现都要过 `backend/app/services/agents/endpoint_security.py` 的
-IP 校验。判定**按真实风险分级，不是按 `is_private` 一刀切**：
+校验入口为 `backend/app/services/agents/endpoint_security.py`。未命中显式例外的目标
+必须使用 HTTP(S)，解析全部 A/AAAA 地址；无解析结果或任一地址被拒绝时拒绝端点。
+以下是当前源码的默认 IP 策略，不是对目标安全性的证明：
 
-| 地址类别 | 判定 | 理由 |
+| 地址类别 | 判定 | 边界 |
 |---|---|---|
-| 云元数据 `169.254.169.254`、`100.100.100.200`、`fd00:ec2::254` | **拒绝（最高优先级）** | 命中即可拿到云主机临时凭证，是真实的攻击面 |
-| 基准测试段 `198.18.0.0/15`、`2001:2::/48` | **放行** | 现代内网基本不用；本地代理的 fake-ip 恰好落在这里 |
+| 云元数据 `169.254.169.254`、`100.100.100.200`、`fd00:ec2::254` | 拒绝 | 默认 IP 判定优先拒绝 |
+| 基准测试段 `198.18.0.0/15`、`2001:2::/48` | 放行 | 现有 fake-IP 兼容策略；不代表转发后的目标已被验证 |
 | RFC 1918 私网 `10/8`、`172.16/12`、`192.168/16` | 拒绝 | 常规内网 |
 | 环回 `127/8`、`::1` | 拒绝 | 打到自身服务 |
 | 链路本地 `169.254/16`（非上述元数据地址） | 拒绝 | |
 | 组播 / 未指定 / 保留 | 拒绝 | |
 
-**为什么放行基准测试段**（2026-10-29 实测）：
+显式例外只在调用方开启对应选项时生效：本机 Ollama 仅允许 `localhost`、`127.0.0.1`、
+`::1` 的显式 `11434` 端口；`AGENT_TRUSTED_INTERNAL_ENDPOINTS` 按协议、主机、显式端口和路径边界匹配，
+命中后在 DNS/IP 校验前短路放行。白名单只能由受控部署配置维护，不能为连通测试临时扩大。
 
-本地开启 Clash 的 fake-ip 后，`newapi.dragon3api.com` 被解析成 `198.18.1.8`。
-浏览器和 `curl` 都能正常访问——`curl -sv` 显示 `Trying 198.18.1.8:443`
-且连接成功返回 401，说明代理在该地址上转发。旧逻辑按 `is_private` 拒绝，
-导致本地**完全无法配置 AI 智能体**。而这两个段不在 RFC 1918 内、云元数据也不用，
-放行的实际风险很低。
+IPv4-mapped IPv6 先归一化再判断，`::ffff:10.0.0.1` 仍拒绝。
+DNS 校验与实际连接之间仍有时间差；白名单及 fake-IP 的转发目标也不由本次地址检查证明。
+`curl` 可达或返回 `401` 只说明连接/认证反馈，不能证明安全。DNS 测试固定解析结果，避免本机代理影响断言。
 
-**IPv4-mapped 归一化**：`::ffff:198.18.1.8` 这类写法先归一化成 IPv4 再判定，
-否则可以用 IPv6 写法绕过。`::ffff:10.0.0.1` 仍然判为内网。
-
-**写测试时的注意事项**：不要依赖真实 DNS。本地开 fake-ip 后，
-`docker-api-1` 会被解析成 `198.18.0.198`、`.invalid` 域名也能"解析成功"，
-测试会得到与 CI 相反的结果。应该在 fixture 里 mock `socket.getaddrinfo`。
+保存智能体使用异步软校验，创建与显式更新 endpoint 都等待非阻塞 DNS guard；命中限制或一般
+校验故障只记录固定告警并继续保存，不等于已阻断出站 SSRF 或重定向。取消继续传播、不得提交。
+同步 helper 保留给非事件循环调用方。软告警与受信白名单日志不记录 URL、名称、凭据或异常原文；
+专项回归为 `backend/tests/ai_agents/test_agent_endpoint_warning.py`，采用自含离线隔离入口。
 
 ### 智能体缓存约定（踩过坑，改动前必读）
 
-`ai_agent.get_agent()` 带进程级 `TTLCache(ttl=60)`。**缓存里只能放普通属性字典，
-绝不能放 ORM 实例。**
-
-原因：ORM 实例绑定在创建它的 session 上，而 `get_db` 是请求级的。
-session 关闭后实例变 detached；一旦需要刷新属性就抛
-`DetachedInstanceError: Instance <AIAgent> is not bound to a Session`。
-
-2026-10-29 生产实测症状：`POST /api/v1/ai-agents/stream` **3 次里 2 次 503**
-「读取智能体配置失败」，堆栈落在 `build_messages` 读 `system_prompt`。
-用户点开 AI 智能体对话大概率看不到回答。
-
-修法是缓存只存列数据快照（用 `sa_inspect(agent).mapper.column_attrs` 取），
-命中时用 `AIAgent(**snapshot)` 重建游离实例返回——返回值类型不变，
-但不再与任何 session 绑定。有测试 `tests/ai_agents/test_agent_cache_detached.py` 锁住。
+`ai_agent.get_agent()` 的进程级 `TTLCache` 有效期由 `AGENT_CACHE_TTL` 配置，默认 60 秒；
+只保存普通列属性快照，不能缓存请求会话中的 ORM 实例。
+命中后以 `AIAgent(**snapshot)` 重建返回值，避免跨请求访问已关闭 session 的属性。
+维护回归为 `backend/tests/ai_agents/test_agent_cache_detached.py`；历史故障见发布和测试记录。
 
 ### 数据模型
 
@@ -183,33 +161,11 @@ session 关闭后实例变 detached；一旦需要刷新属性就抛
 
 ### 流式输出修复（2026-03-23）
 
-**问题**：Dify 对话响应一次性显示，无流式效果
-
-**根因链**：后端 httpx → FastAPI StreamingResponse → 开发期 Vite 代理或生产
-Caddy 网关 → 浏览器，任一层错误缓冲都会破坏流式体验
-
-**修复方案（3层）**：
-
-1. **后端 `backend/app/services/agents/chat_stream.py`（Dify 字节流细节在 `chat_stream_dify_helpers.py`）**：
-   - 使用 `aiter_bytes()` 增量读取 Dify SSE 字节流，并按单个 SSE 事件边界重新组帧
-   - 避免使用 `aiter_text()` 或 `aiter_lines()`（会缓冲），也不聚合完整响应后再返回
-
-2. **后端 `backend/app/api/endpoints/agents/ai_agents/stream.py`**：
-   - StreamingResponse 添加响应头：
-     - `Cache-Control: no-cache, no-transform`
-     - `X-Accel-Buffering: no`
-
-3. **代理与网关**：
-   - 开发环境由 `frontend/vite.config.ts` 将流式 API 代理到 `DEV_PROXY_TARGET`
-   - 生产环境由 Caddy 转发 `/api/*`
-   - 不要重新引入会聚合完整响应后再返回的自定义代理处理
-
-**前端**：
-- 使用 `useStreamEngine` hook
-- XHR `onprogress` + `eventsource-parser` 解析 SSE 事件
-- 替代 Fetch API（Fetch reader.read() 也会缓冲）
-
-**教训**：SSE 流式输出需要全链路禁用缓冲，任何一层缓冲都会导致前端一次性收到所有数据
+- 后端 `chat_stream.py` / `chat_stream_dify_helpers.py` 使用 `aiter_bytes()` 增量读取并按 SSE 事件组帧。
+- 响应层 `api/endpoints/agents/ai_agents/stream.py` 设置 `Cache-Control: no-cache, no-transform` 与 `X-Accel-Buffering: no`。
+- 开发 Vite 代理到 `DEV_PROXY_TARGET`，生产 Caddy 转发 `/api/*`；中间层不得聚合完整响应后才发送。
+- 前端 `useStreamEngine` 使用 XHR `onprogress` 与 `eventsource-parser`。是否流式须检查实际分片到达，
+  不能仅凭使用 XHR、Fetch 或某个读取方法判定。
 
 ### Dify 推理内容隔离（2026-09-20）
 
@@ -244,9 +200,11 @@ HTTP 200 后无有效 SSE，均返回结构化错误而不是成功的空 `messa
 `wangsh:user:{user_id}:agent:{agent_id}`，不使用显示名或 `guest`。会话失效或无法复核时，SSE
 会发送 `session_invalid` 或 `session_revalidation_unavailable` 错误事件，并在 finally 中关闭上游流。
 
-以上修复消除了已识别的空回答、推理泄露和长流持有请求数据库会话问题。2026-09-28 起，Dify 长流还会通过 Redis 分布式租约执行跨 worker 的智能体级并发保护：默认每个智能体最多 20 条活动 Dify 流，最多等待 2 秒；超限返回 `provider_busy` 和 `retry_after`，Redis 不可用时返回 `concurrency_unavailable`，不再无限排队或把连接池耗尽。租约带 TTL、定期续期，并在成功、异常、客户端断开时释放；worker 崩溃后由 TTL 回收。续租失败会立即把租约标记为失效，停止继续读取上游或把响应标记为成功，避免 Redis 故障时保护阈值失效。
-
-另外，Redis 客户端初始化采用 single-flight 保护，60 条并发请求不会在首次访问时重复创建 Redis 连接池。`DIFY_MAX_CONCURRENCY` 是保护阈值，不是 Dify 官方容量承诺。60 人同时使用是否能全部成功，仍需结合真实 Dify 配额、响应时长和压测结果验收；并发保护的目标是把超载转换为可重试的明确失败，避免空回答和级联资源耗尽。
+Dify 长流使用 Redis 分布式租约，默认每个智能体最多 20 条活动流、等待最多 2 秒。
+超限返回 `provider_busy` 和 `retry_after`，Redis 不可用返回 `concurrency_unavailable`。
+租约带 TTL、定期续期，并在成功、异常或客户端断开时释放；worker 崩溃由 TTL 回收。
+续租失败立即停止读取上游，不把流标记为成功。Redis 客户端初始化采用 single-flight，避免并发重复建池。
+`DIFY_MAX_CONCURRENCY` 是保护阈值，课堂容量仍须按真实配额、响应时长和压测验收。
 
 ### 长回答与截断处理（2026-07-23）
 
@@ -317,8 +275,8 @@ HTTP 200 后无有效 SSE，均返回结构化错误而不是成功的空 `messa
 
 ### 会话生命周期
 
-1. **会话与用量记录**：对话走 `POST /ai-agents/stream`（SSE）写入消息；用量由前端另行调用 `POST /ai-agents/usage` 上报，服务端按 `session_id` 归并（没有独立会话表）
-2. **消息记录**：每条消息都记录到数据库
+1. **生成与持久化**：`POST /ai-agents/stream` 生成 SSE；前端另行调用 `POST /ai-agents/usage` 保存问答，服务端按 `session_id` 归并，没有独立会话表。
+2. **消息记录**：只保存符合上文完成及清理合同的内容；流式显示成功不等于使用记录已写入。
 3. **会话列表**：用户可查看历史会话
 4. **导出功能**：管理员可导出对话记录
 
@@ -351,7 +309,7 @@ HTTP 200 后无有效 SSE，均返回结构化错误而不是成功的空 `messa
 - Docker 开发栈中的非空会话已完成列表、详情和 usage 分页复验；列表与详情均按
   `schemas/agents/conversation.py` 的统一合同返回，旧 `ai_agent.py` 导入别名未重新
   引入重复 schema。
-- 本轮没有调用真实外部 AI 端点；连接失败场景继续使用本机不可达地址验证降级路径。
+- 该批次未调用真实外部 AI 端点；连接失败场景使用本机不可达地址验证降级路径，不代表后续版本已验收。
 
 ---
 
@@ -401,6 +359,7 @@ HTTP 200 后无有效 SSE，均返回结构化错误而不是成功的空 `messa
 - 教师提问在独立时间轨道定位，悬停显示原问；与学生提问的先后关系不代表因果关系。点击柱形查看该时段全部有效原问，点击折线仅查看迁移、延伸原问，也可通过时段选择框访问；旧记录只保存典型摘要时明确标注，不能还原全部原问或逐条分类。
 - 全程参与人数优先使用保存的去重摘要，必要时仅从完整有效事件按学生身份去重，不累加或取各桶人数最大值。说明、统计审计与任务单默认折叠，词云、评分、排行和长篇诊断退出主视图；底层分析结果保持原合同。
 - HTML、Markdown 导出与页面使用同一时间统计模型，保留时段、有效提问、其中生成性、参与人数及缺失数据说明；HTML 对动态文本进行转义。
+- lucid本地对比页复用上述时间模型，按各分析起点计算相对分钟，不将稀疏桶序号当时间；Bloom优先兼容旧总分布，否则汇总已保存桶分布，未保存的分布不伪造为零。概览、Bloom横轴、时序图例与提示统一使用短标题及记录编号，同前缀记录可独立识别和切换；本轮尚未合入main或发布。
 
 ### 深度分析异步任务
 
@@ -428,21 +387,20 @@ HTTP 200 后无有效 SSE，均返回结构化错误而不是成功的空 `messa
 `revoke(terminate=True)`。撤销请求不能作为数据库已回滚、结果未写入或 worker 已停止的证明，
 需要结合最终任务状态与分析记录核验。
 
-列表接口读取数据库中的分析记录，不提供运行中队列清单。指定 `analysis_type` 为
+主仓库尚未合入 lucid 修正的基线：列表接口读取数据库中的分析记录，不提供运行中队列清单。指定 `analysis_type` 为
 `hot_questions` 或 `student_chains` 时应用 `skip`、`limit`；未指定时分别取两类各
 `limit // 2` 条并合并，当前不应用 `skip`。响应 `total` 是本次返回条数，不能作为全库总数。
-混合列表的统一分页是 [项目整理台账](../docker/plans/project-consolidation.md#未解决与待复核事项)
-中的后续事项。
+lucid 已实现的未发布修正见下文“分析列表分页”；真实 PostgreSQL 验收以当前测试状态为准。
 
 运行依赖 Redis broker/result backend、Celery worker 和数据库；配置、启动、超时与运行检查
-统一遵循 [部署指南](../docker/deploy/DEPLOY.md)，不在本文复制启动命令。
+统一遵循 [部署指南](../operations/DEPLOY.md)，不在本文复制启动命令。
 实现入口为 `backend/app/api/endpoints/agents/ai_agents/analysis_async.py` 和
 `backend/app/tasks/agent_analysis.py`，任务注册由 `backend/app/core/celery_app.py` 维护。
 维护用例 `backend/tests/ai_agents/test_async_analysis.py` 检查签名、路由与 schema；
 真实模型、队列进度、失败/撤销和落库仍需专项端到端验证，结果只记入
-[TEST_STATUS.md](../docker/testing/TEST_STATUS.md)。
+[TEST_STATUS.md](../testing/TEST_STATUS.md)。
 
-数据库索引、归档与输入防护分别由 [数据库性能指南](../DATABASE_PERFORMANCE_GUIDE.md)、
+数据库索引、归档与输入防护分别由 [数据库性能指南](../development/DATABASE_PERFORMANCE_GUIDE.md)、
 [DATA_ARCHIVING.md](DATA_ARCHIVING.md) 和 [XSS_PROTECTION.md](../security/XSS_PROTECTION.md) 维护。
 历史分析报告中的容量、提速倍数和缓存收益是当时的估算或快照，未经当前负载复跑不能作为性能承诺。
 
@@ -481,6 +439,10 @@ HTTP 200 后无有效 SSE，均返回结构化错误而不是成功的空 `messa
 - `xxx` 在"模型不存在类 404"或 `429/5xx` 时可回退尝试 `xxx:free`
 
 ---
+
+### 分析列表分页（2026-10-31 lucid 未发布修正）
+
+`GET /api/v1/ai-agents/analyses/tasks` 的混合列表由数据库对两类元数据 `UNION ALL`，统一按 `created_at DESC NULLS LAST`、`type ASC`、`id DESC` 排序后执行 `skip`/`limit`；类型筛选使用相同次序。`total` 为筛选集合完整计数，空页也保留总数。`skip >= 0`、`1 <= limit <= 100`，每次两次 SQL，最多加载100条列表元数据，不加载分析正文。保留管理员共享可见范围、归档包含及未知类型回退混合的既有合同。稳定次序不保证并发变化时跨页快照，未据此宣称耗时提升。
 
 ## API 端点
 
@@ -539,11 +501,11 @@ HTTP 200 后无有效 SSE，均返回结构化错误而不是成功的空 `messa
 
 ```json
 {
-  "name": "OpenRouter GPT-4",
+  "name": "OpenRouter 示例",
   "agent_type": "general",
   "api_endpoint": "https://openrouter.ai/api/v1",
   "api_key": "sk-or-xxx",
-  "model_name": "openai/gpt-4-turbo",
+  "model_name": "<平台实际支持的模型 ID>",
   "is_active": true
 }
 ```
@@ -556,7 +518,6 @@ HTTP 200 后无有效 SSE，均返回结构化错误而不是成功的空 `messa
   "agent_type": "dify",
   "api_endpoint": "http://dify-api:5001/v1",
   "api_key": "app-xxx",
-  "model_name": "对话应用ID",
   "is_active": true
 }
 ```
@@ -569,7 +530,7 @@ HTTP 200 后无有效 SSE，均返回结构化错误而不是成功的空 `messa
 
 1. 检查后端响应头是否包含 `Cache-Control: no-cache`
 2. 检查 Vite 开发代理或生产 Caddy 是否保持流式转发，且没有聚合完整响应
-3. 检查前端是否使用 XHR 而非 Fetch API
+3. 检查 `useStreamEngine` 是否持续收到分片并按事件边界解析，不用传输 API 名称代替验证
 
 ### 小组讨论加入失败
 
@@ -604,8 +565,5 @@ HTTP 200 后无有效 SSE，均返回结构化错误而不是成功的空 `messa
 
 ## 最佳实践
 
-1. **API Key 安全**：使用加密存储，不要明文保存
-2. **流式输出**：全链路禁用缓冲，确保实时性
-3. **权限控制**：严格校验用户身份和班级归属
-4. **并发控制**：使用 Redis 锁防止冲突
-5. **错误处理**：透传上游错误信息，便于排查
+维护时按上文分别核对认证、对象归属、端点策略、流式完成与并发租约。
+客户端只接收受控错误码与限长、脱敏说明；不透传密钥、内部堆栈或完整上游异常。

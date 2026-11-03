@@ -4,6 +4,7 @@
 > Owner：assessment
 > 功能与 Prompt 契约版本：v2.0
 > 最近复核：2026-09-08
+> 局部复核：2026-10-31（lucid 本地计分修正，未合入 main、未发布）
 > 归档条件：当评估模块的 API、DB、前端和提示词契约被更细粒度 owner 完整替代时
 
 本文是自主检测系统的唯一长期 owner。它整合测评配置、题库、会话、画像、前端入口、
@@ -50,7 +51,21 @@ AI Prompt 和验证入口；历史阶段计划不再作为当前行为依据。
 - 写入等待后刷新 ORM 会话状态及单题答案快照；普通题目/结果只读不新增行锁。不同会话不共用该锁。AI 评分/自适应出题仍在原事务内，同会话请求可能等待供应商调用；超时、取消与长事务压力需要单独验收。数据库异常由请求事务边界回滚，不新增结构迁移。
 - 整卷结果仅对归属本人且处于 `submitted` / `graded` 的会话开放；`in_progress`（包括全部已答）及其他非结果状态返回 422，不提前提供标准答案或解析。单题已提交后的合法即时反馈不受此限制。
 - 新会话自适应首题使用逐题保存点：保存点内的生成或 SQL 写入失败只回滚当前题，再建立原合同中的无快照占位答案，保留外层新会话及此前固定/成功答案。边界是保存点已经建立；若建立前自动 flush 固定答案或前一题占位答案失败，则请求整体失败，由会话关闭回滚，不能声称仍可占位成功；隔离 SQLite/PG 用新 Session 验证无会话/答案部分提交。占位题后续评分与供应商故障体验仍需专项验收，不把该恢复机制当作首次起测严格并发幂等。AI JSON 解析集中在 `backend/app/services/assessment/ai_response_parsing.py`，`session_service` 保留兼容导出。
-- 自适应补题用于练习反馈，最终总分按每个知识点的首次作答去重计算。
+
+### 计分口径与本地修正（2026-10-31）
+
+以下修正已在 `.claude/worktrees/lucid-sanderson-a1b1bf` 本地实现，尚未合入 main 或发布；
+不能据此认定其他运行环境已生效。计分统一由 `backend/app/services/assessment/scoring.py`
+筛选计分答案，供交卷总分、初级画像和管理端知识点统计复用。
+
+- 固定题逐题计分；同一知识点下多道固定题的分母与得分都保留，不按知识点折叠。
+- 只有 `is_adaptive=true` 的答案按 `(session_id, knowledge_point)` 保留首轮；
+  自适应补题用于练习反馈，不计入最终总分。同知识点的固定题不占用自适应首轮名额。
+- 无知识点答案沿用既有兼容行为，直接保留。修正不重算已持久化的历史会话、画像或分析；
+  既有错误结果需另按明确范围处理，不能以代码修正推定旧结果已修复。
+
+例如同知识点两道固定题各 10 分，一对一错应为 `10/20`、知识点得分率 `50%`，
+并保留该知识点的失分记录。对应实例范围和未覆盖项见 [TEST_STATUS](../testing/TEST_STATUS.md)。
 
 ## 2. 数据模型与迁移
 
@@ -145,7 +160,6 @@ API 统一挂在 `backend/app/api/endpoints/assessment/` 下，完整路径前�
 提交交互使用单题保存/整卷提交共享的同步互斥保护，最终确认也重新检查，不能依赖按钮 disabled 或旧确认回调。保存中拒绝交卷并提示用户稍后显式重试，不排队自动结算；未保存/失败草稿按 answer ID 保留，跨题导航可恢复，保存成功前阻止交卷。选择题失败可“重试保存”，填空题可“提交”或 Enter，简答题可“保存”；简答失败后的 blur 不自动重试。已确认提交成功而结果加载失败时，再试只读结果，不重复交卷。
 
 倒计时当前仅提示时间，归零不自动提交；本轮没有新增截止后禁答规则。单题 timeout 按失败保留草稿，要求显式恢复，不把请求结束当成保存成功。服务端已写入但响应丢失的歧义、跨标签页并发、刷新/退出后草稿恢复及 PostgreSQL 事务仍须专项验收；这些内存保护不提供服务端幂等性或持久草稿。
-
 
 浮窗只把布局偏好写入 `localStorage`，不持久化答题或画像业务数据：
 
@@ -260,9 +274,9 @@ API 统一挂在 `backend/app/api/endpoints/assessment/` 下，完整路径前�
 
 - 文档与链接合同：`node scripts/check-markdown-contracts.mjs`
 - 文档合同测试：`node --test scripts/markdown-contracts.test.mjs`
-- 后端专项：`cd backend && pytest -q tests/assessment`；先确认专用数据库安全边界。
+- 后端专项：先按 [后端测试说明](../../backend/tests/README.md#运行前提) 核验导入与 collection 前的隔离，再在运行器中选择 `tests/assessment` 下的维护用例；不要直接将整个目录连接正常数据库。
 - 纯计分边界：在 [后端测试说明](../../backend/tests/README.md) 要求的隔离 bootstrap 中，以 `--noconftest -p no:cacheprovider` 选择 `tests/assessment/test_assessment_scoring.py` 和 `tests/assessment/test_assessment_session.py`；前者直接加载 `scoring.py`，后者覆盖 session mock 统计与兼容挂载点。后者会导入 app，必须在 collection 前禁 dotenv、注入合成配置并阻断外连。
-- 开放时间窗隔离回归：`cd backend && pytest -q tests/assessment/test_assessment_availability_isolated.py`，使用真实学生 router/JWT/角色守卫/service/ORM 和合成 SQLite 内存库。覆盖窗内外、起止边界、等价 aware offset、会话续答与拒绝先于副作用；安全入口与扩展筛选见 [后端测试说明](../../backend/tests/README.md#测评开放时间窗隔离回归)。SQLite 配置加载适配不代替真实 PostgreSQL 时区转换或并发验收。
+- 开放时间窗隔离回归：在上述隔离运行器中选择 `tests/assessment/test_assessment_availability_isolated.py`，使用真实学生 router/JWT/角色守卫/service/ORM 和合成 SQLite 内存库。覆盖窗内外、起止边界、等价 aware offset、会话续答与拒绝先于副作用；扩展筛选见 [后端测试说明](../../backend/tests/README.md#测评开放时间窗隔离回归)。SQLite 配置加载适配不代替真实 PostgreSQL 时区转换或并发验收。
 - 真实 PostgreSQL 班级隔离回归优先读取 `TEST_DATABASE_URL`，且数据库名必须包含
   `test`、`testing` 或 `ci`；未显式提供且默认库不合规时跳过，显式提供不合规库名则拒绝执行，不接触业务库。
 - 前端服务合同：`cd frontend && npm test -- src/services/assessment/__tests__/types.test.ts`
@@ -270,7 +284,7 @@ API 统一挂在 `backend/app/api/endpoints/assessment/` 下，完整路径前�
   `cd frontend && npm test -- src/components/assessmentEditorRoute.test.tsx`
 - 生产式 smoke：`backend/scripts/smoke_assessment_flow.py`，由
   `scripts/prod-smoke/run.py` 的 Assessment 模块编排
-- 当前测试状态：`docs/docker/testing/TEST_STATUS.md`
+- 当前测试状态：`docs/testing/TEST_STATUS.md`
 
 ## 7. 相关文件
 
@@ -278,8 +292,8 @@ API 统一挂在 `backend/app/api/endpoints/assessment/` 下，完整路径前�
 - `docs/README.md`
 - `docs/DOCUMENTATION_RULES.md`
 - `docs/development/API.md`
-- `docs/docker/testing/README.md`
-- `docs/docker/testing/TEST_STATUS.md`
+- `docs/testing/README.md`
+- `docs/testing/TEST_STATUS.md`
 - `backend/app/api/endpoints/assessment/`
 - `backend/app/services/assessment/`
 - `frontend/src/services/assessment/`

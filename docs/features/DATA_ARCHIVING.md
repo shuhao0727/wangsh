@@ -1,7 +1,8 @@
 # 数据归档功能
 
-> 最后复核：2026-10-20（以下行为已对照 `backend/app/tasks/data_archiving.py`、
-> `backend/app/api/endpoints/system/archiving.py`、`backend/app/core/celery_app.py` 核对）
+> 状态：active
+> Owner：backend
+> 最近复核：2026-11-02
 
 ## 概述
 
@@ -225,5 +226,5 @@ LIMIT 10;
 ## 相关文档
 
 - [Celery 异步分析任务](AI_AGENTS.md#深度分析异步任务)
-- [数据库性能指南](../DATABASE_PERFORMANCE_GUIDE.md)
+- [数据库性能指南](../development/DATABASE_PERFORMANCE_GUIDE.md)
 - [系统监控](../operations/MONITORING.md)

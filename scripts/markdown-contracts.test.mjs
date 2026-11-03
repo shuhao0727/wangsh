@@ -22,7 +22,7 @@ function runFixture(candidate, summaryLines, setup) {
   writeFixtureFile(
     fixtureRoot,
     "README.md",
-    "# Fixture\n\n[Candidate](docs/docker/plans/candidate.md)\n",
+    "# Fixture\n\n[Candidate](docs/plans/candidate.md)\n",
   );
   writeFixtureFile(
     fixtureRoot,
@@ -70,15 +70,15 @@ function runFixture(candidate, summaryLines, setup) {
   const summary = summaryLines.join("\n");
   writeFixtureFile(
     fixtureRoot,
-    "docs/docker/testing/TEST_STATUS.md",
+    "docs/testing/TEST_STATUS.md",
     `# Test status\n\n> 状态：active\n> Owner：testing\n\n${summary}\n`,
   );
   writeFixtureFile(
     fixtureRoot,
-    "docs/docker/archive/README.md",
+    "docs/archive/README.md",
     "# Archive\n\n> 状态：active\n> Owner：docs\n",
   );
-  writeFixtureFile(fixtureRoot, "docs/docker/plans/candidate.md", candidate);
+  writeFixtureFile(fixtureRoot, "docs/plans/candidate.md", candidate);
 
   writeFixtureFile(
     fixtureRoot,
@@ -123,7 +123,7 @@ test("rejects symlink links that escape the repository", () => {
     "# Candidate\n\n> 状态：active\n> Owner：docs\n\n[outside](passwd-link)\n",
     ["11 files / 4 links / 0 missing"],
     (fixtureRoot) => {
-      fs.symlinkSync("/etc/passwd", path.join(fixtureRoot, "docs/docker/plans/passwd-link"));
+      fs.symlinkSync("/etc/passwd", path.join(fixtureRoot, "docs/plans/passwd-link"));
     },
   );
 
@@ -138,8 +138,8 @@ test("rejects links to files excluded by gitignore", () => {
     "# Candidate\n\n> 状态：active\n> Owner：docs\n\n[rules](local-rules.md)\n",
     ["11 files / 4 links / 0 missing"],
     (fixtureRoot) => {
-      writeFixtureFile(fixtureRoot, "docs/docker/plans/local-rules.md", "# Local\n");
-      writeFixtureFile(fixtureRoot, "docs/docker/plans/.gitignore", "local-rules.md\n");
+      writeFixtureFile(fixtureRoot, "docs/plans/local-rules.md", "# Local\n");
+      writeFixtureFile(fixtureRoot, "docs/plans/.gitignore", "local-rules.md\n");
     },
   );
 
@@ -176,6 +176,63 @@ test("requires the exact derived Markdown summary", () => {
 
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /stale Markdown summary/);
+});
+
+test("rejects documents recreated in the retired Docker directory", () => {
+  const result = runFixture(
+    "# Candidate\n\n> 状态：active\n> Owner：docs\n",
+    ["12 files / 3 links / 0 missing"],
+    (fixtureRoot) => {
+      writeFixtureFile(
+        fixtureRoot,
+        "docs/docker/README.md",
+        "# Old entry\n\n> 状态：active\n> Owner：docs\n",
+      );
+    },
+  );
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /retired documentation directory/);
+  assert.doesNotMatch(result.stderr, /stale Markdown summary/);
+});
+
+test("includes Chinese archive filenames in the Markdown summary", () => {
+  const result = runFixture(
+    "# Candidate\n\n> 状态：active\n> Owner：docs\n",
+    ["12 files / 4 links / 0 missing"],
+    (fixtureRoot) => {
+      writeFixtureFile(
+        fixtureRoot,
+        "docs/archive/reviews/中文审查记录.md",
+        "# 中文审查记录\n\n> 状态：archived\n> Owner：docs\n",
+      );
+      fs.appendFileSync(
+        path.join(fixtureRoot, "docs/archive/README.md"),
+        "\n[中文审查记录](reviews/中文审查记录.md)\n",
+      );
+    },
+  );
+
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`.trim());
+  assert.match(result.stdout, /12 files \/ 4 links \/ 0 missing/);
+});
+
+test("rejects Chinese archive files missing from the archive index", () => {
+  const result = runFixture(
+    "# Candidate\n\n> 状态：active\n> Owner：docs\n",
+    ["12 files / 3 links / 0 missing"],
+    (fixtureRoot) => {
+      writeFixtureFile(
+        fixtureRoot,
+        "docs/archive/reviews/中文审查记录.md",
+        "# 中文审查记录\n\n> 状态：archived\n> Owner：docs\n",
+      );
+    },
+  );
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /中文审查记录\.md: missing from archive index/);
+  assert.doesNotMatch(result.stderr, /stale Markdown summary/);
 });
 
 test("checks reference-style links", () => {

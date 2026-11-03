@@ -1,6 +1,8 @@
 # 文章管理系统
 
-> 最后更新：2026-07-11
+> 状态：active
+> Owner：content
+> 最近复核：2026-11-02
 
 ## 概述
 
@@ -186,7 +188,7 @@ MarkdownStyle.articles → Article[]      (一对多)
 {"type": "article_changed", "action": "create|update|delete", "id": 123}
 ```
 
-前端管理页面通过 `useAdminSSE('article_changed', callback)` 监听并自动刷新列表。详见 [AUTO_REFRESH.md](./AUTO_REFRESH.md)。
+前端管理页面通过 `useAdminSSE('article_changed', callback)` 监听并自动刷新列表。详见 [AUTO_REFRESH.md](AUTO_REFRESH.md)。
 
 ---
 
@@ -201,6 +203,17 @@ MarkdownStyle.articles → Article[]      (一对多)
 | `/admin/articles/editor/:id` | `AdminArticleEditorPage` | 编辑文章编辑器 |
 | `/admin/articles/new` | Redirect | 重定向到 `/admin/articles/editor/new` |
 | `/admin/articles/edit/:id` | `ArticleEditRedirect` | 重定向到 `/admin/articles/editor/:id` |
+
+### 详情页目录与代码块
+
+2026-10-31 lucid 本地修正（尚未合入主仓库或发布）：正文 h1–h4 的 ID 在 Markdown
+解析阶段生成，目录读取实际渲染的标题和 ID；重复标题、格式化标题与文章标题同名时保持
+目标唯一，代码围栏内文本不参与目录。没有正文标题时，目录定位到文章标题。
+
+带语言标识的代码块复用现有 `contentRuntimeLoader`，按需加载 highlight.js，并在
+DOMPurify 清理后显示高亮结果；颜色沿用已有语义 token。运行时不可用或语言不支持时
+保留可读代码和复制操作，不阻塞正文。该路径不向首页新增静态内容运行时依赖。
+实例验证与长目录、窄屏交互结果由当前测试摘要记录，源码或组件回归不代替真实浏览器验收。
 
 ### 关键前端文件
 
@@ -219,5 +232,5 @@ MarkdownStyle.articles → Article[]      (一对多)
 
 ## 相关文档
 
-- [AUTO_REFRESH.md](./AUTO_REFRESH.md) — SSE 实时刷新机制
+- [AUTO_REFRESH.md](AUTO_REFRESH.md) — SSE 实时刷新机制
 - [API 参考](../development/API.md) — 完整 API 规格

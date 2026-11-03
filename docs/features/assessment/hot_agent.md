@@ -1,5 +1,9 @@
 # 热点问题归类 Agent — 指令文档
 
+> 状态：active
+> Owner：assessment
+> 最近复核：2026-11-02
+
 本文维护热点问题分析中 LLM 归类的当前合同。实现位于
 `backend/app/services/agents/hot_agent.py`，流式入口为 `POST /ai-agents/analysis/hot-questions/stream`。
 

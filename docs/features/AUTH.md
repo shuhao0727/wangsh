@@ -2,17 +2,15 @@
 
 > 状态：active
 > Owner：AUTH / backend
-> 最近复核：2026-10-20
+> 最近复核：2026-10-31（文档与源码合同核对）
+
+本文维护认证流程、会话撤销及切换边界；接口字段见 [API](../development/API.md)，
+角色矩阵见 [ROLES](../../frontend/src/styles/ROLES.md)。发布和实测状态分别见
+[发布记录](../operations/RELEASE_NOTES.md) 与 [测试状态](../testing/TEST_STATUS.md)。
 
 ## 第一批未发布候选：公共配置与账号生命周期治理（2026-09-14）
 
-> 发布状态更新（2026-10-20 复核）：本节的公共功能开关白名单与账号治理源码已包含在
-> `2.1.2` 及后续发布构建中（`frontend/package.json` 当前为 `2.1.6`）；标题保留
-> 2026-09-14 的候选记录。正常环境是否已完成 AUTH authority 切换仍须以部署记录为准，
-> 代码发布不等于正常库已切换。
-
-本节记录当时的**未发布候选**合同；源码发布状态见上方说明。它不表示正式环境已经更新、
-AUTH 正常库已经完成切换，或候选依赖与镜像已经发布。
+标题保留历史名称以兼容链接；以下描述当前源码合同，不据此判定目标环境已部署或完成 AUTH 切换。
 
 ### 匿名公共配置白名单
 
@@ -24,6 +22,8 @@ AUTH 正常库已经完成切换，或候选依赖与镜像已经发布。
 - 管理端功能开关的读取与写入仍只允许 `super_admin`，匿名白名单不授予管理权限。
 
 ### 停用、删除、恢复与降权
+
+2026-10-31 lucid 本地修正（未合入主线、未发布）：唯一匹配且凭据正确的停用账号登录返回 `403`「账号已停用」；凭据错误、已删除、不存在或歧义仍返回通用 `401`。已登录账号被停用后，受保护请求返回 `401`「账号已停用」，前端清理身份、停止无效续期，并在登录页保留原因。普通业务 `403` 不触发退出。同身份 token 重试也处理停用；旧身份响应及新登录进行中的旧凭据请求不能清理或取消新登录。恢复账号仍须重新登录。
 
 - 停用、软删除、批量删除及导入导致的停用，与 durable inactive tombstone、全部 refresh
   token 撤销在同一数据库事务中提交；AUTH authority 未 ready 时拒绝这些生命周期变更，
@@ -43,7 +43,8 @@ AUTH 正常库已经完成切换，或候选依赖与镜像已经发布。
 
 ## 概述
 
-WangSh 使用统一登录系统，所有角色通过 **姓名 + 学号** 登录。系统包含 5 级角色层级：`super_admin` > `admin` > `teacher` > `student` > `guest`。
+WangSh 使用统一登录入口，支持姓名、学号或用户名定位账号，凭据匹配学号或历史密码。
+有效账号与凭据必须唯一匹配；角色不构成自动继承关系。
 
 ---
 
@@ -51,11 +52,8 @@ WangSh 使用统一登录系统，所有角色通过 **姓名 + 学号** 登录�
 
 ### 登录方式
 
-**统一登录**：所有角色（super_admin/admin/teacher/student）使用 **姓名 + 学号** 登录。
-
-- **姓名** = `full_name`
-- **学号** = `student_id`
-- **向后兼容**：有 `hashed_password` 的账号也可用密码登录
+- `username` 参数接受 `full_name`、`student_id` 或 `username`；`password` 匹配学号，
+  有 `hashed_password` 的账号也可使用历史密码。停用、软删除或匹配不唯一时拒绝登录。
 - **Guest 模式**：未登录可浏览，右上角显示"访客模式"
 - **智能体例外**：访客浏览模式保留，但 `/ai-agents` 页面和 `/api/v1/ai-agents` 能力必须登录正式账号后使用；匿名请求返回 `401`，历史 `guest` 角色返回 `403`。智能体列表、会话、使用记录写入、模型调用及小组讨论配置/消息/流均不得只依赖前端隐藏。
 
@@ -73,7 +71,7 @@ WangSh 使用统一登录系统，所有角色通过 **姓名 + 学号** 登录�
 
 - **登录**：`POST /api/v1/auth/login`
   - 请求格式：`application/x-www-form-urlencoded`
-  - 参数：`username`（姓名）、`password`（学号或密码）
+  - 参数：`username`（姓名、学号或用户名）、`password`（学号或密码）
 - **登出**：`POST /api/v1/auth/logout`
 - **刷新**：`POST /api/v1/auth/refresh`
 
@@ -83,19 +81,8 @@ WangSh 使用统一登录系统，所有角色通过 **姓名 + 学号** 登录�
 
 ### 角色层级
 
-```
-super_admin (超级管理员)
-    ↓
-admin (管理员)
-    ↓
-teacher (教师)
-    ↓
-student (学生)
-    ↓
-guest (访客)
-```
-
-**详细权限矩阵**：见 [`frontend/src/styles/ROLES.md`](../../frontend/src/styles/ROLES.md)
+分组、菜单与对象权限统一见 [ROLES.md](../../frontend/src/styles/ROLES.md)；
+例如学生专用接口不会因调用者是管理员而自动放行。
 
 ---
 
@@ -106,7 +93,7 @@ guest (访客)
 - Cookie 回退保持现有规则：无 header 或 header 不能解析身份时可尝试独立 Cookie；header 已解析但 nonce 失效时，不另选 Cookie 用户。普通 HTTP 不新增 query token 通道。
 - 服务层旧 `get_current_user` 是内部身份查找，不是完整会话验证入口。唯一匹配也不等于 subject 永久绑定用户；不可变用户 ID token 迁移、refresh 的旧 subject 合同、凭据变更撤销政策和真实代理链仍需单独处理。
 - PythonLab terminal/DAP 建连在读取业务 session cache 或访问 terminal/DAP 前验证 JWT、有效用户及当前 nonce/IP；验证失败（含存储异常）关闭 4401。上述为接入规则；已建 terminal/DAP 连接另有逐输入/输出、attach 及空闲会话复查，不能理解为仅在建连时验证。检查与 IO 非原子，不改变可信代理配置；具体边界由 PythonLab 功能文档维护。
-- 当前持久撤销与受控切换合同见下文；不存在 DB/Redis 分布式事务，也不代表正常实例已经迁移。验证范围见 [TEST_STATUS](../docker/testing/TEST_STATUS.md)。
+- 当前持久撤销与受控切换合同见下文；不存在 DB/Redis 分布式事务，也不代表正常实例已经迁移。验证范围见 [TEST_STATUS](../testing/TEST_STATUS.md)。
 
 ### 初始身份查询的数据库故障
 
@@ -129,8 +116,8 @@ guest (访客)
 ### 当前权威及跨存储顺序
 
 PostgreSQL 保存撤销依据，Redis 只保存可重建的会话投影。Alembic revision
-`20260910_0001_auth_authority`（前序 `20260908_0001_xbk_academic_year`；当前 head 为
-`20261020_0001_knn_collection`）新增：
+`20260910_0001_auth_authority`（前序 `20260908_0001_xbk_academic_year`）新增下表。
+完整迁移链和目标数据库版本须在切换前核对，不把此 revision 当作最新 head。
 
 | 表 | 字段及用途 |
 |---|---|
@@ -191,7 +178,7 @@ peer 属于 `AUTH_TRUSTED_PROXY_CIDRS`（逗号分隔 CIDR）时才被采纳**�
   精确网段），不能填 `0.0.0.0/0` 泛授权。
 - 后端端口不得对非合作来源可达；直连后端无法再伪造绑定 IP。
 - 真实代理链验收（S0–S7）证据见
-  [2026-09-11-proxy-chain-acceptance.md](../docker/archive/2026-09-11-proxy-chain-acceptance.md)。
+  2026-09-11-proxy-chain-acceptance.md（正文已清理）。
 
 ### 必须停流的 enrollment（不是在线/自动迁移）
 
@@ -199,7 +186,7 @@ peer 属于 `AUTH_TRUSTED_PROXY_CIDRS`（逗号分隔 CIDR）时才被采纳**�
 登录/刷新和受保护身份（`503`）；退出无法完成时仍清理 Cookie，返回 `503/incomplete`。
 不存在启动时建表、自动 ready、SQL 开关或每请求首次 adoption。
 
-操作顺序，必须在有单独授权的维护窗口由运维执行；本轮仅验证专属合成实例：
+操作顺序须在已获授权的维护窗口执行，历史合成实例验证不代替目标环境切换：
 
 1. 记录目标数据库/schema、认证 Redis 实例/DB、当前同 IP 政策、操作者及维护证据。
    停止全部旧应用副本的 HTTP login/refresh/logout，管理侧密码、用户状态和凭据修改，
@@ -258,7 +245,7 @@ peer 属于 `AUTH_TRUSTED_PROXY_CIDRS`（逗号分隔 CIDR）时才被采纳**�
 支持直连 Redis URL（包括受验证 TLS URL）；不负责自动发现 Sentinel 主节点。
 
 ```bash
-# 以下是维护调用模板，不是本轮对正常库已执行的命令。
+# 维护调用模板；仅在已授权并核对目标的停流窗口执行。
 /path/to/reviewed/python /path/to/wangsh/backend/app/api/endpoints/auth/cutover.py \
   --plan /protected/auth-cutover.json --confirm-database EXACT_DATABASE_NAME
 # 审阅 dry-run、处理具体未知用户授权后，保持同一停流窗口：
@@ -282,7 +269,7 @@ peer 属于 `AUTH_TRUSTED_PROXY_CIDRS`（逗号分隔 CIDR）时才被采纳**�
 - R4 的 Redis-first 候选及“同 IP 替换后 cache-loss 恢复旧 ws1 / legacy access 在退出故障后
   可用”属于**修前历史反例**，没有作为安全实现采用。旧 Redis WATCH helper 的局部 CAS
   测试不证明当前整条登录事务。当前 nonce fence/closed gate 取代那些风险路径；修前证据和
-  源码绑定的合成 PG/Redis、维护回归范围见 [TEST_STATUS](../docker/testing/TEST_STATUS.md)。
+  源码绑定的合成 PG/Redis、维护回归范围见 [TEST_STATUS](../testing/TEST_STATUS.md)。
   测试通过不代表正常实例已执行切换。
 
 ## 管理与课堂 SSE 会话持续校验
@@ -290,7 +277,7 @@ peer 属于 `AUTH_TRUSTED_PROXY_CIDRS`（逗号分隔 CIDR）时才被采纳**�
 - 通用管理推送、课堂管理推送和学生课堂推送使用入场认证实际接受的 token（含既有 Cookie 回退），不重新挑选另一身份。订阅前、每次输出事件前及等待事件期间重验 JWT 到期、nonce 与现有可选 IP 合同。
 - 事件等待轮询为 1 秒，单次会话存储校验上限为 2 秒；缺失认证上下文、验证拒绝、存储异常/超时均结束流，并取消待取事件任务、释放订阅。不发送附带私有数据的错误帧；已开始响应后也不改写 HTTP 状态。
 - 这不是原子即时撤销：最后检查与发送之间的在途帧、浏览器/代理已缓存数据及网络发送阻塞仍有边界。不能把轮询间隔当作全链路断连 SLA；不周期重查数据库角色、停用或班级关系。
-- AI 供应商流与小组讨论流（含小组讨论 `public-config` 流）同样以 `session_checked_stream` 包裹，接入同一套会话复查与清理；但其上游装配、并发与供应商故障语义不在本节范围。完整网关/浏览器、多角色及故障验收与 AUTH 双存储问题保持独立。实例证据只见 [TEST_STATUS](../docker/testing/TEST_STATUS.md)。
+- AI 供应商流与小组讨论流（含小组讨论 `public-config` 流）同样以 `session_checked_stream` 包裹，接入同一套会话复查与清理；但其上游装配、并发与供应商故障语义不在本节范围。完整网关/浏览器、多角色及故障验收与 AUTH 双存储问题保持独立。实例证据只见 [TEST_STATUS](../testing/TEST_STATUS.md)。
 
 ## 前端权限检查
 
@@ -316,7 +303,7 @@ auth.isStudent();     // 仅 student
 - 会话失效、直接 `/me` 失败清身份、主动退出切换至访客作用域；退出先撤下本地身份，不等待退出 HTTP 返回才隐藏旧业务数据。失效后同一账号重登也建立新作用域。
 - 旧作用域真正卸载后取消查询并清空缓存；清理避开 React StrictMode 的 effect 重放。忽略 AbortSignal 的迟到查询、捕获旧 client 的 mutation 回调只作用于旧 client，不进入新身份的缓存。这不是仅设置失效时间或 invalidate，不能在新身份首帧先展示旧缓存再刷新。
 - 边界：本机制在前端收到新的身份/权限信息时生效，不负责侦测尚未获知的服务端权限变更；不替代服务端鉴权、JWT/refresh 撤销、跨标签页协调或退出与再次登录的并发网络合同。已发出的 mutation 可能仍在服务端完成，清理缓存不能回滚写操作。浏览器持久化、模块级缓存等非 QueryClient 存储仍须各自审查。
-- 维护回归位于 `frontend/src/components/Auth/authQueryIsolation.test.tsx`；真实应用与隔离认证/用户接口的复验范围、门禁及未覆盖项统一见 [TEST_STATUS](../docker/testing/TEST_STATUS.md)。登录页目的地规则和后端 API 契约未因本项改变。
+- 维护回归位于 `frontend/src/components/Auth/authQueryIsolation.test.tsx`；真实应用与隔离认证/用户接口的复验范围、门禁及未覆盖项统一见 [TEST_STATUS](../testing/TEST_STATUS.md)。登录页目的地规则和后端 API 契约未因本项改变。
 
 ### API 在途身份隔离与跨标签身份同步
 
@@ -328,7 +315,7 @@ auth.isStudent();     // 仅 student
 
 退出按钮立即导航至登录页，不等旧退出响应回来再次导航。当前身份的退出请求失败（包括服务端 `503`）时，页面保持访客并显示“已清除本页登录状态，但服务端会话撤销未确认”的风险提示；若已切换至新身份，旧失败不得覆盖新身份或弹出过时提示。维护回归还见 `frontend/src/components/Auth/UserMenu.auth-race.test.tsx`。
 
-边界：共享存储不可用时为 best effort；这些机制不是跨标签的全局原子互斥，不能撤回浏览器已接收的 HttpOnly Set-Cookie，也不能取消已经在服务端完成的操作。本地退出及风险提示不等于服务端凭据全部失效。当前跨标签专项属于 jsdom/storage 事件与受控 HTTP adapter 测试，不代表真实多标签浏览器或所有 Cookie 乱序场景已验收；实测结果统一见 [TEST_STATUS](../docker/testing/TEST_STATUS.md)。
+边界：共享存储不可用时为 best effort；这些机制不是跨标签的全局原子互斥，不能撤回浏览器已接收的 HttpOnly Set-Cookie，也不能取消已经在服务端完成的操作。本地退出及风险提示不等于服务端凭据全部失效。当前跨标签专项属于 jsdom/storage 事件与受控 HTTP adapter 测试，不代表真实多标签浏览器或所有 Cookie 乱序场景已验收；实测结果统一见 [TEST_STATUS](../testing/TEST_STATUS.md)。
 
 ### 服务端退出与撤销边界
 
@@ -346,7 +333,7 @@ auth.isStudent();     // 仅 student
 分布式原子性承诺。退出 helper 与 HTTP/JWT/ORM 维护回归位于 `backend/tests/auth/`；
 `test_durable_session_authority_isolated.py` 另覆盖专用 PG/Redis 事务、同 IP 替换、故障与
 受控 enrollment。合成 SQLite 仅证明顺序语义，不能代替 PostgreSQL 锁、Redis TCP 或生产
-网关/CSRF 验收；结果统一见 [TEST_STATUS](../docker/testing/TEST_STATUS.md)。
+网关/CSRF 验收；结果统一见 [TEST_STATUS](../testing/TEST_STATUS.md)。
 
 ### 路由保护
 
@@ -381,9 +368,7 @@ async def staff_endpoint(user: dict = Depends(require_staff)):
 
 ### 权限级别说明
 
-- `require_staff()` = teacher **OR** admin **OR** super_admin
-- `require_admin()` = admin **OR** super_admin
-- `require_super_admin()` = super_admin **only**
+允许角色与正反向边界统一见 [ROLES.md](../../frontend/src/styles/ROLES.md#5-角色层级)。
 
 ---
 
@@ -391,21 +376,14 @@ async def staff_endpoint(user: dict = Depends(require_staff)):
 
 ### 管理员限制
 
-管理员（`admin`）受以下限制保护：
-
-1. **不能**修改或删除超级管理员（`super_admin`）
-2. **不能**修改或删除其他管理员（`admin`）
-3. **只能**将角色改为 `student` 或 `teacher`
-4. 导入用户时**只能**导入 `student` 或 `teacher` 角色
-5. 超级管理员默认不在用户列表中显示
+`admin` 仅管理学生和教师，允许修改自己的资料；不能修改其他管理员或超级管理员，
+也不能授予高权限角色。导入高权限行逐行失败，批量删除遇缺失或越权目标整批拒绝。
+用户列表的可见范围按当前角色与筛选条件限制，不能仅凭前端隐藏实现保护。
 
 ### 超级管理员权限
 
-超级管理员（`super_admin`）拥有完全权限，可以：
-
-- 修改和删除所有角色用户（包括其他管理员）
-- 创建和管理管理员账户
-- 修改系统全局配置
+`super_admin` 可管理管理员账户和系统配置，但仍受账号治理事务、持久撤销及
+“至少保留一名活跃超级管理员”约束，不是无限制权限。
 
 ---
 
@@ -424,4 +402,4 @@ async def staff_endpoint(user: dict = Depends(require_staff)):
 
 - [角色权限矩阵](../../frontend/src/styles/ROLES.md) — 详细权限列表
 - [API 文档](../development/API.md) — 认证相关接口
-- [AGENTS.md](../../AGENTS.md) — 开发规范
+- [CLAUDE.md](../../CLAUDE.md) — 开发规范

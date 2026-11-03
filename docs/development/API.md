@@ -1,11 +1,18 @@
 # API 接口清单
 
-> 基础路径：`/api/v1`（认证接口需携带 `Authorization: Bearer <token>` 头）
-> 最后更新：2026-10-20（KNN 运动习惯采集，v2.1.6 镜像已发布）
+> 状态：active
+> Owner：api
+> 最近复核：2026-11-02
+
+本页维护请求、响应、权限与错误码；认证方式以各接口和 [AUTH](../features/AUTH.md) 为准。
+发布与迁移状态见 [发布记录](../operations/RELEASE_NOTES.md)，验收范围见 [测试状态](../testing/TEST_STATUS.md)。
+保留含“未发布”的历史标题以兼容链接，不用标题判定当前部署状态。
+
+> 2026-10-31 lucid 未发布变更：停用认证状态与前端身份围栏见 [AUTH](../features/AUTH.md#停用删除恢复与降权)；分析列表分页见 [AI_AGENTS](../features/AI_AGENTS.md)；隐私两类消息导出/删除及审计结果见 [隐私边界](../security/GDPR.md)。主仓库源码尚未合入这些实现，真实环境须分别核准。
 
 ## KNN 运动习惯采集（/it/knn）
 
-本节合同已随 `2.1.6` 镜像发布；服务器尚未部署，目标数据库迁移状态须在部署阶段核对。功能流程、特征含义、三张数据表与迁移影响见
+功能流程、特征含义、三张数据表与迁移影响见
 [KNN 采集 owner](../features/KNN_SURVEY.md)。学生使用学号免登录填写，教师在信息技术应用管理内管理批次。
 成功响应直接返回 JSON，不额外包装 `data`；下述正常成功响应均设置 `Cache-Control: no-store`。
 JSON 请求对象禁止额外字段，非法字段、类型或范围返回 `422`。
@@ -33,7 +40,7 @@ JSON 请求对象禁止额外字段，非法字段、类型或范围返回 `422`
   "student_no": "1",
   "request_id": "e69ca9b8-39e3-491c-9469-c01dbe300c8d",
   "expected_revision": 0,
-  "features": [1, 2, 1, 2, 4, 4, 1, 2, 2, 3, 6, 4],
+  "features": [1, 2, 4, 1, 3, 6],
   "label": "耐力类",
   "display_consent": false
 }
@@ -102,7 +109,7 @@ JSON 请求对象禁止额外字段，非法字段、类型或范围返回 `422`
   "refill_allowed": false,
   "answer": {
     "revision": 1,
-    "features": [1, 2, 1, 2, 4, 4, 1, 2, 2, 3, 6, 4],
+    "features": [1, 2, 4, 1, 3, 6],
     "label": "耐力类",
     "display_consent": false,
     "submitted_at": "2026-10-20T15:00:00Z"
@@ -135,12 +142,7 @@ CSV 使用 UTF-8 BOM，包含全部名单（含未交）、提交状态、当前
 
 ## AI伙伴临时共享榜单（未发布）
 
-> 发布状态待复核：本节标题与正文沿用“未发布”口径，指未确认服务器部署与真实模型验收。
-> 但 `docs/docker/RELEASE_NOTES.md:30`（v2.1.5 已发布镜像）已记录“AI伙伴目录改为服务端维护源
-> 和前端生成副本”，v2.1.3 候选（同文件第 107-121 行）已包含榜单；因此“镜像是否已包含本功能”
-> 与“是否已部署上线”需分开表述，待 release owner 核对后统一。
-
-本节记录当前源码合同，不表示已部署或已完成真实模型验收。实现入口为
+实现入口为
 `backend/app/api/endpoints/ai_partner.py`、`backend/app/schemas/ai_partner.py` 与
 `backend/app/services/ai_partner_evaluation.py`、`ai_partner_leaderboard.py`。
 不新增管理员榜单接口、数据库表或 migration；复用平台已有智能体配置和认证。
@@ -185,8 +187,11 @@ CSV 使用 UTF-8 BOM，包含全部名单（含未交）、提交状态、当前
 | `dimensions` | 固定四项，依次为 `value`（价格性价比）、`completion`（任务完成度）、`suitability`（选择合理性）、`validation`（设计验证与风险）；每项含 `key`、`label`、`score`、`max`、`note`；`score` 为 `0..25` 整数、`max=25`，非空理由最多 `1200` 字符 |
 | `suggestions` | `1..6` 条非空改进建议，每条最多 `600` 字符 |
 
-模型输出必须是合法结构化 JSON，四维 key 完整且不重复；非法 JSON、重复 JSON 字段、
-额外字段、越界分项等均拒绝，不通过修补分数伪造成功。标签与顺序由服务端归一化。
+模型输出先清理推理内容，可提取包裹的 JSON 对象，或在整体解析失败时恢复独立有效的
+`dimensions` / `suggestions` 数组。四维完整时按 key 白名单保留各维首项，丢弃未知字段、
+多余维度与重复维度；随后严格校验分数、理由和建议。完整对象解析拒绝重复 JSON 字段，
+分块恢复的元素仍须通过结果 schema；缺维度、越界分数或无法恢复的结构失败，不补造分数。
+标签与顺序由服务端归一化。
 评分不会开启榜单倒计时；只有第一份有效榜单提交才开启窗口。
 
 ### GET /api/v1/ai-partner/leaderboard
@@ -228,19 +233,20 @@ JSON 仅包含以下四个必填字段，响应与 GET 相同：
 | `429` | 评估、榜单或上游模型限流；响应附 `Retry-After` |
 | `502` | 上游模型非成功响应（除限流）、响应过大或未返回合法结构化结果等模型失败 |
 | `503` | 未指定评分智能体、智能体不存在/停用/配置不全、端点不安全，或 Redis 获取/保存评分及榜单失败；明确不可评分，不内存降级 |
-| `504` | 模型调用超时；后端评分调用总时限 `25` 秒 |
+| `504` | 模型调用超时；单次 HTTP 超时 `50` 秒，全部尝试总预算 `110` 秒 |
 
 评估按同轮次同用户每 `60` 秒最多 `5` 次、同轮次全局最多 `60` 次，并限制同用户并发评分；
 已占用额度的失败尝试仍计数。榜单按同轮次同用户分别限制 GET 每分钟 `120` 次、POST 每分钟 `30` 次。
 前端仅浮窗开启且页面可见时每 `5` 秒轮询，关闭或不可见时停止。
+模型输出解析/校验失败最多重试一次；超时或上游 HTTP 错误不重试。
 
 这是课堂临时展示，不是防作弊或考试评分服务；模型评语不能视为真实硬件或供应商验收。
 交互边界见 [AI 智能体 owner](../features/AI_AGENTS.md#ai伙伴临时共享榜单未发布)，
-配置与真实调用前提见 [部署 owner](../docker/deploy/DEPLOY.md#ai伙伴临时共享榜单配置未发布)。
+配置与真实调用前提见 [部署 owner](../operations/DEPLOY.md#ai伙伴临时共享榜单配置未发布)。
 
 ## 第一、二阶段未发布候选 API 合同（2026-09-14）
 
-以下合同已进入当前源码，但尚未部署或迁移正常数据库。
+以下描述当前源码合同；目标环境是否完成发布与迁移须单独核对。
 
 ### 公共配置与账号治理
 
@@ -275,9 +281,8 @@ JSON 仅包含以下四个必填字段，响应与 GET 相同：
 - 现有 `POST /xbk/import/preview` 与 `POST /xbk/import` 仍只接受
   `scope=students|courses|selections` 的既有导入合同，不会自动识别 R3 工作簿。预览不预留名额，
   最终容量和唯一有效位置仍以确认事务为准。
-- R4 partial unique index 已在回环地址的一次性 PostgreSQL 中完成迁移循环、历史有效重复阻断、
-  回滚后无半成品索引以及真实 asyncpg 约束名验证；同周期同学生的第二条有效选课会被目标
-  约束拒绝，软删除记录不参与限制。该证据不表示正常数据库已连接或迁移，也不表示服务已部署。
+- partial unique index 拒绝同周期同学生的第二条有效选课，软删除记录不参与限制。
+  迁移循环、历史重复阻断和回滚验证的环境及证据见测试状态，不据此推断目标数据库已迁移。
 
 ### 解析前请求预算
 
@@ -293,21 +298,23 @@ ASGI middleware 在 FastAPI/Starlette 表单解析前约束请求头和表单请
 
 该预算仅覆盖 `application/x-www-form-urlencoded` 与 `multipart/form-data`，不套用于 JSON。
 它不等于网关原始请求限制、入口限速、并发治理或 multipart 解析 CPU 抢占治理。
-`python-multipart==0.0.32` 目前只写入候选依赖清单，尚未安装到正式 venv 或候选镜像。
+解析器版本以 `backend/requirements.txt` 与目标运行环境为准；依赖文件不能证明已安装或部署。
 
 > 并发行为补充（2026-09-09）：XBK 手工选课写入/恢复及导入 execute 在持有学生、课程共享锁后重验父实体；父删除先锁父再级联，批量删除仅作用于冻结 ID 集合，preview 不作并发承诺。无新增响应字段、FK 或迁移，自然键更名政策未改变；详见 [XBK owner](../features/XBK.md)。
 
 ## 未发布 AUTH 持久权威合同（2026-09-10）
 
-- `login`、`refresh`、`logout` 不新增路由或 token 来源。新增持久会话权威要求先完成 migration 和受控 enrollment；`auth_authority.ready` 未就绪时拒绝认证服务，不因 Redis 会话缺失自动接管旧凭据。切换流程不是公开 HTTP API，详见 [AUTH](../features/AUTH.md) 与 [部署说明](../docker/deploy/DEPLOY.md)。
+- `login`、`refresh`、`logout` 不新增路由或 token 来源。新增持久会话权威要求先完成 migration 和受控 enrollment；`auth_authority.ready` 未就绪时拒绝认证服务，不因 Redis 会话缺失自动接管旧凭据。切换流程不是公开 HTTP API，详见 [AUTH](../features/AUTH.md) 与 [部署说明](../operations/DEPLOY.md)。
 - PostgreSQL 是已接管会话的撤销依据，Redis 为投影；普通认证读取不能用缺失/迟到缓存绕过持久 inactive 或 nonce 不匹配。DB 提交后 Redis 发布失败仍可能产生持久撤销，失败响应不代表无副作用，也不把恢复旧 Redis key 当作恢复旧权限。
-- 本轮受控增量迁移与跨存储反证已在合成专库完成限定验证，正常库未迁移、未发布；不能把下方历史缓存丢失边界直接当作新实现结论，也不据此扩大成生产切换通过。具体覆盖和剩余 WS/SSE/真实实例整合状态仅见 [TEST_STATUS](../docker/testing/TEST_STATUS.md)。
+- 当前覆盖范围和目标环境切换证据见 [TEST_STATUS](../testing/TEST_STATUS.md)，不沿用 Redis-only 历史结论判断持久撤销。
 
 ## 管理与课堂事件流会话合同补充
 
 `GET /api/v1/admin/stream`、`GET /api/v1/classroom/admin/stream`、`GET /api/v1/classroom/stream` 在既有接入认证后增加持续会话校验：订阅前及每帧发送前复核实际接受的 JWT/nonce/IP，空闲等待也有界复查。失效或存储故障结束流并退订；事件格式、角色守卫及 token 来源优先级不变，不改为成功空数据或匿名订阅。响应开始后不补发 HTTP 401。
 
-检查和网络发送不是原子操作，不能保证已经在途/已缓存事件被收回，也不刷新数据库角色或班级。AI 与小组讨论 SSE 不由此覆盖。规则见 [AUTH](../features/AUTH.md#管理与课堂-sse-会话持续校验)，证据见 [TEST_STATUS](../docker/testing/TEST_STATUS.md)。
+检查和网络发送不是原子操作，不能保证已经在途/已缓存事件被收回，也不刷新数据库角色或班级。
+AI 与小组讨论 SSE 复用持续会话校验，其供应商及并发错误另见下文。
+规则见 [AUTH](../features/AUTH.md#管理与课堂-sse-会话持续校验)，证据见测试状态。
 
 ## AI 分析/对话 SSE 的设置阶段错误码
 
@@ -333,8 +340,7 @@ ASGI middleware 在 FastAPI/Starlette 表单解析前约束请求头和表单请
 **流开始之后**的错误（上游超时、连接中断）仍只能通过 `event: error` 帧传递——这是 SSE 协议
 的限制，HTTP 状态码此时无法再更改。
 
-前端 `frontend/src/services/znt/api/index.ts` 已按 `if (!response.ok)` 处理非 200，本次变更
-不需要前端改动。
+客户端须先处理非 200 响应，再按 SSE 事件处理流中错误。
 
 ## 认证存储不可用反馈补充
 
@@ -348,7 +354,8 @@ DBAPI 包装）属于已识别的暂时不可用；不单凭永久/未知 DNS �
 
 ## 登录与 PythonLab 长连接合同补充
 
-以下 Redis-first 机制属于旧版本背景；当前未发布 AUTH 以本页顶部持久权威合同为准：同 IP 替换在数据库权威事务中确定，陈旧 Redis 绑定不误踢已经迁移的 owner，缓存发布失败不返回成功 token/Cookie。DB/Redis 仍非分布式原子提交，但已撤销会话不能通过恢复或丢失缓存重新获得权限，详见 [AUTH](../features/AUTH.md#持久会话权威与受控切换)。
+同 IP 替换、缓存恢复与撤销遵守 [AUTH 持久权威合同](../features/AUTH.md#持久会话权威与受控切换)。
+DB/Redis 不构成分布式原子提交，缓存发布失败不返回成功 token/Cookie，也不恢复已撤销权限。
 
 PythonLab terminal/DAP 保持原接入错误码和 token 优先级，既有连接新增输入、输出、attach 边界及空闲会话复查，撤销以 `4401` 关闭；取消并回收连接任务。检查后已在途 IO 不保证撤回，不周期刷新 DB 角色。详见 [PYTHONLAB](../features/PYTHONLAB.md#websocket-建连认证边界2026-09-09)。
 
@@ -369,13 +376,19 @@ DAP 断连清理采用元信息原值 CAS 与连接租约条件检查，不覆�
 |------|------|------|------|
 | POST | `/auth/login` | 用户登录（Form: username, password） | 否 |
 | GET | `/auth/me` | 获取当前用户信息 | 是 |
-| POST | `/auth/logout` | 撤销刷新令牌、轮换会话并清除 Cookie | 登录令牌可选 |
+| POST | `/auth/logout` | 持久撤销会话与刷新令牌，并清除 Cookie | 登录令牌可选 |
 | POST | `/auth/refresh` | 使用 refresh token 原子轮换访问令牌 | Refresh token |
 | GET | `/auth/health` | 认证服务健康检查 | 否 |
 
 `/auth/logout` 不要求必须提供凭据；有凭据时优先使用当前有效且 nonce 匹配的 access。access 缺失、过期、验签失败或无法证明当前会话时，使用配置的 refresh Cookie，缺少该值才读取兼容 `refresh_token`；不从请求 body 读取 refresh。refresh 必须有效且所属用户可登录，并在用户锁后重验。有效当前 access 与 Cookie 身份冲突时，只撤销 access 证明的账号。
 
-撤销在用户锁内执行：更新 refresh 撤销位、尝试 nonce 轮换、提交数据库。缓存轮换失败仍尝试提交 refresh 撤销；数据库提交失败仍告警并尽力回滚。始终尝试删除配置的 access/refresh Cookie。正常处理或无有效凭据的幂等清理返回 `200` 与 `{message: "登出成功", timestamp: ...}`；已识别的撤销异常返回 `503`、`revocation_status: "incomplete"` 及说明消息。logout 严格读取会话遇到故障且无有效 refresh fallback 时也返回 `503`，缺失 nonce 不授权撤销。读取兼容 Cookie 不等于清理全部兼容别名；`503` 不保证保留的凭据已失效，不提供双存储原子性。故障边界与身份/锁保护机制见 [认证 owner](../features/AUTH.md#服务端退出与撤销边界)，本地修复范围见 [审查台账 AUTH-01](../docker/archive/2026-09-08-project-audit-findings.md)。
+撤销在同序全局锁和用户锁内执行：持久会话置为 inactive、撤销 refresh，并在一个数据库事务中提交；
+退出不轮换 Redis nonce。提交前失败 rollback；提交确认丢失时结果不确定，不能自动恢复原凭据。
+端点始终尝试清除配置的 access/refresh Cookie。正常处理或无有效凭据的幂等清理返回 `200` 与
+`{message: "登出成功", timestamp: ...}`；已识别撤销故障返回 `503`、`revocation_status: "incomplete"`。
+严格会话读取故障且无有效 refresh fallback 时也为 `503`；缺失 nonce 不授权撤销。
+兼容 Cookie 可读不等于全部别名均被清除，客户端清理也不证明保留凭据已失效。
+完整故障与锁边界见 [AUTH](../features/AUTH.md#服务端退出与撤销边界)。
 
 登录提交边界（2026-09-09）：先提交 refresh 替换，再重取用户锁并重验本次 refresh 后发布 Redis 会话。第一阶段提交失败不提前旋转 Redis；若重验发现已被新的登录/退出替换则返回 `409`，无成功登录 Cookie。Redis 发布失败不能撤回已提交的 refresh 替换，仍需按认证 owner 的故障边界处理。
 
@@ -385,17 +398,13 @@ DAP 断连清理采用元信息原值 CAS 与连接租约条件检查，不覆�
 
 PythonLab WS 接入补充（2026-09-09）：terminal/DAP 在业务缓存、terminal 任务或 DAP bridge IO 前校验有效用户及会话 nonce/IP；失败含存储异常关闭 4401，有效身份下不存在/owner 不符保持 4404/4403。仍先 accept 后 close，token 提取渠道及优先级不变、不新增 Cookie 回退。已建连接按上方长连接合同持续校验，但不承诺原子即时撤销。
 
-补充说明（2026-07-11）：
-- `/auth/refresh` 使用数据库行锁，在单个事务内撤销旧 token 并创建新 token；同一个 refresh token 并发或重复使用时只允许一次成功。
-- refresh token 关联用户已停用或软删除时返回 `401`。
-- 服务端 session nonce 缺失时，旧 access token 不会根据自身 nonce 重建会话；合法 refresh token 流程可以显式创建新的 session nonce。
-- 前端 API 客户端在出现 `401 -> refresh 失败` 时，会触发 `ws:auth-expired` 全局事件，统一将页面登录态回收，避免“前端仍显示已登录但接口持续 401”。
-- 若会话因为“同一账号在其他地方重新登录”而失效，后端会返回“账号已在其他地方登录，请重新登录”，前端会强提示当前设备已下线。
-- 成功登录同一账号会重新旋转 session nonce，因此旧设备即使仍持有未过期 access token，也会在下一次访问受保护接口（包括 `/auth/me`）时收到 `401`。
-- 同账号重新登录时，后端会撤销此前该用户尚未过期的 refresh token，避免旧设备通过 `/auth/refresh` 自动恢复登录态。
-- `/auth/me` 与其他受保护接口一样受单会话策略约束；旧设备在同账号其他地方重新登录后再次访问 `/auth/me` 时，也会收到 `401`。
-- SSE 鉴权支持 query token 与 Cookie 双通道；当 query token 无效但 Cookie 中会话有效时，可继续完成握手（例如 `/classroom/stream`）。
-- 安全审计 S-3（2026-08）：`?token=` query 鉴权仅限 SSE 端点（`/admin/stream`、`/classroom/stream`、`/ai-agents/group-discussion/stream`）；普通 HTTP 端点只接受 Authorization header 或 Cookie 中的 token，带 `?token=` 的普通请求将返回 401。
+补充合同：
+- refresh 在数据库锁内单次消费，停用/软删除账号返回 `401`；只恢复已接管、仍 active 且 nonce 匹配的会话，不能恢复已撤销或未知 legacy 凭据。
+- refresh 消费先提交再发布；提交后响应丢失时旧 refresh 重试为 `401`，须重新登录。旧 access 不根据自身 nonce 重建缓存。
+- 同账号重新登录轮换 nonce 并撤销旧 refresh；旧设备的 `/auth/me` 和其他受保护请求均受单会话策略约束。
+- 前端遇到 `401 -> refresh 失败` 时触发 `ws:auth-expired` 并回收身份；失效原因提示见 AUTH。
+- `?token=` 只对专用 SSE 入口生效，普通 HTTP 仅接受 Header/Cookie。SSE 的优先级为 Bearer、query、Cookie；
+  前选 token 无法解析身份时可回退 Cookie，已解析但 nonce 失效时不另选用户。
 
 ## 三、系统管理（/system）
 
@@ -437,11 +446,11 @@ PythonLab WS 接入补充（2026-09-09）：terminal/DAP 在业务缓存、termi
 | DELETE | `/users/privacy/me/data` | 校验 `confirmation="DELETE MY DATA"` 后硬删除本人上述两类消息 | 是 |
 
 用户管理权限说明：
-- 普通 `admin` 只能管理和导入 `student`、`teacher`，不能创建、修改或删除 `admin`、`super_admin`。
+- 普通 `admin` 仅可创建、删除和导入 `student`、`teacher`；允许修改自己资料，但不能修改其他管理员或超级管理员，不能授予高权限角色。
 - 导入文件中的高权限角色行不会自动降级；该行单独失败并继续处理后续行，失败明细通过 `UserImportResult.errors` 返回。
 - 批量删除在目标缺失或包含普通 `admin` 无权删除的高权限账号时整批拒绝，不执行部分删除。
 - 批量删除请求体与前端统一为对象结构 `{ "user_ids": number[] }`，不接受裸数组。
-- 导入模板本轮仍为统一模板，暂不按当前角色动态变化。
+- 导入模板为统一模板，不按当前角色动态变化。
 
 ## 五、文章系统（/articles）
 
@@ -594,11 +603,11 @@ PythonLab WS 接入补充（2026-09-09）：terminal/DAP 在业务缓存、termi
 - `/ai-agents/stream` 的上游 HTTP 错误会保留经过长度限制的 Provider `detail`；内部
   初始化或运行异常只返回稳定错误码和通用提示，不向普通用户暴露内部异常详情。
 - OpenRouter 运行时流式调用与“连接测试”统一请求头：`HTTP-Referer`、`X-Title`，减少“测试可用但对话报模型不存在”的配置偏差。
-- `/ai-agents/stream` 在上游 `HTTP 200` 且无文本产出时仍会发送 `message_end`；前端若检测到空结果会明确提示“模型未返回内容”，避免界面长时间转圈。
+- 上游 `HTTP 200` 但无可见正文不算成功：Dify 返回 `dify_empty_answer`，其他 Provider 返回 `provider_empty_answer`，不发送成功的空 `message_end`。
 - `/ai-agents/stream` 的 `messages` 最多 20 条，只允许 `user`/`assistant`。`message`
   表示本轮问题；若历史末尾尚未包含该问题，后端会自动追加一次，若已包含则不会重复。
   客户端传入 `system` 历史返回 `422`，系统提示词只来自智能体服务端配置。
-- 停用智能体返回 SSE `agent_inactive`，不会连接外部 Provider。正常结束原因以
+- 停用智能体在流开始前返回 HTTP `409` 与 `agent_inactive`，不会连接外部 Provider。正常结束原因以
   `stop`、`end_turn`、`stop_sequence` 或明确终止标记为准；输出长度、上下文窗口、
   内容策略、工具调用和未知结束原因均返回对应 SSE `error`，不伪装成完整成功。
 - 多平台并用时（如 OpenRouter + SiliconFlow），OpenRouter 全局 Key 仅用于 OpenRouter Endpoint，不再兜底到其他平台；其他平台请在智能体配置中填写对应 API Key。
@@ -957,7 +966,6 @@ PythonLab WS 接入补充（2026-09-09）：terminal/DAP 在业务缓存、termi
 
 `GET /assessment/available` 与新建会话共用开放窗判断：未设置的边界不限制，恰好开始或结束可起测。`POST /assessment/sessions/start` 在配置存在且启用、又无本人同配置进行中会话时，于查题、AI 与写入之前校验；窗前返回 `422 {"detail":"该测评尚未开始"}`，窗后返回 `422 {"detail":"该测评已结束"}`。可复用会话不受窗口重新限制，保持原 session、开始时间和答案；这不改变窗外配置在列表中隐藏的行为，也不保证严格并发幂等。配置禁用仍先于复用拒绝，原有成功响应字段不变。详见 [会话与答题边界](../features/ASSESSMENT.md#会话与答题边界)。
 
-
 起测并发（2026-09-09）：PostgreSQL READ COMMITTED 下，`POST /assessment/sessions/start` 先按配置与本人 ID 取得事务级互斥，再检查/复用进行中会话；已有会话被保存或交卷锁住时等待，不再跳过另建。事务提交、回滚或会话关闭释放互斥；不同配置/学生可独立起测。该保护只覆盖当前服务入口，不替代唯一约束、历史重复数据修复或新旧版本混跑验收；SQLite 不据此承诺并发唯一。开放窗、题目及响应字段不变。
 
 首轮自适应题在已建立的保存点内生成或写入失败时，仅回滚该题保存点，保留新会话、固定题及此前成功题目，并按既有合同建立无题目快照的占位答案；后续正常请求复用同一进行中会话，不重新生成首轮题。这不保证 AI 可用、占位题的后续评分完整性或首次起测并发唯一性；保存点建立前的自动 flush 及其他外层事务失败仍按请求边界整体回滚，不适用占位恢复。响应字段、开放窗与结果权限不变，无结构迁移。
@@ -1121,6 +1129,8 @@ Content-Type: application/json
 
 课堂权限与数据边界：
 - 学生端全部使用 `require_student`，活动详情、答题、结果、活动列表、SSE 和 active plan 都要求学生与活动具有完全匹配的非空 `class_name`。
+- 活动创建/更新的 `class_name` 最多50字符并去首尾空白，API保留可空草稿兼容；教师页面要求非空班级并在编辑时回填。lucid本地修复尚未发布。
+- 活动 `start`/`restart` 在教师锁与活动行锁后校验最新班级；空值返回 `400`，拒绝早于结束其他活动、删除旧答案、状态变化和事件。已结束空班级活动先显式复制为草稿并补班级；正常 `restart` 使用同一ID并清除旧答案与分析。
 - active plan 仅返回所有活动均属于当前学生班级的计划，并始终移除 `correct_answer`。
 - 教师只能查看和管理自己创建的活动、计划及计划内活动；`admin`、`super_admin` 可全局管理。
 - 管理端计划接口中，计划不存在返回 `404`，对象级权限失败返回 `403`；状态不允许、空计划、活动缺少班级或班级不一致等业务校验失败返回 `400`。

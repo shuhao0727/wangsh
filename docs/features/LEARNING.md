@@ -284,5 +284,5 @@ Chapters、Content、Progress 共享相同的 module_key 校验逻辑，仅允�
 ## 相关文档
 
 - [API 参考](../development/API.md) — 完整 API 规格
-- [课堂互动系统](./CLASSROOM.md) — 课堂计划与活动
-- [PythonLab](./PYTHONLAB.md) — Python 教学实验环境
+- [课堂互动系统](CLASSROOM.md) — 课堂计划与活动
+- [PythonLab](PYTHONLAB.md) — Python 教学实验环境

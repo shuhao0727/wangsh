@@ -1,5 +1,9 @@
 # XSS 防护与 Prompt Injection 检测
 
+> 状态：reference
+> Owner：backend
+> 最近复核：2026-11-02
+
 本文档说明 WangSh 项目中的 XSS（跨站脚本攻击）防护策略和 Prompt Injection（提示词注入）检测机制。
 
 ## 概述

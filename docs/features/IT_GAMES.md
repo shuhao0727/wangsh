@@ -1,6 +1,8 @@
 # IT 游戏资源库
 
-> 最后更新：2026-10-20
+> 状态：active
+> Owner：it-games
+> 最近复核：2026-11-02
 
 ## 概述
 
@@ -137,4 +139,4 @@ IT 游戏资源库模块为信息技术教学场景提供教学游戏安装包�
 
 - [KNN 运动习惯采集](KNN_SURVEY.md) — 匿名学生填写、教师批次与冻结课堂数据
 - [API 参考](../development/API.md) — 完整 API 规格
-- [数据库性能指南](../DATABASE_PERFORMANCE_GUIDE.md)
+- [数据库性能指南](../development/DATABASE_PERFORMANCE_GUIDE.md)

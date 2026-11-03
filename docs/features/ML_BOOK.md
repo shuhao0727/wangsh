@@ -151,5 +151,5 @@ ML Book 是面向"教科书"场景的书籍系统，Learning 平台是通用化�
 
 ## 相关文档
 
-- [Learning 平台](./LEARNING.md) — 通用化学习内容管理与进度跟踪
+- [Learning 平台](LEARNING.md) — 通用化学习内容管理与进度跟踪
 - [API 参考](../development/API.md) — 完整 API 规格

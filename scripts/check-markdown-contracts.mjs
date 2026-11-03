@@ -13,11 +13,11 @@ const assessmentPromptOwners = [
 function listMarkdownFiles() {
   const output = execFileSync(
     "git",
-    ["ls-files", "-co", "--exclude-standard", "--", "*.md"],
+    ["ls-files", "-z", "-co", "--exclude-standard", "--", "*.md"],
     { cwd: repoRoot, encoding: "utf8" },
   );
 
-  return [...new Set(output.split("\n").filter(Boolean))]
+  return [...new Set(output.split("\0").filter(Boolean))]
     .filter((file) => fs.existsSync(path.resolve(repoRoot, file)))
     .sort();
 }
@@ -333,11 +333,15 @@ function audit() {
   }
 
   const governedPrefixes = [
-    "docs/docker/plans/",
-    "docs/docker/testing/",
-    "docs/docker/frontend/",
-    "docs/docker/archive/",
+    "docs/plans/",
+    "docs/testing/",
+    "docs/ui/",
+    "docs/archive/",
   ];
+
+  for (const file of files.filter((item) => item.startsWith("docs/docker/"))) {
+    errors.push(`${file}: retired documentation directory; use the owner listed in docs/README.md`);
+  }
 
   for (const file of files.filter((item) => governedPrefixes.some((prefix) => item.startsWith(prefix)))) {
     const text = fs.readFileSync(path.resolve(repoRoot, file), "utf8");
@@ -357,14 +361,14 @@ function audit() {
   }
 
   const archiveFiles = files
-    .filter((file) => file.startsWith("docs/docker/archive/") && file !== "docs/docker/archive/README.md")
+    .filter((file) => file.startsWith("docs/archive/") && file !== "docs/archive/README.md")
     .map((file) => path.resolve(repoRoot, file));
-  const archiveIndex = fs.readFileSync(path.resolve(repoRoot, "docs/docker/archive/README.md"), "utf8");
+  const archiveIndex = fs.readFileSync(path.resolve(repoRoot, "docs/archive/README.md"), "utf8");
   const indexedArchiveFiles = new Set(
-    localMarkdownLinks("docs/docker/archive/README.md", archiveIndex)
+    localMarkdownLinks("docs/archive/README.md", archiveIndex)
       .map((raw) => decodeURIComponent(raw.split("#")[0]))
       .filter(Boolean)
-      .map((target) => path.resolve(repoRoot, "docs/docker/archive", target)),
+      .map((target) => path.resolve(repoRoot, "docs/archive", target)),
   );
 
   for (const archived of archiveFiles) {
@@ -396,7 +400,7 @@ function audit() {
   }
 
   const summary = `${files.length} files / ${relativeLinks} links / 0 missing`;
-  const testStatus = "docs/docker/testing/TEST_STATUS.md";
+  const testStatus = "docs/testing/TEST_STATUS.md";
   const testStatusText = fs.readFileSync(path.resolve(repoRoot, testStatus), "utf8");
   if (!testStatusText.includes(summary)) {
     errors.push(`${testStatus}: stale Markdown summary, expected ${summary}`);
