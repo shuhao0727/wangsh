@@ -16,7 +16,6 @@ for token in \
   'write 0' \
   'idle 2m' \
   'max_header_size 64KB' \
-  'max_size 16MB' \
   'dial_timeout 5s' \
   'response_header_timeout 30s' \
   'read_timeout 60s' \
@@ -26,6 +25,12 @@ for token in \
     exit 1
   }
 done
+
+# 按真实 matcher 块校验游戏/普通请求体额度及 read_body 30s。
+# 后端以受控 AST 读取 GAME_UPLOAD_BUDGET，包含 multipart 预算；不导入应用。
+# 缺失、歧义或不支持的表达式必须失败，且在 Docker/Caddy 验证前执行。
+python3 -I -B "${ROOT_DIR}/gateway/tests/validate_caddy_contract.py" \
+  "$CONFIG" "${ROOT_DIR}/backend/app/core/request_budget.py"
 
 # 反向断言：server 级 write 不允许写成非 0。上面的正断言是全文子串匹配，
 # 若某处注释或其他块里再次出现 "write 0" 字样，仍可能被"误满足"；这里再按
@@ -46,6 +51,23 @@ if grep -Eq '^[[:space:]]*(rate_limit|rate-limit|rateLimit)([[:space:]]|\{|$)' "
   echo "unsupported/unverified rate-limit directive in Caddyfile" >&2
   exit 1
 fi
+
+# SSE 白名单沿用现有前端订阅调用点检查。transport write_timeout 是向上游
+# 写请求的等待预算，不是 SSE 响应的总时长；server 级 write 0 另行校验。
+# 这里仍是全文路径检查，不代替精确的 matcher/动态调用合同（C33 未在本轮扩展）。
+STREAM_PATHS="$(
+  cd "${ROOT_DIR}" &&
+  rg -o --no-filename 'apiUrl\}/[a-zA-Z0-9/_-]*stream' frontend/src \
+    | sed -E 's#apiUrl\}/#/api/v1/#' \
+    | sort -u
+)"
+missing=0
+while IFS= read -r p; do
+  [ -n "$p" ] || continue
+  # 模板串拼出的动态段（如 ${id}）无法静态比对，跳过前缀校验
+  grep -Fq "$p" "$CONFIG" || { echo "SSE path missing from @api_stream: $p" >&2; missing=1; }
+done <<< "$STREAM_PATHS"
+[ "$missing" -eq 0 ] || exit 1
 
 docker run --rm -i "$CADDY_IMAGE" caddy adapt \
   --config /dev/stdin --adapter caddyfile --validate < "$CONFIG" >/dev/null

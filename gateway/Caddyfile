@@ -13,6 +13,10 @@
 	servers {
 		timeouts {
 			read_header 5s
+			# read_body 是「整次上传」的硬截止，且是服务器级、无法按路径放宽
+			# （Caddy v2.8.4 无路由级 timeouts 指令）。保持 30s 是有意的取舍：
+			# 放宽会同步扩大 slowloris 窗口。502 MiB 请求预算需约 17.6 MB/s，
+			# 更慢的链路仍可能超时，应由调用方压缩包体。
 			read_body 30s
 			write 0
 			idle 2m
@@ -22,9 +26,19 @@
 }
 
 :80 {
-	# Enforce one hard request-body ceiling before any route handler or upstream.
-	# Caddy core returns 413 and rejects the body before reverse_proxy receives it.
-	request_body {
+	# 请求体上限。站点级 request_body 是独立 handler、先于所有 route 执行，
+	# 叠加一条更大的 request_body 不会放宽（外层 http.MaxBytesReader 仍是底层
+	# reader）。因此用「具名 matcher 排除上传路径」的写法，而不是分层叠加。
+	# 游戏文件限额为后端的 500 MiB；网关请求预算为 502 MiB，包含 multipart 开销。
+	# 普通请求继续使用 16MB（十进制），后端业务限额仍独立生效。
+	# 历史问题：全局 16MB 或游戏档 500MB 都小于完整游戏上传请求预算。
+	@game_upload path /api/v1/admin/it/games
+	@body_guarded not path /api/v1/admin/it/games
+
+	request_body @game_upload {
+		max_size 526385152
+	}
+	request_body @body_guarded {
 		max_size 16MB
 	}
 
@@ -62,12 +76,12 @@
 		}
 	}
 
-	# SSE 长连接单独处理：/api 默认 transport 写超时 30s，而 SSE 在后端 keepalive
-	# （15s 一次）之外可能长时间没有业务数据，超过就会被反向代理侧关掉。
-	# stream 路径把 read/write timeout 置 0，由后端 keepalive 维持；空闲回收交给
-	# server 级 idle 2m。
+	# SSE 长连接单独处理：transport write_timeout 限制向上游写入请求的等待，
+	# 不是客户端 SSE 响应的总时长。响应读取由 read_timeout 约束；本路由将
+	# read/write timeout 置 0，并依赖后端 keepalive。server 级 write 已在顶部
+	# 显式置 0；不能用 route 级 transport 设置覆盖 server 的绝对写截止。
 	# 注意顺序：handle 按声明顺序匹配，@api_stream 必须排在 @api 之前。
-	@api_stream path /api/v1/admin/stream /api/v1/ai-agents/stream /api/v1/ai-agents/analysis/*/stream /api/v1/ai-agents/group-discussion/stream /api/v1/classroom/admin/stream
+	@api_stream path /api/v1/admin/stream /api/v1/ai-agents/stream /api/v1/ai-agents/analysis/*/stream /api/v1/ai-agents/group-discussion/stream /api/v1/ai-agents/group-discussion/public-config/stream /api/v1/classroom/admin/stream /api/v1/classroom/stream
 	handle @api_stream {
 		reverse_proxy backend:8000 {
 			transport http {
