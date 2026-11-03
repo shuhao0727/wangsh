@@ -178,7 +178,7 @@ def main(argv: list[str] | None = None) -> int:
     if problems:
         print(
             "\n修复方式：新迁移去掉 IF NOT EXISTS / if_not_exists，改为无条件创建。"
-            "历史迁移的冻结额度见 FROZEN_GUARD_COUNTS 与 docs/ENGINEERING_GOVERNANCE.md §六。",
+            "历史迁移的冻结额度见 FROZEN_GUARD_COUNTS 与 docs/development/ENGINEERING_GOVERNANCE.md §六。",
             file=sys.stderr,
         )
         return 1

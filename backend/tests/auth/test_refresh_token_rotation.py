@@ -26,11 +26,6 @@ def dedicated_url():
     return value
 
 
-def _legacy_seed_token():
-    # 无 ws1. 前缀的 legacy refresh，family 为 None，绕过 family nonce 校验。
-    return f"seed-{datetime.now(timezone.utc).timestamp()}"
-
-
 async def _seed_durable_state(db, user_id: int, *, active: bool = True) -> None:
     """并发用例的合成持久权威：gate 就绪 + 用户行 state，不改变锁序语义。"""
     gate = await db.get(AuthAuthority, 1)

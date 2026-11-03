@@ -44,7 +44,7 @@ from app.services.xbk.course_selection_workbook_token import (
     issue_course_selection_workbook_token,
     verify_course_selection_workbook_token,
 )
-from app.services.xbk.exports.common import class_sort_key, safe_sheet_name
+from app.services.xbk.exports.common import class_sort_key, safe_sheet_name, unique_sheet_name
 from app.services.xbk.exports.course_selection import (
     CATALOG_SHEET,
     CourseSelectionExportConflict,
@@ -148,18 +148,6 @@ async def _read_workbook(file: UploadFile) -> bytes:
     except WorkbookArchiveError as exc:
         raise _error(exc) from exc
     return content
-
-
-def _unique_sheet_name(label: str, used: set[str]) -> str:
-    base = safe_sheet_name(label)
-    candidate = base
-    suffix = 2
-    while candidate in used:
-        marker = f"_{suffix}"
-        candidate = f"{base[:31 - len(marker)]}{marker}"
-        suffix += 1
-    used.add(candidate)
-    return candidate
 
 
 async def _load_current_courses(
@@ -266,7 +254,7 @@ def _sheet_names_by_class(
 ) -> dict[tuple[str, str], str]:
     used_sheet_names = {CATALOG_SHEET, METADATA_SHEET}
     return {
-        class_key: _unique_sheet_name(f"{class_key[0]}{class_key[1]}", used_sheet_names)
+        class_key: unique_sheet_name(f"{class_key[0]}{class_key[1]}", used_sheet_names)
         for class_key in ordered_classes
     }
 

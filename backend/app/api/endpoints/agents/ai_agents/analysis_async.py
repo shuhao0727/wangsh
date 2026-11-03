@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 
 from app.core.deps import get_db, require_admin
 from app.models.agents import HotQuestionAnalysis, StudentChainAnalysis
-from sqlalchemy import select
+from sqlalchemy import func, literal, select, union_all
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -219,6 +219,43 @@ async def cancel_analysis_task(
     }
 
 
+def _task_columns(model):
+    """Shared projection for the two analysis tables (same public fields)."""
+    return (
+        model.id.label("id"),
+        model.title.label("title"),
+        model.agent_id.label("agent_id"),
+        model.class_name.label("class_name"),
+        model.created_at.label("created_at"),
+    )
+
+
+def _task_item(row) -> Dict[str, Any]:
+    created_at = row["created_at"]
+    return {
+        "id": row["id"],
+        "title": row["title"],
+        "agent_id": row["agent_id"],
+        "class_name": row["class_name"],
+        "created_at": created_at.isoformat() if created_at else None,
+        "type": row["type"],
+    }
+
+
+async def _task_total(db: AsyncSession, analysis_type: Optional[str]) -> int:
+    if analysis_type == "hot_questions":
+        models = (HotQuestionAnalysis,)
+    elif analysis_type == "student_chains":
+        models = (StudentChainAnalysis,)
+    else:
+        models = (HotQuestionAnalysis, StudentChainAnalysis)
+    total = 0
+    for model in models:
+        count = await db.scalar(select(func.count()).select_from(model))
+        total += int(count or 0)
+    return total
+
+
 @router.get("/analyses/tasks", response_model=Dict[str, Any])
 async def list_analysis_tasks(
     skip: int = Query(0, ge=0),
@@ -228,89 +265,62 @@ async def list_analysis_tasks(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    列出最近的分析任务记录
+    列出最近的分析任务记录。
 
-    可通过 analysis_type 筛选任务类型
+    `total` 是筛选后的全量条数；混合列表使用同一条 SQL 的
+    ORDER BY/OFFSET/LIMIT，避免先各取一半再在内存分页造成重复/漏项。
     """
     if analysis_type == "hot_questions":
-        result = await db.execute(
-            select(HotQuestionAnalysis)
-            .order_by(HotQuestionAnalysis.created_at.desc())
-            .offset(skip)
-            .limit(limit)
+        query = select(
+            *_task_columns(HotQuestionAnalysis),
+            literal("hot_questions").label("type"),
         )
-        records = result.scalars().all()
-        items = [
-            {
-                "id": r.id,
-                "title": r.title,
-                "agent_id": r.agent_id,
-                "class_name": r.class_name,
-                "created_at": r.created_at.isoformat() if r.created_at else None,
-                "type": "hot_questions",
-            }
-            for r in records
-        ]
     elif analysis_type == "student_chains":
-        result = await db.execute(
-            select(StudentChainAnalysis)
-            .order_by(StudentChainAnalysis.created_at.desc())
-            .offset(skip)
-            .limit(limit)
+        query = select(
+            *_task_columns(StudentChainAnalysis),
+            literal("student_chains").label("type"),
         )
-        records = result.scalars().all()
-        items = [
-            {
-                "id": r.id,
-                "title": r.title,
-                "agent_id": r.agent_id,
-                "class_name": r.class_name,
-                "created_at": r.created_at.isoformat() if r.created_at else None,
-                "type": "student_chains",
-            }
-            for r in records
-        ]
     else:
-        # 返回两种类型的混合列表
-        hot_result = await db.execute(
-            select(HotQuestionAnalysis)
-            .order_by(HotQuestionAnalysis.created_at.desc())
-            .limit(limit // 2)
+        hot = select(
+            *_task_columns(HotQuestionAnalysis),
+            literal("hot_questions").label("type"),
         )
-        chain_result = await db.execute(
-            select(StudentChainAnalysis)
-            .order_by(StudentChainAnalysis.created_at.desc())
-            .limit(limit // 2)
+        chains = select(
+            *_task_columns(StudentChainAnalysis),
+            literal("student_chains").label("type"),
         )
+        combined = union_all(hot, chains).subquery()
+        query = select(combined)
 
-        hot_records = hot_result.scalars().all()
-        chain_records = chain_result.scalars().all()
-
-        items = []
-        for r in hot_records:
-            items.append(
-                {
-                    "id": r.id,
-                    "title": r.title,
-                    "agent_id": r.agent_id,
-                    "class_name": r.class_name,
-                    "created_at": r.created_at.isoformat() if r.created_at else None,
-                    "type": "hot_questions",
-                }
+    if analysis_type in ("hot_questions", "student_chains"):
+        rows = (
+            await db.execute(
+                query.order_by(
+                    HotQuestionAnalysis.created_at.desc()
+                    if analysis_type == "hot_questions"
+                    else StudentChainAnalysis.created_at.desc(),
+                    HotQuestionAnalysis.id.desc()
+                    if analysis_type == "hot_questions"
+                    else StudentChainAnalysis.id.desc(),
+                )
+                .offset(skip)
+                .limit(limit)
             )
-        for r in chain_records:
-            items.append(
-                {
-                    "id": r.id,
-                    "title": r.title,
-                    "agent_id": r.agent_id,
-                    "class_name": r.class_name,
-                    "created_at": r.created_at.isoformat() if r.created_at else None,
-                    "type": "student_chains",
-                }
+        ).mappings().all()
+    else:
+        rows = (
+            await db.execute(
+                query.order_by(
+                    combined.c.created_at.desc(),
+                    combined.c.id.desc(),
+                )
+                .offset(skip)
+                .limit(limit)
             )
+        ).mappings().all()
 
-        # 按创建时间排序
-        items.sort(key=lambda x: x["created_at"] or "", reverse=True)
-
-    return {"success": True, "data": items, "total": len(items)}
+    return {
+        "success": True,
+        "data": [_task_item(row) for row in rows],
+        "total": await _task_total(db, analysis_type),
+    }

@@ -314,14 +314,3 @@ def test_apply_common_filters_course_model():
     compiled = str(result.compile(compile_kwargs={"literal_binds": True}))
     assert "2025" in compiled
     assert "LIKE" in compiled.upper()
-
-
-# ---------------------------------------------------------------------------
-# data.py 兼容性桥接测试
-# ---------------------------------------------------------------------------
-
-def test_data_py_backward_compat():
-    """旧 data.py 导入路径仍然可用"""
-    from app.api.endpoints.xbk.data import require_xbk_access, apply_common_filters
-    assert callable(require_xbk_access)
-    assert callable(apply_common_filters)

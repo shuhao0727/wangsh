@@ -48,34 +48,21 @@ class Settings(
         if not self.DEBUG and "COOKIE_SECURE" not in self.model_fields_set:
             self.COOKIE_SECURE = True
 
-        # 开发/Docker 环境自动推导路径
-        if self.DEBUG:
-            if not (self.TYPST_PDF_STORAGE_DIR or "").strip() or str(self.TYPST_PDF_STORAGE_DIR).startswith("/app/"):
-                if self.DEPLOYMENT_ENV == "docker" or os.path.exists("/.dockerenv"):
-                    self.TYPST_PDF_STORAGE_DIR = "/app/data/typst_pdfs"
-                else:
-                    self.TYPST_PDF_STORAGE_DIR = str(PROJECT_ROOT / "data" / "typst_pdfs")
-            if not (self.DAP_HOST_IP or "").strip():
-                if self.DEPLOYMENT_ENV == "docker" or os.path.exists("/.dockerenv"):
-                    self.DAP_HOST_IP = "host.docker.internal"
-                else:
-                    self.DAP_HOST_IP = "127.0.0.1"
-            return self
-
         # 生产环境强制要求
-        def must_set(name: str, value: str):
-            if not value or str(value).strip() in {"", "change_me"}:
-                raise ValueError(f"{name} 未配置或仍为默认值，请在 .env 中设置为安全值")
+        if not self.DEBUG:
+            def must_set(name: str, value: str):
+                if not value or str(value).strip() in {"", "change_me"}:
+                    raise ValueError(f"{name} 未配置或仍为默认值，请在 .env 中设置为安全值")
 
-        must_set("SECRET_KEY", self.SECRET_KEY)
-        must_set("POSTGRES_PASSWORD", self.POSTGRES_PASSWORD)
-        must_set("SUPER_ADMIN_PASSWORD", self.SUPER_ADMIN_PASSWORD)
-        must_set("AGENT_API_KEY_ENCRYPTION_KEY", self.AGENT_API_KEY_ENCRYPTION_KEY or "")
+            must_set("SECRET_KEY", self.SECRET_KEY)
+            must_set("POSTGRES_PASSWORD", self.POSTGRES_PASSWORD)
+            must_set("SUPER_ADMIN_PASSWORD", self.SUPER_ADMIN_PASSWORD)
+            must_set("AGENT_API_KEY_ENCRYPTION_KEY", self.AGENT_API_KEY_ENCRYPTION_KEY or "")
 
-        if len(self.SECRET_KEY) < 32:
-            raise ValueError("SECRET_KEY 长度过短，建议至少 32 字符")
+            if len(self.SECRET_KEY) < 32:
+                raise ValueError("SECRET_KEY 长度过短，建议至少 32 字符")
 
-        # 生产环境路径兜底
+        # 路径推导：DEBUG 与生产共用同一套规则，只在容器内外取值不同。
         if not (self.TYPST_PDF_STORAGE_DIR or "").strip() or str(self.TYPST_PDF_STORAGE_DIR).startswith("/app/"):
             if self.DEPLOYMENT_ENV == "docker" or os.path.exists("/.dockerenv"):
                 self.TYPST_PDF_STORAGE_DIR = "/app/data/typst_pdfs"

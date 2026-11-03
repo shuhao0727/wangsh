@@ -22,7 +22,8 @@ class K8sProvider(SandboxProvider):
     """
     
     def __init__(self):
-        self.namespace = "default" # TODO: Make configurable via settings
+        # 命名空间写死为 default：K8sProvider 尚未投入生产使用，接入前需改为可配置。
+        self.namespace = "default"
         self.image = getattr(settings, "PYTHONLAB_SANDBOX_IMAGE", "pythonlab-sandbox:py311")
         self.debugpy_port = int(getattr(settings, "PYTHONLAB_DEBUGPY_PORT", 5678) or 5678)
         self.runtime_class = getattr(settings, "PYTHONLAB_DOCKER_RUNTIME", None)

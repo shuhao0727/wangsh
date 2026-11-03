@@ -15,7 +15,14 @@ from starlette.concurrency import run_in_threadpool
 from app.utils.academic_year import normalize_academic_year, split_academic_year
 from app.models import XbkCourse, XbkSelection, XbkStudent
 from app.core.config import settings
-from app.services.xbk.exports.common import apply_table_style, auto_adjust_column_width, class_sort_key, safe_sheet_name, force_text_cells
+from app.services.xbk.exports.common import (
+    apply_table_style,
+    auto_adjust_column_width,
+    class_sort_key,
+    safe_sheet_name,
+    force_text_cells,
+    unique_sheet_name,
+)
 from app.services.xbk.course_selection_workbook import (
     CATALOG_SHEET,
     INSTRUCTION,
@@ -192,18 +199,6 @@ async def _load_selection_map(db: AsyncSession, year: str, term: str, students: 
         raise CourseSelectionExportConflict(conflicts)
     return {student_no: codes[0] for student_no, codes in codes_by_student.items()}
 
-def _unique_sheet_name(label: str, used: set[str]) -> str:
-    base = safe_sheet_name(label)
-    candidate = base
-    suffix = 2
-    while candidate in used:
-        marker = f"_{suffix}"
-        candidate = f"{base[:31 - len(marker)]}{marker}"
-        suffix += 1
-    used.add(candidate)
-    return candidate
-
-
 async def _load_export_rows(
     db: AsyncSession,
     normalized_year: str,
@@ -292,7 +287,7 @@ def _build_export_manifest(
 ]:
     used_sheet_names = {CATALOG_SHEET, METADATA_SHEET}
     sheet_by_class = {
-        class_key: _unique_sheet_name(f"{class_key[0]}{class_key[1]}", used_sheet_names)
+        class_key: unique_sheet_name(f"{class_key[0]}{class_key[1]}", used_sheet_names)
         for class_key in ordered_classes
     }
     manifest_courses = [

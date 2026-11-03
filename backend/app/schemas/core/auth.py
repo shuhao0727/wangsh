@@ -111,28 +111,6 @@ class UserResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class StudentLoginResponse(BaseModel):
-    """学生登录响应模型"""
-    access_token: str
-    token_type: str = "bearer"
-    expires_in: int
-    role_code: str = "student"
-    student_id: str
-    full_name: str
-    class_name: Optional[str]
-    study_year: Optional[str]
-
-
-class AdminLoginResponse(BaseModel):
-    """管理员登录响应模型"""
-    access_token: str
-    token_type: str = "bearer"
-    expires_in: int
-    role_code: str
-    username: str
-    full_name: str
-
-
 class PasswordResetRequest(BaseModel):
     """密码重置请求模型"""
     identifier: str = Field(..., description="用户名或邮箱")

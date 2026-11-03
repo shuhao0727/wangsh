@@ -25,20 +25,6 @@ def sanitize_html(text: Optional[str]) -> Optional[str]:
     return escape(text)
 
 
-def sanitize_multiline(text: Optional[str]) -> Optional[str]:
-    """转义多行文本中的 HTML
-
-    Args:
-        text: 待转义的多行文本
-
-    Returns:
-        转义后的文本，保留换行符
-    """
-    if text is None:
-        return None
-    return escape(text)
-
-
 # 危险 Prompt 注入模式
 PROMPT_INJECTION_PATTERNS = [
     # 忽略指令类

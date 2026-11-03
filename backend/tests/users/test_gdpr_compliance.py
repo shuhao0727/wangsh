@@ -25,6 +25,7 @@ from app.db.database import Base
 from app.models.agents.ai_agent import ZntConversation
 from app.models.agents.group_discussion import GroupDiscussionMessage
 from app.models.core.audit_log import AuditLog
+from app.models.core.user_consent import UserConsent
 
 SYNTHETIC_TOKEN = "synthetic-gdpr-token"
 
@@ -32,6 +33,7 @@ _TABLES = [
     ZntConversation.__table__,
     GroupDiscussionMessage.__table__,
     AuditLog.__table__,
+    UserConsent.__table__,
 ]
 
 
@@ -136,6 +138,17 @@ async def test_export_user_data(client: AsyncClient, auth_headers: dict, test_us
     assert "export_date" in data
     assert data["user_info"]["user_id"] == test_user["id"]
     assert data["conversations_count"] >= 1
+    assert data["data_scope"]["conversations"] is True
+    assert data["data_scope"]["assessment"] is False
+    assert data["operation_id"]
+    audit = await db.execute(
+        select(AuditLog.action).where(
+            AuditLog.user_id == test_user["id"],
+            AuditLog.resource_id == data["operation_id"],
+        )
+    )
+    actions = set(audit.scalars().all())
+    assert {"EXPORT_DATA_REQUESTED", "EXPORT_DATA_COMPLETED"} <= actions
 
 
 @pytest.mark.asyncio
@@ -149,6 +162,7 @@ async def test_get_data_summary(client: AsyncClient, auth_headers: dict, test_us
     assert "data_summary" in data
     assert "warning" in data
     assert data["user_id"] == test_user["id"]
+    assert data["data_scope"]["analysis"] is False
 
 
 @pytest.mark.asyncio
@@ -195,6 +209,18 @@ async def test_delete_user_data_with_confirmation(
     assert "message" in data
     assert "deleted_at" in data
     assert "deleted_items" in data
+    assert "所有数据" not in data["message"]
+    assert data["operation_id"]
+    assert data["data_scope"]["discussion_messages"] is True
+    assert data["data_scope"]["account"] is False
+    audit = await db.execute(
+        select(AuditLog.action).where(
+            AuditLog.user_id == test_user["id"],
+            AuditLog.resource_id == data["operation_id"],
+        )
+    )
+    actions = set(audit.scalars().all())
+    assert {"DELETE_DATA_REQUESTED", "DELETE_DATA_COMPLETED"} <= actions
 
     # 验证数据已删除
     result = await db.execute(
@@ -202,6 +228,52 @@ async def test_delete_user_data_with_confirmation(
     )
     conversations = list(result.scalars())
     assert len(conversations) == 0
+
+
+@pytest.mark.asyncio
+async def test_consent_read_write_withdraw_and_audit(client: AsyncClient, auth_headers: dict, test_user: dict, db: AsyncSession):
+    response = await client.get("/api/users/privacy/me/consents", headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert {item["consent_type"] for item in data} == {"AI_USAGE", "DATA_ANALYSIS"}
+    assert all(item["consented"] is None for item in data)
+
+    response = await client.put(
+        "/api/users/privacy/me/consents/AI_USAGE",
+        headers=auth_headers,
+        json={"consented": True},
+    )
+    assert response.status_code == 200
+    assert response.json()["data"]["consented"] is True
+
+    response = await client.get("/api/users/privacy/me/consents", headers=auth_headers)
+    usage = next(item for item in response.json()["data"] if item["consent_type"] == "AI_USAGE")
+    assert usage["consented"] is True
+
+    response = await client.delete(
+        "/api/users/privacy/me/consents/AI_USAGE", headers=auth_headers
+    )
+    assert response.status_code == 200
+    assert response.json()["data"]["consented"] is False
+
+    audit = await db.execute(
+        select(AuditLog.action).where(
+            AuditLog.user_id == test_user["id"],
+            AuditLog.resource_type == "user_consent",
+            AuditLog.resource_id == "AI_USAGE",
+        )
+    )
+    assert {"CONSENT_GRANTED", "CONSENT_WITHDRAWN"} <= set(audit.scalars().all())
+
+
+@pytest.mark.asyncio
+async def test_consent_rejects_unknown_type(client: AsyncClient, auth_headers: dict):
+    response = await client.put(
+        "/api/users/privacy/me/consents/UNKNOWN",
+        headers=auth_headers,
+        json={"consented": True},
+    )
+    assert response.status_code == 400
 
 
 @pytest.mark.asyncio

@@ -3,7 +3,6 @@ AI智能体服务
 提供智能体的CRUD操作和测试功能
 """
 
-from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional, List, Dict
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,20 +16,81 @@ from app.schemas.agents import (
     AgentTestResponse,
     AgentStatisticsData,
 )
-from app.schemas.agents import COMMON_MODEL_PRESETS
-from app.utils.agent_secrets import encrypt_api_key, try_decrypt_api_key, last4
+from app.utils.agent_secrets import encrypt_api_key, last4
 from app.core.config import settings
 from cachetools import TTLCache
+from loguru import logger
 
 # Agent Cache: key=agent_id, value=AIAgent, TTL=settings.AGENT_CACHE_TTL, maxsize=settings.AGENT_CACHE_MAXSIZE
 _AGENT_CACHE = TTLCache(maxsize=settings.AGENT_CACHE_MAXSIZE, ttl=settings.AGENT_CACHE_TTL)
 
 
-@dataclass
-class _AgentProviderContext:
-    api_endpoint: str
-    flags: Dict[str, bool]
-    is_dify: bool
+def _log_endpoint_warning() -> None:
+    """固定、不携带配置或异常信息；日志 sink 故障也不阻断软保存。"""
+    try:
+        logger.warning(
+            "[agent-endpoint] api_endpoint 未通过安全校验；"
+            "保存已继续，如非本地/内网部署请核对配置。"
+        )
+    except Exception:
+        pass
+
+
+def warn_if_endpoint_unsafe(api_endpoint: Optional[str], *, agent_name: str = "") -> None:
+    """同步调用方兼容入口；保存路径使用异步版，agent_name 仅保留参数兼容。
+
+    内网 dify/自建模型是正常用法，因此只做软校验，不改变保存结果。
+    校验与日志的一般异常不外抛；取消等 BaseException 仍由调用方处理。
+    """
+    if not api_endpoint:
+        return
+    try:
+        from app.services.agents.endpoint_security import _assert_safe_endpoint
+
+        _assert_safe_endpoint(
+            str(api_endpoint),
+            allow_local_ollama=True,
+            allow_trusted_internal=True,
+        )
+    except Exception:
+        _log_endpoint_warning()
+
+
+async def warn_if_endpoint_unsafe_async(api_endpoint: Optional[str], *, agent_name: str = "") -> None:
+    """异步软校验：复用非阻塞 DNS 防护，保留软保存与取消传播语义。"""
+    if not api_endpoint:
+        return
+    try:
+        from app.services.agents.endpoint_security import _assert_safe_endpoint_async
+
+        await _assert_safe_endpoint_async(
+            str(api_endpoint),
+            allow_local_ollama=True,
+            allow_trusted_internal=True,
+        )
+    except Exception:
+        _log_endpoint_warning()
+
+
+async def _warn_updated_endpoint(agent: AIAgent, update_data: Dict) -> None:
+    """仅在本次更新了 api_endpoint 时做一次软校验（拆分以保持 update_agent 复杂度）。"""
+    if "api_endpoint" in update_data:
+        await warn_if_endpoint_unsafe_async(agent.api_endpoint)
+
+
+from app.services.agents.agent_testing import (
+    AgentProviderContext as _AgentProviderContext,
+    build_provider_context as _build_provider_context,
+    build_test_headers as _build_test_headers,
+    display_test_message as _display_test_message,
+    elapsed_ms as _elapsed_ms,
+    join_api_url as _join_api_url,
+    model_display_name as _model_display_name,
+    resolve_provider_type as _resolve_provider_type,
+    resolve_test_endpoint as _resolve_test_endpoint,
+    test_basic_endpoint as _test_basic_endpoint,
+    test_models_endpoint as _test_models_endpoint,
+)
 
 async def create_agent(
     db: AsyncSession,
@@ -74,6 +134,7 @@ async def create_agent(
         is_active=agent_in.is_active,
     )
     
+    await warn_if_endpoint_unsafe_async(api_endpoint)
     db.add(db_agent)
     await db.commit()
     await db.refresh(db_agent)
@@ -133,228 +194,6 @@ async def get_agent(
 
     return agent
 
-
-
-def _resolved_agent_api_key(agent: AIAgent, *, is_openrouter: bool) -> Optional[str]:
-    v = try_decrypt_api_key(getattr(agent, "api_key_encrypted", None))
-    if v:
-        return v
-    legacy = (getattr(agent, "api_key", None) or "").strip()
-    if legacy:
-        return legacy
-    if is_openrouter and settings.OPENROUTER_API_KEY:
-        return settings.OPENROUTER_API_KEY
-    return None
-
-
-def _model_display_name(model_id: Optional[str]) -> Optional[str]:
-    if not model_id:
-        return model_id
-    try:
-        for models in COMMON_MODEL_PRESETS.values():
-            for m in models:
-                if m.id == model_id:
-                    return m.name
-    except Exception:
-        pass
-    name = model_id.replace("-", " ").replace("_", " ").title()
-    name = name.replace("Gpt", "GPT").replace("Claude", "Claude").replace("Qwen", "Qwen").replace("Llama", "Llama").replace("Doubao", "Doubao")
-    return name
-
-
-def _build_provider_context(agent: AIAgent) -> _AgentProviderContext:
-    from app.services.agents.providers import detect_flags
-
-    api_endpoint = (agent.api_endpoint or "").strip()
-    return _AgentProviderContext(
-        api_endpoint=api_endpoint,
-        flags=detect_flags(api_endpoint),
-        is_dify=agent.agent_type == "dify",
-    )
-
-
-def _build_test_headers(agent: AIAgent, ctx: _AgentProviderContext) -> Dict[str, str]:
-    headers: Dict[str, str] = {}
-    api_key = _resolved_agent_api_key(agent, is_openrouter=ctx.flags["is_openrouter"])
-    if api_key:
-        if ctx.is_dify:
-            headers["Authorization"] = f"Bearer {api_key}"
-        elif ctx.flags["is_anthropic"]:
-            headers["x-api-key"] = api_key
-        else:
-            headers["Authorization"] = f"Bearer {api_key}"
-    if ctx.flags["is_openrouter"]:
-        headers["HTTP-Referer"] = "https://github.com/wangsh"
-        headers["X-Title"] = "WangSh AI"
-    return headers
-
-
-def _resolve_provider_type(flags: Dict[str, bool]) -> str:
-    if flags["is_deepseek"]:
-        return "DeepSeek"
-    if flags["is_openai"]:
-        return "OpenAI"
-    if flags["is_anthropic"]:
-        return "Anthropic"
-    if flags["is_openrouter"]:
-        return "OpenRouter"
-    if flags["is_siliconflow"]:
-        return "SiliconFlow"
-    if flags["is_volcengine"]:
-        return "Volcengine"
-    if flags["is_aliyun"]:
-        return "Aliyun"
-    return "AI服务"
-
-
-def _resolve_test_endpoint(ctx: _AgentProviderContext) -> Optional[str]:
-    from app.services.agents.providers import models_endpoint
-
-    if ctx.is_dify:
-        return "/v1/chat/completions"
-    return models_endpoint(ctx.flags)
-
-
-def _join_api_url(base: str, path: str) -> str:
-    base_clean = (base or "").strip().rstrip("/")
-    if base_clean.endswith("/chat/completions"):
-        base_clean = base_clean[:-17]
-    path_clean = path if path.startswith("/") else f"/{path}"
-    if base_clean.endswith("/v1") and path_clean.startswith("/v1/"):
-        path_clean = path_clean[len("/v1"):]
-    if base_clean.endswith("/api/v1") and path_clean.startswith("/api/v1/"):
-        path_clean = path_clean[len("/api/v1"):]
-    if base_clean.endswith("/api/v3") and path_clean.startswith("/api/v3/"):
-        path_clean = path_clean[len("/api/v3"):]
-    return f"{base_clean}{path_clean}"
-
-
-def _elapsed_ms(start_time: float, time_module) -> float:
-    return (time_module.time() - start_time) * 1000
-
-
-def _display_test_message(test_message: str) -> str:
-    if len(test_message) > 50:
-        return test_message[:50] + "..."
-    return test_message
-
-
-async def _perform_chat_test(
-    client,
-    agent: AIAgent,
-    test_message: str,
-    headers: Dict[str, str],
-    ctx: _AgentProviderContext,
-) -> str:
-    from app.services.agents.providers import chat_completions_endpoint
-
-    try:
-        chat_payload = {
-            "model": agent.model_name,
-            "messages": [{"role": "user", "content": test_message}],
-            "max_tokens": 10
-        }
-        chat_url = chat_completions_endpoint(ctx.api_endpoint, ctx.flags)
-        chat_response = await client.post(
-            chat_url,
-            headers=headers,
-            json=chat_payload,
-            timeout=30.0
-        )
-        if chat_response.status_code == 200:
-            return f"\n🧠 聊天测试: ✅ 成功 (使用模型: {_model_display_name(agent.model_name)})"
-        return f"\n🧠 聊天测试: ⚠️ 模型调用失败 (状态码: {chat_response.status_code})"
-    except Exception as chat_error:
-        return f"\n🧠 聊天测试: ⚠️ 模型调用错误 ({str(chat_error)[:50]})"
-
-
-async def _test_models_endpoint(
-    client,
-    agent: AIAgent,
-    test_request: AgentTestRequest,
-    headers: Dict[str, str],
-    ctx: _AgentProviderContext,
-    start_time: float,
-    time_module,
-) -> AgentTestResponse:
-    response = await client.get(
-        _join_api_url(ctx.api_endpoint, _resolve_test_endpoint(ctx) or ""),
-        headers=headers
-    )
-    response_time = _elapsed_ms(start_time, time_module)
-    if response.status_code == 200:
-        data = response.json()
-        models_count = len(data.get("data", []))
-        chat_test_result = ""
-        if agent.model_name and test_request.test_message:
-            chat_test_result = await _perform_chat_test(
-                client=client,
-                agent=agent,
-                test_message=test_request.test_message,
-                headers=headers,
-                ctx=ctx,
-            )
-        test_message_display = _display_test_message(test_request.test_message)
-        provider_type = _resolve_provider_type(ctx.flags)
-        return AgentTestResponse(
-            success=True,
-            message=f"✅ {provider_type} 智能体 '{agent.name}' 测试成功\n\n📋 类型: {agent.agent_type}\n🔗 端点: {ctx.api_endpoint}\n📊 发现模型: {models_count} 个{chat_test_result}\n💬 测试消息: {test_message_display}",
-            response_time=response_time,
-            timestamp=datetime.now(),
-        )
-
-    error_msg = f"❌ API连接测试失败\n\n📋 类型: {agent.agent_type}\n🔗 端点: {ctx.api_endpoint}\n🛑 状态码: {response.status_code}"
-    if response.status_code == 401:
-        error_msg += "\n🔒 错误原因: 认证失败 (API Key 无效或过期)"
-    elif response.status_code == 403:
-        error_msg += "\n🚫 错误原因: 拒绝访问 (权限不足)"
-    elif response.status_code == 404:
-        error_msg += "\n🔍 错误原因: 端点不存在 (请检查URL)"
-    elif response.status_code == 429:
-        error_msg += "\n⏳ 错误原因: 请求过多 (触发限流)"
-    error_msg += f"\n📄 响应: {response.text[:500]}"
-    return AgentTestResponse(
-        success=False,
-        message=error_msg,
-        response_time=response_time,
-        timestamp=datetime.now(),
-    )
-
-
-async def _test_basic_endpoint(
-    client,
-    agent: AIAgent,
-    test_request: AgentTestRequest,
-    headers: Dict[str, str],
-    ctx: _AgentProviderContext,
-    start_time: float,
-    time_module,
-) -> AgentTestResponse:
-    try:
-        response = await client.get(ctx.api_endpoint, headers=headers, timeout=30.0)
-        response_time = _elapsed_ms(start_time, time_module)
-        if response.status_code < 400:
-            test_message_display = _display_test_message(test_request.test_message)
-            return AgentTestResponse(
-                success=True,
-                message=f"✅ 智能体 '{agent.name}' 基本连接测试成功\n\n📋 类型: {agent.agent_type}\n🔗 端点: {ctx.api_endpoint}\n💬 测试消息: {test_message_display}",
-                response_time=response_time,
-                timestamp=datetime.now(),
-            )
-        return AgentTestResponse(
-            success=False,
-            message=f"❌ 基本连接测试失败\n\n📋 类型: {agent.agent_type}\n🔗 端点: {ctx.api_endpoint}\n🛑 状态码: {response.status_code}",
-            response_time=response_time,
-            timestamp=datetime.now(),
-        )
-    except Exception as conn_error:
-        response_time = _elapsed_ms(start_time, time_module)
-        return AgentTestResponse(
-            success=False,
-            message=f"❌ 连接测试异常\n\n📋 类型: {agent.agent_type}\n🔗 端点: {ctx.api_endpoint}\n🛑 错误: {str(conn_error)[:100]}",
-            response_time=response_time,
-            timestamp=datetime.now(),
-        )
 
 
 async def get_agents(
@@ -474,6 +313,8 @@ async def update_agent(
 
     for field, value in update_data.items():
         setattr(agent, field, value)
+
+    await _warn_updated_endpoint(agent, update_data)
 
     if clear_api_key and not api_key_plain:
         agent.api_key = None

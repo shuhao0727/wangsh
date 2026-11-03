@@ -3,6 +3,10 @@
   "backend/app/api/endpoints/agents/ai_agents/analysis.py::get_trends_summary": {
    "ceiling": 23
   },
+  "backend/app/api/endpoints/agents/ai_agents/analysis_helpers.py::_prepare_chain_deep_analysis_input": {
+   "ceiling": 20,
+   "moved_from": "backend/app/api/endpoints/agents/ai_agents/analysis.py::_prepare_chain_deep_analysis_input"
+  },
   "backend/app/api/endpoints/agents/ai_agents/export.py::export_hot_questions_excel.build_excel_bytes": {
    "ceiling": 15
   },
@@ -48,6 +52,10 @@
   },
   "backend/app/api/endpoints/management/users/users.py::update_user": {
    "ceiling": 25
+  },
+  "backend/app/api/endpoints/management/users/users_import.py::import_users": {
+   "ceiling": 32,
+   "moved_from": "backend/app/api/endpoints/management/users/users.py::import_users"
   },
   "backend/app/api/endpoints/xbk/analysis.py::course_stats": {
    "ceiling": 30
@@ -167,9 +175,6 @@
   "backend/app/core/session_guard.py::extract_client_ip": {
    "ceiling": 14
   },
-  "backend/app/services/agents/agent_analysis.py::_build_timeline_buckets": {
-   "ceiling": 19
-  },
   "backend/app/services/agents/agent_analysis.py::_call_llm_analysis": {
    "ceiling": 14
   },
@@ -224,14 +229,8 @@
   "backend/app/services/agents/group_discussion/session_service.py::send_message": {
    "ceiling": 25
   },
-  "backend/app/services/agents/hot_agent.py::_build_analysis_prompt": {
-   "ceiling": 23
-  },
   "backend/app/services/agents/llm_agent_base.py::_call_openai_compatible": {
    "ceiling": 13
-  },
-  "backend/app/services/agents/llm_agent_base.py::_call_openai_compatible_stream": {
-   "ceiling": 15
   },
   "backend/app/services/agents/model_discovery.py::ModelDiscoveryService.discover_models": {
    "ceiling": 15
@@ -293,9 +292,6 @@
   "backend/app/services/informatics/github_sync.py::run_github_sync": {
    "ceiling": 93
   },
-  "backend/app/services/informatics/typst_notes.py::_write_project_files": {
-   "ceiling": 20
-  },
   "backend/app/services/informatics/typst_notes.py::compile_note_pdf": {
    "ceiling": 40
   },
@@ -322,75 +318,51 @@
   },
   "backend/app/utils/typst_asset_validation.py::detect_mime_by_magic": {
    "ceiling": 18
-  },
-  "backend/app/api/endpoints/agents/ai_agents/analysis_helpers.py::_prepare_hot_deep_analysis_input": {
-   "ceiling": 22,
-   "moved_from": "backend/app/api/endpoints/agents/ai_agents/analysis.py::_prepare_hot_deep_analysis_input"
-  },
-  "backend/app/api/endpoints/agents/ai_agents/analysis_helpers.py::_prepare_chain_deep_analysis_input": {
-   "ceiling": 20,
-   "moved_from": "backend/app/api/endpoints/agents/ai_agents/analysis.py::_prepare_chain_deep_analysis_input"
-  },
-  "backend/app/api/endpoints/management/users/users_import.py::import_users": {
-   "ceiling": 32,
-   "moved_from": "backend/app/api/endpoints/management/users/users.py::import_users"
   }
  },
  "file_ceilings": {
   "backend/app/api/endpoints/assessment/admin.py": {
-   "ceiling": 735
+   "ceiling": 734
   },
   "backend/app/api/endpoints/content/articles/articles.py": {
    "ceiling": 767,
    "exception": {
+    "expires_at": "2026-11-15",
     "owner": "project-governance",
-    "reason": "2026-10-16 UI 回滚：恢复合并前 articles.py（766 行），相对已合并分支的 699 行为回滚性增长，非新增债务。到期前重新评估。",
-    "expires_at": "2026-11-15"
+    "reason": "2026-10-16 UI 回滚：恢复合并前 articles.py（766 行），相对已合并分支的 699 行为回滚性增长，非新增债务。到期前重新评估。"
    }
   },
   "backend/app/api/endpoints/xbk/import_export.py": {
-   "ceiling": 894
+   "ceiling": 792
   },
   "backend/app/api/pythonlab/ws/bridge.py": {
-   "ceiling": 799
+   "ceiling": 793
   },
   "backend/app/api/pythonlab/ws/handlers.py": {
-   "ceiling": 653
+   "ceiling": 589
   },
   "backend/app/core/sandbox/docker.py": {
    "ceiling": 756,
    "exception": {
+    "expires_at": "2026-11-15",
     "owner": "project-governance",
-    "reason": "2026-10-16 cleanup_orphans 回收修复：新增 reap_user_container（约 44 行），修复用户级孤儿容器永不回收的死代码。到期前重新评估是否拆分模块。",
-    "expires_at": "2026-11-15"
+    "reason": "2026-10-16 cleanup_orphans 回收修复：新增 reap_user_container（约 44 行），修复用户级孤儿容器永不回收的死代码。到期前重新评估是否拆分模块。"
    }
   },
   "backend/app/services/agents/agent_analysis.py": {
-   "ceiling": 697
-  },
-  "backend/app/services/agents/ai_agent.py": {
-   "ceiling": 629
-  },
-  "backend/app/services/agents/group_discussion/session_service.py": {
-   "ceiling": 508
-  },
-  "backend/app/services/agents/model_discovery.py": {
-   "ceiling": 682
+   "ceiling": 522
   },
   "backend/app/services/assessment/profile_service.py": {
-   "ceiling": 614
+   "ceiling": 612
   },
   "backend/app/services/assessment/session_service.py": {
-   "ceiling": 1386
+   "ceiling": 1263
   },
   "backend/app/services/informatics/github_sync.py": {
    "ceiling": 665
   },
   "backend/app/services/informatics/typst_notes.py": {
-   "ceiling": 570
-  },
-  "backend/app/utils/cache.py": {
-   "ceiling": 516
+   "ceiling": 542
   }
  },
  "schema_version": 1,

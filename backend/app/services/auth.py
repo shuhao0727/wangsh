@@ -57,7 +57,7 @@ def verify_token(token: str) -> Optional[Dict[str, Any]]:
 
 
 async def authenticate_user(
-    db, identifier: str, credential: str, user_type: str = "admin"
+    db, identifier: str, credential: str, user_type: str = "admin", *, include_inactive: bool = False
 ) -> Optional[Dict[str, Any]]:
     """
     统一用户认证 — 所有角色均使用 姓名(identifier) + 学号/密码(credential)
@@ -65,12 +65,18 @@ async def authenticate_user(
     identifier 用于定位用户（full_name / student_id / username，均为公开标识符）
     credential 优先匹配 student_id；有 hashed_password 的账号也可使用密码，
     保持项目统一的"姓名 + 学号"登录契约并兼容历史密码账号。
+
+    include_inactive=True 只供登录端点区分"停用且凭据正确"（403）与
+    "账号/凭据错误"（401）；其他调用方仍只接受启用账号，避免停用账号
+    通过管理端重新认证。
     """
-    query = select(User).where(
+    conditions = [
         or_(User.full_name == identifier, User.student_id == identifier, User.username == identifier),
         User.is_deleted.is_(False),
-        User.is_active.is_(True)
-    )
+    ]
+    if not include_inactive:
+        conditions.append(User.is_active.is_(True))
+    query = select(User).where(*conditions)
     result = await db.execute(query)
     candidates = result.scalars().all()
     matching_users = [
@@ -99,10 +105,12 @@ async def authenticate_user(
 
 
 async def authenticate_user_auto(
-    db, identifier: str, credential: str
+    db, identifier: str, credential: str, *, include_inactive: bool = False
 ) -> Optional[Dict[str, Any]]:
-    """统一认证 — 所有角色使用 姓名+学号"""
-    return await authenticate_user(db, identifier, credential)
+    """统一认证 — 所有角色使用 姓名+学号。"""
+    return await authenticate_user(
+        db, identifier, credential, include_inactive=include_inactive
+    )
 
 
 async def resolve_legacy_subject(db, subject):

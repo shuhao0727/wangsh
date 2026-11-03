@@ -13,7 +13,7 @@ from celery import Task
 from sqlalchemy import select
 
 from app.core.celery_app import celery_app
-from app.db.database import AsyncSessionLocal
+from app.db.database import AsyncSessionLocal, engine
 from app.models.agents import HotQuestionAnalysis, StudentChainAnalysis
 from app.services.agents.agent_deep_analysis import (
     analyze_hot_questions_v2,
@@ -21,6 +21,27 @@ from app.services.agents.agent_deep_analysis import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def run_analysis_in_fresh_loop(coro):
+    """Run one Celery task coroutine and drop pooled connections afterward.
+
+    A prefork/solo worker executes several tasks in the same process. Each
+    ``asyncio.run`` creates a new event loop; asyncpg connections left in the
+    global pool are bound to the previous loop and raise "attached to a
+    different loop" on the next task. Disposing the pool at the end of every
+    task keeps each task's connections scoped to its loop.
+    """
+    import asyncio
+
+    async def _runner():
+        try:
+            return await coro
+        finally:
+            await engine.dispose()
+
+    return asyncio.run(_runner())
+
 
 
 class AnalysisTask(Task):
@@ -131,8 +152,8 @@ def analyze_hot_questions_task(
                 logger.error(f"热点分析任务执行失败: {e}", exc_info=True)
                 raise
 
-    # 在事件循环中运行异步函数
-    return asyncio.run(_run_analysis())
+    # 在独立事件循环中运行；结束后释放连接池，避免下一任务复用旧 loop 的连接。
+    return run_analysis_in_fresh_loop(_run_analysis())
 
 
 @celery_app.task(name="analyze_student_chains_async", bind=True, base=AnalysisTask)
@@ -228,5 +249,5 @@ def analyze_student_chains_task(
                 logger.error(f"问题链分析任务执行失败: {e}", exc_info=True)
                 raise
 
-    # 在事件循环中运行异步函数
-    return asyncio.run(_run_analysis())
+    # 在独立事件循环中运行；结束后释放连接池，避免下一任务复用旧 loop 的连接。
+    return run_analysis_in_fresh_loop(_run_analysis())

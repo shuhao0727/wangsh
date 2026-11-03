@@ -5,7 +5,6 @@ import time
 import urllib.parse
 import urllib.request
 import urllib.error
-import uuid
 
 LOGIN_RETRY_ATTEMPTS = max(int(os.environ.get("LOGIN_RETRY_ATTEMPTS", "4") or "4"), 1)
 LOGIN_RETRY_SLEEP_SECONDS = max(float(os.environ.get("LOGIN_RETRY_SLEEP_SECONDS", "2.2") or "2.2"), 0.5)
@@ -47,57 +46,6 @@ def _http_form(method: str, url: str, *, fields: dict, timeout: int = 12):
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             raw = resp.read().decode("utf-8")
             return resp.status, json.loads(raw) if raw else None
-    except urllib.error.HTTPError as e:
-        raw = e.read().decode("utf-8") if hasattr(e, "read") else ""
-        try:
-            payload = json.loads(raw) if raw else None
-        except Exception:
-            payload = {"raw": raw}
-        return e.code, payload
-
-
-def _http_multipart(
-    method: str,
-    url: str,
-    *,
-    headers: dict | None = None,
-    files: list[tuple[str, str, bytes, str]],
-    fields: dict | None = None,
-    timeout: int = 20,
-):
-    boundary = "----smoke-" + uuid.uuid4().hex
-    parts: list[bytes] = []
-
-    for k, v in (fields or {}).items():
-        parts.append(f"--{boundary}\r\n".encode("utf-8"))
-        parts.append(f'Content-Disposition: form-data; name="{k}"\r\n\r\n'.encode("utf-8"))
-        parts.append(str(v).encode("utf-8"))
-        parts.append(b"\r\n")
-
-    for field_name, filename, content, content_type in files:
-        parts.append(f"--{boundary}\r\n".encode("utf-8"))
-        parts.append(
-            f'Content-Disposition: form-data; name="{field_name}"; filename="{filename}"\r\n'.encode("utf-8")
-        )
-        parts.append(f"Content-Type: {content_type}\r\n\r\n".encode("utf-8"))
-        parts.append(content)
-        parts.append(b"\r\n")
-
-    parts.append(f"--{boundary}--\r\n".encode("utf-8"))
-    data = b"".join(parts)
-
-    req = urllib.request.Request(url, data=data, method=method.upper())
-    req.add_header("Content-Type", f"multipart/form-data; boundary={boundary}")
-    req.add_header("Accept", "application/json")
-    for k, v in (headers or {}).items():
-        req.add_header(k, v)
-
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            raw = resp.read().decode("utf-8")
-            if not raw:
-                return resp.status, None
-            return resp.status, json.loads(raw)
     except urllib.error.HTTPError as e:
         raw = e.read().decode("utf-8") if hasattr(e, "read") else ""
         try:

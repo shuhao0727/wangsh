@@ -36,7 +36,7 @@ def _make_request(ip="127.0.0.1"):
 
 
 def _patch_login_deps(monkeypatch, user=None, nonce="test-nonce", client_ip="127.0.0.1"):
-    async def fake_authenticate(db, username, password):
+    async def fake_authenticate(db, username, password, **kwargs):
         return user
 
     async def fake_on_successful_login(user_id, request):
@@ -158,6 +158,31 @@ def test_login_wrong_password(monkeypatch):
         assert False, "应该抛出 HTTPException"
     except HTTPException as e:
         assert e.status_code == 401
+
+
+def test_login_inactive_account_with_correct_credentials_is_forbidden(monkeypatch):
+    user = {
+        "id": 3,
+        "username": "disabled",
+        "full_name": "Disabled User",
+        "role_code": "student",
+        "student_id": "20240003",
+        "is_active": False,
+    }
+    _patch_login_deps(monkeypatch, user=user)
+
+    try:
+        asyncio.run(auth_api.login_for_access_token(
+            response=Response(),
+            request=_make_request(),
+            username="20240003",
+            password="correct",
+            db=_LoginDB(),
+        ))
+        assert False, "停用账号应返回 403"
+    except HTTPException as e:
+        assert e.status_code == 403
+        assert e.detail == "账号已停用"
 
 
 def test_login_rate_limited(monkeypatch):

@@ -1,6 +1,7 @@
 """Dify 阶段一止血：有界历史重放（bounded replay）测试
 
-覆盖 docs/docker/plans/2026-10-28-DIFY-DEFECT-FIX-PLAN.md「阶段一」的边界要求：
+覆盖 Dify 阶段一（有界历史重放）的边界要求，后续取舍见
+docs/plans/project-consolidation.md 的 DIFY-01：
 - 单轮不加前缀
 - 多轮带历史且顺序正确
 - 轮次上限 4 轮

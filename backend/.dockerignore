@@ -12,6 +12,10 @@ htmlcov/
 .DS_Store
 *.log
 docker/bin/
+celerybeat-schedule
+celerybeat-schedule.*
+data/
+uploads/
 
 # Keep tests and validation scripts in git/CI, but out of deploy images.
 tests/

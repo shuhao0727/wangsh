@@ -4,15 +4,54 @@
 验证 Celery 任务的提交、状态查询和结果获取流程
 """
 
-import pytest
+import asyncio
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+from app.api.endpoints.agents.ai_agents.analysis_async import list_analysis_tasks
+from app.db.database import Base
+from app.models.agents import HotQuestionAnalysis, StudentChainAnalysis
 from app.tasks.agent_analysis import analyze_hot_questions_task, analyze_student_chains_task
 
 
 class TestAsyncAnalysisTasks:
     """异步分析任务测试"""
+
+    def test_fresh_loop_disposes_engine_after_task(self, monkeypatch):
+        import app.tasks.agent_analysis as task_module
+
+        class FakeEngine:
+            disposed = 0
+
+            async def dispose(self):
+                self.disposed += 1
+
+        fake = FakeEngine()
+        monkeypatch.setattr(task_module, "engine", fake)
+        assert task_module.run_analysis_in_fresh_loop(asyncio.sleep(0, result=7)) == 7
+        assert fake.disposed == 1
+
+    def test_fresh_loop_disposes_engine_on_error(self, monkeypatch):
+        import app.tasks.agent_analysis as task_module
+
+        class FakeEngine:
+            disposed = 0
+
+            async def dispose(self):
+                self.disposed += 1
+
+        fake = FakeEngine()
+        monkeypatch.setattr(task_module, "engine", fake)
+
+        async def fail():
+            raise RuntimeError("synthetic failure")
+
+        with pytest.raises(RuntimeError, match="synthetic failure"):
+            task_module.run_analysis_in_fresh_loop(fail())
+        assert fake.disposed == 1
 
     def test_hot_questions_task_signature(self):
         """测试热点分析任务签名和参数"""
@@ -62,6 +101,47 @@ class TestAsyncAnalysisTasks:
 
 class TestAsyncAnalysisAPI:
     """异步分析 API 端点测试"""
+
+    @pytest.mark.asyncio
+    async def test_mixed_task_list_applies_skip_and_returns_full_total(self):
+        engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+        async with engine.begin() as conn:
+            await conn.run_sync(lambda sync_conn: Base.metadata.create_all(
+                sync_conn,
+                tables=[HotQuestionAnalysis.__table__, StudentChainAnalysis.__table__],
+            ))
+        factory = async_sessionmaker(engine, expire_on_commit=False)
+        base = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        async with factory() as db:
+            for index in range(3):
+                db.add(HotQuestionAnalysis(
+                    title=f"hot-{index}", task_sheet="synthetic",
+                    created_at=base + timedelta(minutes=index), result={},
+                ))
+                db.add(StudentChainAnalysis(
+                    title=f"chain-{index}",
+                    created_at=base + timedelta(minutes=index + 10), result={},
+                ))
+            await db.commit()
+
+            first = await list_analysis_tasks(
+                skip=0, limit=2, analysis_type=None, current_user={}, db=db,
+            )
+            second = await list_analysis_tasks(
+                skip=2, limit=2, analysis_type=None, current_user={}, db=db,
+            )
+            hot = await list_analysis_tasks(
+                skip=0, limit=2, analysis_type="hot_questions", current_user={}, db=db,
+            )
+
+            assert first["total"] == 6
+            assert second["total"] == 6
+            assert len(first["data"]) == 2
+            assert [item["id"] for item in first["data"]] != [item["id"] for item in second["data"]]
+            assert first["data"][0]["title"] == "chain-2"
+            assert hot["total"] == 3
+            assert [item["type"] for item in hot["data"]] == ["hot_questions"] * 2
+        await engine.dispose()
 
     def test_async_endpoints_registered(self):
         """验证异步端点已注册"""
@@ -135,26 +215,3 @@ class TestAsyncAnalysisAPI:
         )
         assert response.status == "completed"
         assert response.result["analysis_id"] == 123
-
-
-@pytest.mark.integration
-class TestAsyncAnalysisIntegration:
-    """异步分析集成测试（需要 Celery worker 运行）"""
-
-    @pytest.mark.skip(reason="需要 Celery worker 运行")
-    def test_full_async_workflow(self):
-        """
-        完整异步工作流测试
-
-        该测试需要：
-        1. Redis/RabbitMQ broker 运行
-        2. Celery worker 运行
-        3. 数据库可访问
-
-        测试步骤：
-        1. 提交异步任务
-        2. 查询任务状态
-        3. 等待任务完成
-        4. 验证结果已保存到数据库
-        """
-        pass

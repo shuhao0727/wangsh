@@ -118,11 +118,6 @@ async def _alembic_version_rows(conn, schema: str) -> list[object] | None:
     return []
 
 
-async def _has_alembic_version(conn, schema: str) -> bool:
-    """Backward-compatible non-empty check for callers outside ``main``."""
-    return bool(await _alembic_version_rows(conn, schema))
-
-
 async def _get_existing_schema_tables(conn, schema: str) -> set[str]:
     result = await conn.execute(
         text(

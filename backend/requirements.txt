@@ -23,18 +23,15 @@ greenlet==3.3.1
 
 # JWT认证
 PyJWT[crypto]==2.9.0
-passlib[bcrypt]==1.7.4
-argon2-cffi==25.1.0  # 更强的密码哈希算法
-
-# Email验证
-email-validator==2.3.0
+# 密码哈希：security.py 直接 import bcrypt，不经 passlib。
+# bcrypt 必须显式声明——此前靠 passlib[bcrypt] 的 extra 间接安装。
+bcrypt==5.0.0
 
 # 异步任务（基础）
 celery==5.6.2
 redis==7.1.0
 
-# AI智能体相关（SSE流式响应）
-sse-starlette==2.2.0
+# AI智能体相关（SSE 流式响应由 app/core/sse.py + Starlette StreamingResponse 实现）
 httpx==0.28.1
 
 # 中文分词（热点/问题链分析的语义词提取）

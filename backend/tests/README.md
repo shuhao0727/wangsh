@@ -2,43 +2,62 @@
 
 `backend/tests/` 只放测试用例本体。专项 smoke/soak 脚本不放这里，统一收敛到 [`../scripts/README.md`](../scripts/README.md) 和 [`../../scripts/README.md`](../../scripts/README.md)。
 
-> 安全前置：本页测试选择和历史命令仅供已核验的隔离运行器使用。必须在导入 app 和 pytest collection 前禁用 dotenv、注入合成配置并限制网络；不得在普通 shell 直接运行全量或整个 auth 目录，使测试连接正常 `settings` 数据库。
+所有测试选择均须先核验隔离环境；本目录没有自动保护全部旧用例的默认入口。实际源码、命令、红绿结果、跳过项和证据位置统一记录在 [TEST_STATUS](../../docs/testing/TEST_STATUS.md)，不把历史成功当作当前验证。
 
-`core/test_config_optional_scoring_agent.py` 独立加载服务配置字段，验证评分智能体 ID 的空值、环境变量及正整数约束；不导入全局 Settings。运行仍应禁用正常 conftest、dotenv 和网络，避免 collection 环境带入业务配置。
+## 保存端点软校验的自含离线回归
+
+`ai_agents/test_agent_endpoint_warning.py` 使用 stdlib unittest，导入目标源码前安装文件/导入/
+网络审计守卫，以合成 settings、DB、日志替身执行真实 create/update 与异步 guard；不加载正常
+app、Settings、conftest 或 pytest 插件。这仅是该专项入口，不能推广到其他用例：
+
+```bash
+env -i PATH=/usr/bin:/bin PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 venv/bin/python -I -B -S tests/ai_agents/test_agent_endpoint_warning.py -q
+```
+
+命令在 `backend/` 执行；它不验证真实 SQLAlchemy 事务、实际 Loguru sink、数据库或 API 启动。
+
+## 运行前提
+
+1. 在 app 导入及 pytest collection **之前**清理继承环境、禁用 dotenv/secrets，注入合成 settings；运行器须阻断 `.env*` 读取并强制 `_env_file=None`、`_secrets_dir=None`。
+2. 无网络分支从导入期阻断 socket/DNS，DB/cache 用隔离内存、临时文件或替身；专用 PG/Redis 分支限定目标白名单及写域，不挂业务卷。fixture 启动后禁网不能保护导入期。
+3. 禁止加载正常 conftest 和自动插件：`PYTEST_DISABLE_PLUGIN_AUTOLOAD=1`、`--noconftest`、`-p no:cacheprovider`，只选择已审查用例。上述参数、opt-in 标志或 `TEST_DATABASE_URL` **单独都不构成隔离**。
+4. 专用数据库先核对真实目标；部分旧 auth/classroom 用例直连 `settings.DATABASE_URL`（见下文），不能靠 `TEST_DATABASE_URL` 改写。无专用环境时显式排除并阻断外连，跳过不算通过。
+5. 使用对应批次已核验运行器；日期型外部路径仅是历史证据，不保证仍可执行。专用 PG 与无网络结果分列；保留依赖/夹具失败、风险反例和 xfail，不删断言刷绿。
+
+`core/test_config_optional_scoring_agent.py` 独立加载配置字段，验证评分智能体 ID 的空值、环境变量和正整数约束；虽不导入全局 Settings，仍须上述 collection 保护。
 
 ## KNN 采集隔离回归
 
 `it/test_knn_collection_isolated.py` 使用 unittest、真实 PostgreSQL 事务和 HTTPX ASGITransport，覆盖学号规范化、严格字段与时间窗、并发防重和幂等、重填授权及历史版本、取消回滚、名单变更原子性、CSV 和冻结匿名数据。功能与迁移合同见 [KNN_SURVEY](../../docs/features/KNN_SURVEY.md)。
 
-仅由已审查的外部 bootstrap 执行：导入 app 前清空继承环境，禁用 dotenv/secrets 和正常 conftest，注入合成配置；运行环境必须是本批专用 PostgreSQL 的 `network=none` 隔离命名空间，无正常业务数据卷、宿主端口或 Docker socket。测试仅允许连接 `127.0.0.1:5432/knn_collection_test`，逐例创建并清理独立 schema。`KNN_ISOLATED_TEST=1` 和连接目标校验只是附加守卫，不构成独立隔离；不要在普通 shell 或正常开发容器中直接运行本文件。
+除共同前提外，须使用专用 PostgreSQL 的 `network=none` 命名空间，无业务卷、宿主端口或 Docker socket；只允许 `127.0.0.1:5432/knn_collection_test`，逐例建/清 schema。`KNN_ISOLATED_TEST=1` 仅为附加守卫，不在普通 shell 或正常开发容器直跑。
 
-本专项直接执行增量 migration 的 upgrade/downgrade/upgrade，前置仅合成 `sys_users`，不加载正常 Alembic `env.py`；权限用例使用合成身份和真实 staff/归属守卫，不能代替完整历史迁移链、真实 JWT 登录、浏览器或部署验收。当前外部运行器、结果与证据位置只维护在 [TEST_STATUS](../../docs/docker/testing/TEST_STATUS.md)。
+增量 migration 执行 upgrade/downgrade/upgrade，前置仅合成 `sys_users`，不加载正常 Alembic `env.py`。合成身份配合真实 staff/归属守卫，不证明完整历史迁移链、真实 JWT、浏览器或部署。
 
 ## 风险收口专项的隔离要求（2026-09-09）
 
-- `xbk/test_xbk_import_cancellation_pg.py` 是专用 PostgreSQL/asyncpg opt-in：每例独立 schema，覆盖父行锁、INSERT/deferred COMMIT 在途取消、SQL 失败回滚、同 session 重试、真实 get_db 退出及重复取消边界。只通过清环境、禁 dotenv/secrets、禁 conftest/自动插件、限定网络和写入目录的隔离运行器执行；`TEST_DATABASE_URL` 必须显式指向含独立 test/testing/ci 段的专用库。真实 TCP 分支需额外设置本批分配的 `R5_XBK_HTTP_PORT`，不能借用正常服务端口。TCP 断连与显式服务端取消分别验收，不能由断连推断事务已撤销。实际结果与精确运行器见 [TEST_STATUS](../../docs/docker/testing/TEST_STATUS.md)。
+- `xbk/test_xbk_import_cancellation_pg.py` 是专用 PostgreSQL/asyncpg opt-in：每例独立 schema，覆盖父行锁、INSERT/deferred COMMIT 在途取消、SQL 失败回滚、同 session 重试、真实 get_db 退出及重复取消边界。遵守共同隔离前提；`TEST_DATABASE_URL` 必须显式指向含独立 test/testing/ci 段的专用库。真实 TCP 分支需额外设置本批分配的 `R5_XBK_HTTP_PORT`，不能借用正常服务端口。TCP 断连与显式服务端取消分别验收，不能由断连推断事务已撤销。
 
-- `xbk/test_xbk_parent_delete_concurrency_pg.py` 使用显式专用 PostgreSQL `TEST_DATABASE_URL`，核验真实双事务锁等待、父删除/写入顺序、冻结集合、回滚及跨批次顺序；不能指向正常库，缺少专用环境应安全跳过。文件级结果与排除项见测试状态，不把整模块总数当作全部并发用例。
+- `xbk/test_xbk_parent_delete_concurrency_pg.py` 使用显式专用 PostgreSQL `TEST_DATABASE_URL`，核验真实双事务锁等待、父删除/写入顺序、冻结集合、回滚及跨批次顺序；不能指向正常库，缺少专用环境应安全跳过。按文件记录结果和排除项，不以模块总数代替。
 - `xbk/test_export_list_row_parity_isolated.py` 核对普通导出的筛选全集、无选课/未选、多选、live grade、姓名快照及 `data` / `diagnostics` 边界；默认 SQLite/内存分支不证明 PostgreSQL。专用 PG/ASGI 分页与工作簿回读是独立证据，admin 依赖注入不验认证，也不等于最终镜像的 TCP/Chrome 下载或 Excel 实开。
 - `auth/test_subject_ambiguity_isolated.py` 与 `auth/test_optional_session_isolated.py` 使用合成 JWT、SQLite ORM 和真实认证路由；原始 lookup/refresh 的已知边界刻画不等于修复通过。不直接用未审查的全 auth 目录访问本机 settings 数据库。
 - `pythonlab/test_ws_session_auth_isolated.py` 使用真实 JWT/SQLite ORM/ASGI WS 验证接入 nonce/IP 和错误码；兼容 WS 用例需合成会话及隔离 backend IO。不得以 dummy token 的 raw 用户替身绕过新认证，不访问真实 DAP/Docker；已建连接即时撤销另验。
 - `pythonlab/test_sandbox_ownership_closure.py` 和 `test_sandbox_start_recovery.py` 检查真实 provider/task 配合 fake Docker/Redis 的调度反例；文件锁多进程实测不代替真实多 worker 部署及资源回收验收。
-- 外部整合运行器禁 dotenv、自动插件及网络，使用白名单并记录实际源码 SHA；必要纯 Python 测试依赖只读挂载。专用 PG 和无网络 SQLite 结果分开，依赖/夹具失败保留，不通过删除测试刷绿。
-- 动态结果和证据只维护在 [TEST_STATUS](../../docs/docker/testing/TEST_STATUS.md)。
+- 整合运行器记录源码 SHA，必要纯 Python 依赖只读挂载；其他隔离与结果记录遵守共同前提。
 
 ## AUTH 持久权威专项
 
-`auth/test_durable_session_authority_isolated.py` 必须在 collection 前由已审查的 bootstrap 禁用 dotenv、正常 conftest 和自动插件，注入合成配置并限制网络/写域。`R5_AUTH_ISOLATED=1` 只是 opt-in，不等于安全隔离；不得在普通 shell 执行全 auth 目录。
+`auth/test_durable_session_authority_isolated.py` 遵守共同前提，`R5_AUTH_ISOLATED=1` 仅为 opt-in。
 
-本轮外部入口为 `/Users/wsh/.codex/artifacts/wangsh-r5-parallel-20260910/auth/run_tests.py`；默认合成 SQLite 且禁止外部连接，`--pg` 仅允许该批专属 PG/Redis 回环端口，每例独立 schema。它在隔离 schema 调用实际 incremental migration 与受控 enrollment，不加载正常迁移 `env.py` 或真实业务库。PG/Redis 故障、显式 ready gate、存量证据切换与回滚需分别看实际用例和 [TEST_STATUS](../../docs/docker/testing/TEST_STATUS.md)，不能用 SQLite 或 ready 修正前的绿例冒充最终 PG 结果。
+历史外部入口为 `/Users/wsh/.codex/artifacts/wangsh-r5-parallel-20260910/auth/run_tests.py`；默认合成 SQLite 且禁止外部连接，`--pg` 仅允许该批专属 PG/Redis 回环端口，每例独立 schema。它在隔离 schema 调用实际 incremental migration 与受控 enrollment，不加载正常迁移 `env.py` 或真实业务库。PG/Redis 故障、显式 ready gate、存量证据切换与回滚需分别看实际用例和 [TEST_STATUS](../../docs/testing/TEST_STATUS.md)，不能用 SQLite 或 ready 修正前的绿例冒充最终 PG 结果。
 
-旧 auth maintenance 回归由同目录 `run_regression.py` 选择明确文件、合成存储运行；更新测试时保留旧反例，校准 DB-first 合同，不将撤销失败期望改为成功来刷绿。运行器是外部本轮证据，不是正式运维切换脚本。
+同目录历史 `run_regression.py` 选择旧 auth 文件和合成存储。维护时保留旧反例与 DB-first 合同，不把撤销失败改成成功；这些运行器不是正式运维切换脚本。
 
 ## XBK 导入恢复与取消事务专项
 
-`xbk/test_r4_import_restore_transaction.py` 默认在 `R4_XBK_OFFLINE` 不为 `1` 时整模块跳过；这一 guard 不替代 collection 前隔离正常 conftest/settings。只能使用已审查的外部 bootstrap：先禁 dotenv、网络和子进程，注入合成配置，限定 `R4_XBK_ARTIFACTS` 写域，再通过 `--noconftest` 选择本文件。不得仅设置 opt-in 就在普通业务环境运行。
+`xbk/test_r4_import_restore_transaction.py` 在 `R4_XBK_OFFLINE!=1` 时整模块跳过。遵守共同前提，另禁子进程并限定 `R4_XBK_ARTIFACTS` 写域；opt-in 不授权普通业务环境执行。
 
-外部入口为 `/Users/wsh/.codex/artifacts/wangsh-r4-resume-20260910/xbk/run_isolated.py`，支持 `matrix`、`controls`、`red` 和 `lifecycle`。SQLite 实际事务配合异步 facade / AsyncSession 同步驱动封装，使用确定性 await 点的 Task.cancel；`lifecycle` 验证真实 get_db 退出，`red` 刻意保留调用方 session 并要求函数自行 rollback。红例必须单列，不能当作正常 HTTP 数据损坏；不覆盖 asyncpg 或 PostgreSQL 网络/锁取消。结果与解释器边界见 [TEST_STATUS](../../docs/docker/testing/TEST_STATUS.md)。
+历史入口为 `/Users/wsh/.codex/artifacts/wangsh-r4-resume-20260910/xbk/run_isolated.py`，支持 `matrix`、`controls`、`red` 和 `lifecycle`。SQLite 实际事务配合异步 facade / AsyncSession 同步驱动封装，使用确定性 await 点的 Task.cancel；`lifecycle` 验证真实 get_db 退出，`red` 刻意保留调用方 session 并要求函数自行 rollback。红例必须单列，不能当作正常 HTTP 数据损坏；不覆盖 asyncpg 或 PostgreSQL 网络/锁取消。结果与解释器边界见 [TEST_STATUS](../../docs/testing/TEST_STATUS.md)。
 
 ## 状态恢复与长期连接专项（2026-09-09）
 
@@ -46,13 +65,13 @@
 - `pythonlab/test_sandbox_state_recovery_atomic.py` 是显式 opt-in 专项；没有外部专用 harness 则跳过，不自动创建资源。真实 Redis/Docker 必须限制唯一 UNIX socket、唯一 label、完整 exact-ID manifest、无网络业务卷，精确清理。Celery eager 不代表真实多 worker。
 - `pythonlab/test_ws_revocation_isolated.py` 验证真实 ASGI/JWT/退出路由和连接取消，transport 用替身；专用 Redis 分支未配置时跳过。它不能替代浏览器真实 pointer、Continue 或真实 DAP/TTY 验收。
 - `pythonlab/test_ws_cleanup_atomic_isolated.py` 用真实专用 Redis 与 ASGI 验证 detach 等待期间状态/租约更换、过期及原子错误；缺专用运行器应跳过，不访问正常缓存。单独保留旧字节失败与作者/独立复验，不能用仅模拟 EVAL 的测试冒充真 Redis。
-- `auth/test_sse_asgi_lifecycle_isolated.py` 在实际三条路由、入场依赖和 StreamingResponse 上驱动 ASGI receive/send，覆盖退出和客户端断连；是 SQLite/合成 cache/pubsub 环境，不是 TCP 浏览器 SSE。逐层证据见 [TEST_STATUS](../../docs/docker/testing/TEST_STATUS.md)。
+- `auth/test_sse_asgi_lifecycle_isolated.py` 在实际三条路由、入场依赖和 StreamingResponse 上驱动 ASGI receive/send，覆盖退出和客户端断连；是 SQLite/合成 cache/pubsub 环境，不是 TCP 浏览器 SSE。逐层证据见 [TEST_STATUS](../../docs/testing/TEST_STATUS.md)。
 
 ## PythonLab transport 与最终 sandbox 验收分层
 
 - `pythonlab/test_sandbox_worker_recovery.py` 是隔离分类/任务分支回归，覆盖可信 Docker CLI 连接错误、权限/非法资源拒绝、provider 暂时错误及重试耗尽；不能把所有 `RuntimeError` / HTTP transport 错误当作可重试，也不能以单测代替真实 broker。
 - 专用报告另保留真实 Redis broker、prefork worker SIGKILL、同 ID 重投、原锁自然到期、真实 CLI 连接故障以及容器复用/执行/stop 回收证据。该专项有合成 settings/cache、故障 gate 和可见性配置，不是原封生产栈；每条 retry lineage 的上限不是同 task ID 的全局重试计数，真实 broker 耗尽仍未证明。
-- 最终 Docker 的 worker start/ping 不等于最终 sandbox E2E。Chrome/WebKit、多断点 Continue、DAP/TTY、混版本及旧 FAILED 状态恢复仍需单列，不能将专项证据记为最终 E2E 通过，也不能笼统退回“真实 worker 完全未测”。分层结果与运行器只见 [TEST_STATUS](../../docs/docker/testing/TEST_STATUS.md)。
+- 最终 Docker 的 worker start/ping 不等于最终 sandbox E2E。Chrome/WebKit、多断点 Continue、DAP/TTY、混版本及旧 FAILED 状态恢复仍需单列，不能将专项证据记为最终 E2E 通过，也不能笼统退回“真实 worker 完全未测”。分层结果与运行器只见 [TEST_STATUS](../../docs/testing/TEST_STATUS.md)。
 
 ## 当前结构
 
@@ -84,23 +103,17 @@ tests/
 
 ## XBK 整数学年运行库迁移回归
 
-`xbk/test_xbk_academic_year_live_schema.py` 是 opt-in 隔离 PostgreSQL 回归：合成旧整数 schema 与两种 term，执行真实 Alembic upgrade/downgrade，并调用真实 XBK router。默认跳过，不能把 skip 算成迁移通过。仅在外部 network-none 专属 runner 中运行，禁用 dotenv、conftest 和插件自动加载，并使用网络拒绝守卫；测试库必须是专属 `xbk_migration_rehearsal_test`。不要只设置 opt-in 环境变量就在普通环境运行，更不能连接正常业务库。实际执行证据与限制见 `docs/docker/testing/TEST_STATUS.md`；此测试不代替正常库备份恢复和完整历史迁移链验证。
+`xbk/test_xbk_academic_year_live_schema.py` 合成旧整数 schema 与两种 term，执行真实 Alembic upgrade/downgrade 和 XBK router。默认跳过；共同隔离前提外，须使用 network-none 专用运行器及 `xbk_migration_rehearsal_test` 库。skip 不算迁移通过，专项不替代正常库备份恢复或完整历史迁移链。
 
 ## 内容权限与测评写入隔离回归
 
 - `test_learning_content_visibility_isolated.py`：真实 JWT、路由、服务和 SQLite ORM 验证通用学习内容排除个人导图，并保留公共、个人和管理端正常/拒绝对照。不是 PostgreSQL 或完整认证端到端测试。
 - `assessment/test_assessment_session_concurrency_pg.py`：必须显式设置专用 `TEST_DATABASE_URL`，限定 `postgresql+asyncpg` 且库名包含独立 `test/testing/ci` 段；未设置则跳过，不回退到正常配置。各用例创建并清理唯一合成 schema，真实事务与锁等待验证首次并发起测、已有会话被锁时复用、起测取消/延迟约束最终提交失败后的回滚重试、不同学生/配置互不阻塞，以及保存/交卷交错、重复写入、回滚重试、不同会话和缓存状态；同时验证结果与画像权限。需要该测试库的 CREATE SCHEMA 权限。禁止设置为正常业务库。
-- 隔离执行须在导入 app 前禁用 dotenv，使用合成配置和网络拒绝守卫；`--noconftest` 和禁插件不能替代连接隔离。PG runner 只允许连接本批专用库，不挂业务卷或 Docker socket。实际命令、加载源码指纹和覆盖边界只在 `docs/docker/testing/TEST_STATUS.md` 对应批次证据中维护。
+- 遵守共同前提；PG runner 仅允许本批专用库，不挂 Docker socket。
 
 ## 常用命令
 
-本目录没有自动隔离所有旧用例的默认入口。先使用 [TEST_STATUS](../../docs/docker/testing/TEST_STATUS.md) 对应批次中已核验的外部运行器，再选择模块或文件；这里不提供普通 shell 的全量/auth 直跑命令。
-
-认证无网络入口须同时具备以下保护：
-
-1. 在 app 导入和 pytest collection 前清理继承环境、注入合成 settings，并禁用 dotenv 与 secrets-dir 自动读取；已核验运行器同时阻断 `.env*` 文件打开并强制 `_env_file=None`、`_secrets_dir=None`。
-2. 无网络分支从导入期阻断 socket 连接与 DNS 解析，DB/cache 仅使用内存或替身；fixture 启动后的禁网不能保护更早的配置导入。专用 PG/Redis 分支另用目标白名单，不能解除保护后连接正常服务。
-3. 禁用插件自动加载（`PYTEST_DISABLE_PLUGIN_AUTOLOAD=1`），使用 `--noconftest`、`-p no:cacheprovider` 并显式选择已审查的测试。这些 pytest 参数单独不构成 no-dotenv/no-network 隔离；临时运行器不放入维护脚本目录。
+先满足[运行前提](#运行前提)，再按对应批次运行器选择文件；不提供普通 shell 的全量或整个 auth 直跑命令。以下路径以 `backend/` 为根；`--deselect` 的 nodeid 须与所选 rootdir 一致，先在同一隔离环境 collect 核对。
 
 | 隔离运行器中的测试选择 | 用途 |
 |---|---|
@@ -116,71 +129,53 @@ tests/
 
 - `auth/test_auth_storage_unavailable.py` 通过异常注入区分身份存储故障与编程/SQL 合同错误，保护应报告 `503` 的窄分类；它不是 PostgreSQL 进程、DNS 或 Docker 离线的实测。
 - 外部 PG/ASGI 运行器使用专用 PG/Redis，真实拒绝新连接，再经 HTTPX `ASGITransport` 驱动身份请求；SSE admission probe 仅验证入场依赖，不覆盖完整流或 TCP。
-- 新 freeze 镜像必须另经真实 TCP 的故障—恢复与保留凭据验证。局部 ASGI/本地 DNS 分类回归不能覆盖最终 Docker 的 `500`（预期 `503`）历史红例；未取得新实例证据前不得写已闭环。Docker 恢复须获授权，不为了验收操作正常服务。结果与未测项仅见 [TEST_STATUS](../../docs/docker/testing/TEST_STATUS.md)。
+- 新 freeze 镜像必须另经真实 TCP 的故障—恢复与保留凭据验证。局部 ASGI/本地 DNS 分类回归不能覆盖最终 Docker 的 `500`（预期 `503`）历史红例；未取得新实例证据前不得写已闭环。Docker 恢复须获授权，不为了验收操作正常服务。结果与未测项仅见 [TEST_STATUS](../../docs/testing/TEST_STATUS.md)。
 
 ## 认证退出隔离回归
 
-开发依赖由 `backend/requirements-dev.txt` 维护。`aiosqlite` 仅用于隔离 SQLite ORM 回归；
-普通单会话用例可使用内存数据库，涉及 WebSocket watcher 与 login/logout 并发 session 的
-夹具使用每个测试上下文独立的临时文件数据库，避免内存 SQLite `StaticPool` 让并发事务
-共享同一物理连接。`requirements-dev.txt` 同时声明 `aiohttp`，使系统清理回归能够导入并
-验证 PythonLab WebSocket smoke/soak 脚本；脚本运行方式、生命周期重试与最终清理语义由
-`backend/scripts/README.md` 维护。
-在满足上文 no-dotenv/no-network 前置保护的运行器中选择
-`tests/auth/test_logout_revocation_isolated.py` 与 `tests/auth/test_auth_logout_refresh.py`，
-不是安装依赖后直接调用 pytest。
+开发依赖见 `backend/requirements-dev.txt`（含 `aiosqlite`、供 PythonLab smoke 导入使用的 `aiohttp`）。普通单会话可用内存 SQLite；WS watcher 或 login/logout 并发夹具须用每测试独立临时文件库，避免 `StaticPool` 共享物理连接。脚本重试/清理语义见 [后端脚本说明](../scripts/README.md)。
 
-新增退出回归使用真实 FastAPI auth router、JWT 签发/验签、ORM 和 nonce 校验；每项只创建
-包含合成 User/RefreshToken 的隔离 SQLite 数据库并开启外键，不创建或访问业务表，也不连接
-开发或生产 PostgreSQL。DB session 与 session cache 被替换为隔离适配器，socket 连接被夹具
-阻断，不需要启动应用、PostgreSQL 或 Redis。
+在隔离运行器中选择 `tests/auth/test_logout_revocation_isolated.py` 与 `tests/auth/test_auth_logout_refresh.py`。它们使用真实 auth router、JWT、ORM、nonce，以及仅含合成 User/RefreshToken、开启 FK 的 SQLite；DB session/cache 为隔离适配器，不访问业务表或正常 PostgreSQL/Redis。
 
 - 校验新 DB session 读到的持久撤销位、保留令牌副本的 refresh/`me` 返回，以及配置 Cookie 的清理，不只检查 `200`。
 - 覆盖无效 access 的 refresh fallback、nonce 写入/读取失败、数据库 commit 失败、Cookie/header 冲突、旧会话重登保护和 refresh replay。
 - 在首次读出 refresh 归属与获取用户锁之间插入已完成的 login/refresh，检验锁后重验；这是确定性逻辑回归，不证明 PostgreSQL 行锁调度或真实并发吞吐。真实 PG/Redis、TTL、生产 middleware 与前端网络竞态须另在专用环境验收。
-- 实际版本、修复前/后结果、扩展用例的外连拦截与未运行范围只维护在 [TEST_STATUS](../../docs/docker/testing/TEST_STATUS.md)。
 
 ## 管理与课堂 SSE 撤销回归
 
-`auth/test_sse_revocation_isolated.py` 使用真实 JWT、auth logout 路由、SQLite ORM 与三个实际端点的事件生成器，覆盖退出前后事件、Cookie 回退、空闲失效、存储故障/超时与取消退订。cache/pubsub 为合成适配器，不是网络 SSE 或浏览器验收；真实 PG/Redis 的独立实例层另见 [TEST_STATUS](../../docs/docker/testing/TEST_STATUS.md)。
+`auth/test_sse_revocation_isolated.py` 使用真实 JWT、auth logout 路由、SQLite ORM 与三个实际端点的事件生成器，覆盖退出前后事件、Cookie 回退、空闲失效、存储故障/超时与取消退订。cache/pubsub 为合成适配器，不是网络 SSE 或浏览器验收；真实 PG/Redis 的独立实例层另见 [TEST_STATUS](../../docs/testing/TEST_STATUS.md)。
 
 课堂旧测试 `classroom/test_classroom_auto_end_concurrency.py::test_concurrent_auto_end_claims_activity_once` 和 `classroom/test_classroom_plan.py::test_locked_plan_keeps_items_and_activities_eagerly_loaded` 直接使用 `settings.DATABASE_URL`，不能依赖 `TEST_DATABASE_URL` 保护。没有专用数据库时必须显式排除并阻断外连；pytest 的 nodeid 相对所选 rootdir（在 backend 下为 `tests/classroom/...`），应先 collect 核对，不将排除项算通过。
 
 ## 测评开放时间窗隔离回归
 
-安装 `backend/requirements-dev.txt` 声明的开发依赖后，在 `backend/` 执行：
-
-```bash
-pytest -q tests/assessment/test_assessment_availability_isolated.py
-# 无专用 PostgreSQL 时，扩展回归显式排除真实数据库用例：
-pytest -q tests/assessment --deselect=tests/assessment/test_assessment_profile.py::test_generate_class_profile_isolates_students_by_class
-```
+开发依赖见 `backend/requirements-dev.txt`。在已核验的隔离运行器中选择 `tests/assessment/test_assessment_availability_isolated.py`；扩展到 assessment 目录前逐例审查，无专用 PostgreSQL 时至少显式排除 `tests/assessment/test_assessment_profile.py::test_generate_class_profile_isolates_students_by_class`，不能仅安装依赖便普通 shell 直跑。
 
 - BIZ-04 专项加载真实学生 router、JWT 签发/验签、角色/nonce 守卫、service 与 ORM；仅替换 DB session 和 nonce cache，并为 AI 设置调用哨兵。SQLite 内存库开启 FK，仅建立合成用户、智能体和测评相关表；fixture 阻断 socket 连接，不需要业务数据库、Redis 或 AI 服务。
 - 校验列表与直接起测的一致边界、单边/无窗口、等价 UTC/正负 offset、起止时刻与微秒相邻时刻；新 DB session 核对已提交的 session/answer，SQL 哨兵检查窗外不查题、不写会话/答案，正常起测反证哨兵有效。
 - 保留跨截止或改到未来后的本人同配置续答，核对开始时间、答案和原 session 不变且可继续答题；另一用户、另一配置以及非进行中历史会话不能绕过限制。配置缺失/禁用、空题库、未登录和 guest 角色拒绝维持原合同。
 - SQLite 会丢弃时区；fixture 仅在配置加载/刷新边界恢复 UTC/等价 aware offset，并保留冻结时钟的 datetime 类型判断。该适配不证明 PostgreSQL 的时间戳转换、DST 或 `SKIP LOCKED` 并发行为；专用 PostgreSQL 用例必须单独配置并验收，不把 `deselected` 记作通过。
-- 本批 runner 在导入 app 前注入合成环境、设置不可用哨兵 DB/Redis 并阻断外连；临时 runner 与日志不进入维护脚本目录。实际环境、红绿对照、未覆盖项和证据位置仅见 [TEST_STATUS](../../docs/docker/testing/TEST_STATUS.md)。
+- 运行器另用不可用 DB/Redis 哨兵；临时 runner 与日志不进入维护脚本目录。
 
 ## 测评结果与个人画像权限隔离回归
 
 - `assessment/test_assessment_result_visibility_isolated.py`：真实学生 router、请求 schema、service、SQLite ORM，响应另经真实 schema 校验。覆盖未交卷拒绝、终态结果、存在性/归属、合法单题反馈；身份为合成适配器但角色守卫真实，后台画像仅记录，不运行 AI。
 - `assessment/test_assessment_profile_detail_isolated.py`：真实 JWT/角色守卫、学生和管理 router、schema、service、SQLite ORM。覆盖个人类型与本人归属双重校验、group/class 数字碰撞拒绝、管理端合法访问及缺失 ID 合同。
 - `assessment/test_assessment_scoring.py`：只读纯 Python 计分边界，覆盖自适应首次尝试去重、无知识点兼容、知识点得分率和分数区间；直接加载 `scoring.py`，不导入 app、dotenv、数据库或外部服务，可在 `--noconftest -p no:cacheprovider` 下运行。
-- 两组使用内存合成数据，不是 PostgreSQL 锁/时区、Redis、完整 app lifespan/middleware、真实浏览器或供应商验收。必须在导入 app 前禁 dotenv、注入合成环境并阻断外连，再以 `--noconftest` 运行，不能只依赖 fixture 的运行期禁网。外部 runner、红绿证据及扩展回归结果见 [TEST_STATUS](../../docs/docker/testing/TEST_STATUS.md)。
+- 前两组用合成内存数据，遵守共同前提；不证明 PostgreSQL 锁/时区、Redis、完整 app lifespan/middleware、真实浏览器或供应商行为。
 
 ## 自适应首题与闭环反证回归
 
 - `tests/assessment/test_assessment_adaptive_start_isolated.py` 使用真实 ORM/FK，默认 SQLite；显式安全 `TEST_DATABASE_URL` 可使用专用 PG 唯一 schema。按实际调用次序覆盖多题正常、首/末/全失败及真实 SQL/答案 ORM INSERT 外键异常，检查固定答案和成功题目保留、占位答案持久化、复用会话不再次调用 AI。保存点建立前的固定答案或前一题占位答案 flush 失败则要求整体失败；关闭失败 Session 后以新 Session 确认零会话/答案部分提交。供应商为替身，不代表真实 AI、最终 commit 故障恢复或起测并发唯一性。
 - 退出补验同时运行 `tests/auth/test_logout_boundaries_isolated.py` 与 `test_logout_revocation_isolated.py`；确定性交错验证过期凭据、冲突身份、锁内顺序和故障后 Cookie 清理，仍非 PostgreSQL/Redis 双存储故障验收。
 - AI 会话列表专项补最新问题/答案的时间与 ID 次序、空白回退、完整 session 统计和 limit；SQLite 与专用 PG 可共用该入口，合成视图不代替生产视图性能测试。
-- `tests/pythonlab/test_sandbox_ownership_closure.py` 与既有启动恢复/limits/tasks behavior 合跑，验证真实任务/provider 分支，cache/CLI 为替身。严格 xfail 明确记录创建未登记和检查后被新会话接管的未修路径；使用 `--runxfail` 可显示实际失败，xfail 不属于修复通过。
+- `tests/pythonlab/test_sandbox_ownership_closure.py` 与既有启动恢复/limits/tasks behavior 合跑，验证真实任务/provider 分支，cache/CLI 为替身。当前仓库已无 xfail 标记，相关未修路径由对应用例直接断言。
 - CSV/Excel 解析拆分在 `app/api/endpoints/xbk/_import_parsing.py`，XBK 原回归与新增边界保持字段校验、全批原子性、文本/换行合同；不通过放宽治理 baseline 或接受非法 API 输入使测试通过。
-- 实际命令、反证与工程门禁以 [TEST_STATUS](../../docs/docker/testing/TEST_STATUS.md) 对应批次为准。以上均不得连接正常数据库或复用真实名册。
+- 上述专项不得连接正常数据库或复用真实名册；风险反例通过不算修复完成。
 
 ## XBK 隔离 HTTP 回归
 
-`tests/xbk/test_xbk_isolated_http.py` 默认跳过。仅在专门配置的一次性 XBK 审查服务上运行：
+`tests/xbk/test_xbk_isolated_http.py` 默认跳过。满足共同运行前提，并配置一次性 XBK 审查服务后，在隔离运行器中使用以下选择：
 
 ```bash
 XBK_AUDIT_BASE_URL=http://localhost:8009 XBK_AUDIT_ALLOW_LEGACY_SEED=1 \
@@ -205,19 +200,14 @@ XBK_AUDIT_BASE_URL=http://localhost:8009 XBK_AUDIT_ALLOW_LEGACY_SEED=1 \
 
 ## 性能基线
 
-以下是关键 API 端点的性能基线，用于手动回归测试：
+以下为历史手动回归参考目标，未附当前数据量与实测样本，不能作为当前性能达标证据：
 
-| 端点 | 基线 | 说明 |
+| 端点 | 历史参考目标 | 说明 |
 |------|------|------|
 | `/api/v1/xbk/analysis/summary` | < 500ms | XBK 统计摘要 |
 | `/api/v1/xbk/analysis/course-stats` | < 300ms | 课程统计 |
 
-**验证方法**:
-```bash
-# 使用 curl + time 或 httpie
-time curl -X GET "http://localhost:8000/api/v1/xbk/analysis/summary?year=2024-2025&term=上学期" \
-  -H "Authorization: Bearer $TOKEN"
-```
+**验证方法**：在获准的专用环境用真实参数计时，记录代码版本、数据规模、查询次数、耗时与前后对照；不要将正常业务服务用作默认测试目标。
 
 **历史记录**: 性能测试文件于 2026-07 整理时移除（commit 39293d2），基线值保留于此作为手动验证参考。
 
@@ -229,6 +219,6 @@ time curl -X GET "http://localhost:8000/api/v1/xbk/analysis/summary?year=2024-20
 - XBK PG：`tests/xbk/test_xbk_import_concurrency_pg.py` 要求显式 `TEST_DATABASE_URL`，仅接受 asyncpg 和名称包含 test/testing/ci 段的专用库；每例唯一 schema/finally 清理，真实事务锁等待与晚冲突整批回滚。不可用正常库替代。
 - AI：`tests/ai_agents/test_conversation_list_isolated.py` 默认合成 SQLite/ASGI；显式 `CONVERSATION_TEST_DATABASE_URL` 可用专用 PG 唯一 schema，覆盖本人 session 级聚合及详情隔离；搭配 `test_agent_conversations.py` 保留响应合同。
 - PythonLab：`tests/pythonlab/test_sandbox_start_recovery.py` 结合既有 docker limits/tasks behavior。运行真实 Celery task wrapper，但 provider/cache/CLI 均受控替身；保留的非 CAS 风险反例通过不表示风险已修。
-- 迁移：`tests/test_migration_preflight_guard_contract.py` 与 `tests/system/test_migration_state_check.py`，不加载 app conftest；不执行实际 upgrade。完整命令、红绿记录、环境与未覆盖范围只维护于 [TEST_STATUS](../../docs/docker/testing/TEST_STATUS.md)。
+- 迁移：`tests/test_migration_preflight_guard_contract.py` 与 `tests/system/test_migration_state_check.py`，不加载 app conftest；不执行实际 upgrade。完整命令、红绿记录、环境与未覆盖范围只维护于 [TEST_STATUS](../../docs/testing/TEST_STATUS.md)。
 
-认证撤销反馈专项：`auth/test_auth_publication_failure_contract.py` 覆盖 `503`/Cookie 清理、严格会话读取、独立 refresh fallback 及登录提交后重锁重验。故障响应与凭据实际失效分别断言，不能把返回 `503` 当成双存储撤销保证。旧 fixture 必须模拟严格 GET 而非只模拟降级 cache.get；独立 PostgreSQL/Redis 故障与并发层的结果统一见 [TEST_STATUS](../../docs/docker/testing/TEST_STATUS.md)。
+认证撤销反馈专项：`auth/test_auth_publication_failure_contract.py` 覆盖 `503`/Cookie 清理、严格会话读取、独立 refresh fallback 及登录提交后重锁重验。故障响应与凭据实际失效分别断言，不能把返回 `503` 当成双存储撤销保证。旧 fixture 必须模拟严格 GET 而非只模拟降级 cache.get；独立 PostgreSQL/Redis 故障与并发层的结果统一见 [TEST_STATUS](../../docs/testing/TEST_STATUS.md)。

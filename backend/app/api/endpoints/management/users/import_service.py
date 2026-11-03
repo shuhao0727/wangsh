@@ -28,7 +28,8 @@ from .schemas import ImportUserResponse, UserImportResult
 
 # 导入上限：逐行导入的开销约为每行 7~10 次 DB 往返（savepoint + 咨询锁 + 校验 + upsert），
 # 且整段在一个事务内持有咨询锁直到最终 commit，期间会阻塞其他登录/登出。
-# 没有上限时，网关 16MB 的请求体可容纳约 10 万行 → 约 70~100 万次往返。
+# 没有上限时，仅靠网关 16MB 的请求体（非游戏路径）已可容纳约 10 万行 → 约 70~100 万次往返，
+# 因此这里独立限体积与行数，不依赖代理层。
 MAX_USER_IMPORT_BYTES = 10 * 1024 * 1024
 MAX_USER_IMPORT_ROWS = 5000
 

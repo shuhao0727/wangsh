@@ -40,21 +40,6 @@ async def clear_article_cache(
         logger.info(f"清除了 {deleted_total} 个文章相关缓存")
 
 
-async def clear_all_article_cache() -> None:
-    """清除所有文章缓存"""
-    patterns = [
-        "articles:*"
-    ]
-
-    deleted_total = 0
-    for pattern in patterns:
-        deleted = await cache.clear_pattern(pattern)
-        deleted_total += deleted
-
-    if deleted_total > 0:
-        logger.info(f"清除了 {deleted_total} 个文章缓存")
-
-
 async def clear_analysis_cache(
     analysis_type: Optional[str] = None,
     analysis_id: Optional[int] = None

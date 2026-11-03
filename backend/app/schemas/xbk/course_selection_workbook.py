@@ -1,7 +1,7 @@
 """HTTP schemas for the R3 all-class course-selection workbook flow."""
 
 from datetime import datetime
-from typing import Any, Optional
+from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -40,9 +40,3 @@ class CourseSelectionWorkbookConfirmResponse(BaseModel):
     changed: int
     inserted: int
     updated: int
-
-
-class CourseSelectionWorkbookErrorDetail(BaseModel):
-    code: str
-    message: str
-    issues: list[dict[str, Any]] = Field(default_factory=list)

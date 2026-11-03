@@ -250,25 +250,6 @@ class ArticleService:
             "total_pages": total_pages
         }
     
-    @staticmethod
-    async def increment_view_count(db: AsyncSession, article_id: int) -> Optional[Article]:
-        """
-        增加文章浏览数（如果需要的话）
-        注意：当前模型没有view_count字段，这里预留接口
-        """
-        article = await ArticleService.get_article_by_id(db, article_id)
-        if not article:
-            return None
-        
-        # 如果模型有view_count字段，可以在这里更新
-        # await db.execute(
-        #     update(Article)
-        #     .where(Article.id == article_id)
-        #     .values(view_count=Article.view_count + 1)
-        # )
-        # await db.commit()
-        
-        return article
     
     @staticmethod
     async def toggle_publish_status(

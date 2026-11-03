@@ -132,6 +132,22 @@ def safe_sheet_name(name: str) -> str:
     return s if s else "Sheet"
 
 
+def unique_sheet_name(label: str, used: set[str]) -> str:
+    """按 safe_sheet_name 生成不重名的工作表名，重名时追加 _2、_3 后缀。
+
+    Excel 限制表名 31 字符，追加后缀时先截断 base 再拼接，避免超长。
+    """
+    base = safe_sheet_name(label)
+    candidate = base
+    suffix = 2
+    while candidate in used:
+        marker = f"_{suffix}"
+        candidate = f"{base[:31 - len(marker)]}{marker}"
+        suffix += 1
+    used.add(candidate)
+    return candidate
+
+
 def class_sort_key(name: str):
     s = (name or "").strip()
     if not s:

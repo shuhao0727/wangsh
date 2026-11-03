@@ -55,14 +55,21 @@ async def login_for_access_token(
     client_ip = extract_client_ip(request)
     await rate_limiter.check(f"login:{client_ip}", interval_seconds=2)
 
-    # 从数据库验证用户
-    user = await authenticate_user_auto(db, username, password)
-    
+    # 从数据库验证用户（登录需要识别停用账号，才能与错误凭据区分）
+    user = await authenticate_user_auto(db, username, password, include_inactive=True)
+
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="用户名或密码错误",
             headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # 凭据正确但账号已停用：明确 403，不进入令牌/会话写入。
+    if not user.get("is_active", True):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="账号已停用",
         )
     
     # 准备令牌数据

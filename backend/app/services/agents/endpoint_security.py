@@ -68,10 +68,7 @@ def _trusted() -> Tuple[TrustedEndpoint, ...]:
         _trusted_cache = parse_trusted_endpoints(raw)
         _trusted_cache_raw = raw
         if _trusted_cache:
-            logger.info(
-                "[endpoint-security] 已启用受信内部端点白名单：{}",
-                ", ".join(e.describe() for e in _trusted_cache),
-            )
+            logger.info("[endpoint-security] 已启用受信内部端点白名单")
     return _trusted_cache
 
 
@@ -239,10 +236,7 @@ def _assert_safe_endpoint(
     if allow_trusted_internal:
         entries = _trusted()
         if matches_trusted_endpoint(api_endpoint, entries):
-            logger.info(
-                "[endpoint-security] 命中受信内部端点白名单，跳过内网判定：{}",
-                api_endpoint,
-            )
+            logger.info("[endpoint-security] 命中受信内部端点白名单，跳过内网判定")
             return
     _scheme, host, port = _parse_endpoint(api_endpoint)
     if allow_local_ollama and allows_local_ollama(host, port):
@@ -263,10 +257,7 @@ async def _assert_safe_endpoint_async(
     if allow_trusted_internal:
         entries = _trusted()
         if matches_trusted_endpoint(api_endpoint, entries):
-            logger.info(
-                "[endpoint-security] 命中受信内部端点白名单，跳过内网判定：{}",
-                api_endpoint,
-            )
+            logger.info("[endpoint-security] 命中受信内部端点白名单，跳过内网判定")
             return
     _scheme, host, port = _parse_endpoint(api_endpoint)
     if allow_local_ollama and allows_local_ollama(host, port):

@@ -17,7 +17,6 @@ _INTERCEPTED_LOGGERS = (
     "uvicorn.access",
     "sqlalchemy",
     "celery",
-    "passlib",
 )
 _INTERCEPT_GUARD = threading.local()
 _INSTALL_LOCK = threading.RLock()

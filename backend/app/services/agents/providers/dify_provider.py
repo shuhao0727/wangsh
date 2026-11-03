@@ -18,8 +18,8 @@ from .base import LLMProvider
 # 为什么这只是阶段一而不是终态：
 #   每次请求都是「全新的 query、不带 conversation_id」，Dify 侧会把这些请求算成
 #   一个个互不相关的独立会话——后台会话列表/统计会碎。
-#   终态方案（conversation_id 绑定 + znt_agent_conversations 表）见
-#   docs/docker/plans/2026-10-28-DIFY-DEFECT-FIX-PLAN.md 的「阶段二」。
+#   终态方案（conversation_id 绑定 + znt_agent_conversations 表）属原方案「阶段二」，
+#   取舍与状态见 docs/plans/project-consolidation.md 的 DIFY-01（原正文已清理）。
 # ---------------------------------------------------------------------------
 
 # 历史最多保留的轮数（1 轮 = 一问一答 = 2 条消息），即最多 8 条消息

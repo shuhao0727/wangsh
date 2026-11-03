@@ -210,34 +210,6 @@ def _make_debug_session_meta(session_id: str, **overrides):
     return meta
 
 
-def _make_settling_gather(expected_done: int = 2):
-    original_gather = asyncio.gather
-    original_sleep = asyncio.sleep
-
-    async def _settling_gather(*aws, **_kwargs):
-        tasks = [asyncio.create_task(aw) for aw in aws]
-        while True:
-            done = [task for task in tasks if task.done()]
-            pending = [task for task in tasks if not task.done()]
-            for task in done:
-                if task.cancelled():
-                    continue
-                exc = task.exception()
-                if exc is not None:
-                    for pending_task in pending:
-                        pending_task.cancel()
-                    await original_gather(*pending, return_exceptions=True)
-                    raise exc
-            if len(done) >= expected_done or not pending:
-                for pending_task in pending:
-                    pending_task.cancel()
-                await original_gather(*pending, return_exceptions=True)
-                return [None if task.cancelled() else task.result() for task in tasks]
-            await original_sleep(0)
-
-    return _settling_gather
-
-
 def _make_mainline_gather(main_count: int = 2):
     original_gather = asyncio.gather
 
