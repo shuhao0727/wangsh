@@ -31,6 +31,7 @@
 | SEC-01 | **已处置**：2026-05-18 植入的后门账号 `systemd`(uid 1001)、sudoers `NOPASSWD:ALL` 行、root crontab `@reboot`、`log.service`（含 immutable 属性）已全部清除；2026-10-26 存在一次来自 `77.239.124.120` 的成功密码登录 | ops + 安全责任人 | **2026-11-04 已关闭**：六项逐一复验通过，证据归档 `/root/security-remediation-20261104/`；遗留：入侵入口未定、SSH 密码认证仍开启。详见[事件记录](../archive/operations/2026-11-04-backdoor-account-incident.md) |
 | SEC-02 | 桌面 `.env` 权限过宽（`664`，50558 字节） | ops | **2026-11-04 已关闭**：确认为旧版 Dify 配置副本（73 含密键中 72 与 `dify/docker/.env` 一致），已归档为 `600 root:root` 并移除桌面副本；其中历史凭据是否需轮换交由 Dify 侧评估 |
 | OPS-04 | 服务器重复存储与冗余文件 | release-ops | **2026-11-04 关闭**：清理 `.npm` 248M、`2.2.7/incoming` 412M、`/tmp` 临时目录 252 个、`~/.vscode-server` 旧版三个 1.5G、`/swapfile_extra` 16G（校验未启用/无 fstab/无进程占用），`/var/log/btmp.1` 截断 45.7M；磁盘 69G→51G。`/home/shuhao/dify` 实测仅 670KB（非审计所报 100MB）且属 Dify 项目，保留不删。十条红线清理后复验全部一致 |
+| OPS-05 | 服务器三个无容器引用的数据库旧卷：`wangsh_postgres_data`(111M，最后写入 2026-10-28)、匿名卷 `4a4e943e…`(110M，2026-09-16)、`wangsh_redis_data`(45M，2026-10-28)。判断为改用 bind mount 之前的生产数据快照 | release-ops + 数据 owner | **待决定**：确认是否仍需保留作历史追溯；若删除，须先独立备份并核实无恢复需求。不擅自删除 |
 | DOC-01 | 本轮撤回误关闭结论；其余旧关闭集合仅为历史记录，不作为当前验收依据 | project-governance | 原编号逐项有实现、环境和验收证据；工作树删除不等于需求退役 |
 | PRIV-02 | 同意写入/撤回 API 与 `/privacy` 自助页已实现并记录审计；同意版本文本字段、AI 调用前强制校验和告知政策仍未完成 | backend + frontend | 补齐版本/告知文本与调用前校验后关闭；不宣称完整合规闭环 |
 | PRIV-04 | 目标库迁移、运营地区、责任人、渠道与保留期限未核 | ops + 运营责任人 | 逐环境核对迁移与数据流，由责任人确认政策；源码不作合规认证 |
