@@ -7,12 +7,14 @@
 
 ## 当前状态
 
-- 更新：2026-11-04；2.2.6已从 `c45ad0e` 完成发布，workflow41661803455成功，六镜像及release-set已核准；本轮联网复核workflow/远端标签、本机六镜像digest与amd64一致，尚未部署。旧2.2.5 tag仍为 `189205c`，不覆盖。
-- 现行计划：[代码复核、真实环境验收与台账核验计划](2026-11-02-verification-and-backlog.md)（active）。用户已确认继续未完成的2.2.6验收与部署；后续仅用 `wangsh.cn:6607`，不再使用局域网入口。
-- 边界：不绕过门禁、不覆盖已发tag/镜像、不改业务数据或默认挂载、不清理回滚资源。外网SSH现已恢复；生产仍运行2.2.2，认证ready、迁移20261026_0001，尚未备份或切换。实际PG/Redis为旧发布目录bind，备用production Compose却指向命名卷；此差异阻断直接启动，须按实际目标核准配置。D类历史修复及B/C产品边界仍按原条目保留。
+- 更新：2026-11-04；**2.2.8 已部署生产**。`210655a` 经 PR #17 合入 `2d9dda0`，workflow41783222115 发布六镜像（清单 `cda44253…`），六镜像按 digest 到齐并经官方 registry 核验；纯正式镜像合成栈 Chrome/WebKit 各 4/4；停流配对备份 + 隔离恢复通过；按服务切换后 `current -> /home/shuhao/wangsh-releases/2.2.8/source`，PG/Redis 未重建；专用合成 admin 部署后双浏览器各 4/4 并按精确 ID 停用软删除。2.2.5/2.2.6/2.2.7 标签与镜像未覆盖。
+- 现行计划：[四方台账对齐与会话复盘](2026-11-04-four-way-ledger-alignment.md)（active）。2.2.8 已部署，RELEASE-01 已关闭；后续外部入口为 `wangsh.cn:6608`。上一阶段计划[代码复核、真实环境验收与台账核验](2026-11-02-verification-and-backlog.md)已 superseded。
+- 边界：不绕过门禁、不覆盖已发tag/镜像、不改业务数据或默认挂载、不清理回滚资源。实际PG/Redis为旧发布目录bind，备用production Compose却指向命名卷；本轮已按实际目标完成备份与切换，未重建基础设施。D类历史修复及B/C产品边界仍按原条目保留。
+- 2.2.8 部署证据：[批次记录](../archive/testing/2026-11-04-release-228.md)；服务器 `/home/shuhao/wangsh-releases/2.2.8/{backups,evidence}`。未做长时间运行观察、真实课堂并发与回滚实测。
 - 2026-11-04当前执行：用户进一步授权重新提交/发布/构建镜像/部署；当前准备2.2.7并保留2.2.6，TTY本地修复最终Chrome/WebKit各4/4通过、后端191/前端875定向通过。共享主仓库不切分支，临时独立检出提交；远端质量门禁、正式六镜像及备份恢复后才部署，RELEASE-01保持开放。
 - 2.2.7进展：ce78e0d及跨平台测试续修d87f7e9经6项PR门禁合入main的5e6c369；workflow41763078161成功发布，tag/源一致。清单SHA256 b694677b5234d943f59e29be9323e1e5a70eea96446ce6e9a4033d4acaa4c969。临时SSH官方TLS核验通过；部分mirror layer缺失按官方OCI原digest传输核准，不重建。尚未生产停流/备份恢复/切换，RELEASE-01仍开放。
 - 2.2.7正式候选DAP阻断已实证：沙箱内部5678可连，backend无法访问Linux宿主loopback映射；Docker内DAP修订方案已获准并实现，原服务器修订栈Chrome/WebKit各4/4通过，后端205及认证撤销78通过。现准备2.2.8，保留回环绑定与已发2.2.7，不扩大端口暴露；正式新镜像及备份恢复前不切换。
+- 2.2.8进展：210655a经6项PR门禁合入2d9dda0；workflow41783222115成功发布六镜像/tag/清单，cda44253…核准。服务器三镜像到齐，其余官方传输EOF/TLS波动保留并有限重试；纯合成恢复预演整体通过（精确约束改写、属主权限及有效Redis目标订正有据）。未停生产/真实配对备份；用户允许专用admin合成账号作部署后行为验收及精确收尾。
 - PRIV 导出仍为内存组装；文档旧述的游标/临时文件/流式发送未实现，已在 GDPR owner 文档标明。
 
 本页是项目未结事项的唯一台账。当前测试结果见[测试状态](../testing/TEST_STATUS.md)，
@@ -23,8 +25,13 @@
 
 | 编号 | 事项 | Owner | 关闭条件 |
 |---|---|---|---|
+| LEDGER-01 | 本地 `main` 落后 `origin/main` 5 个提交，生产 2.2.8 构建源 `2d9dda0` 不在本地历史；工作区另有 40 项未提交改动（28 M + 12 ??）。在本地构建/打标签会得到 2.2.6 旧代码 | release-ops | 处置未提交改动后快进 main，并验证 `git merge-base --is-ancestor 2d9dda0 HEAD` 为真 |
+| LEDGER-02 | 2.2.5 缺发布链路：无 `2.2.5-build-<run>` staging tag、无 `dockerhub-amd64` run、无 `release-set-*` artifact，同提交 `ci-quality` 41592108696 为 failure；镜像源码来源不可自证 | release-ops | 在发布记录标注"来源不可审计"，或在有据前提下补记说明；不补推伪造发布 |
+| LEDGER-03 | DockerHub 缺 2.2.2/2.2.3 镜像（404），服务器本地镜像为唯一副本；2.2.1 镜像构建源 `c0b44b6` ≠ tag `a3a5a54`；2.2.0 tag 与构建 head 差 3 个提交 | release-ops | 在发布记录逐条标注历史事实；2.2.2 本地镜像列入不可删红线 |
+| SEC-01 | `/etc/systemd/system/log.service` 的 `ExecStart=/usr/bin/log -sshd`、`User=root`、目标文件不存在；unit 为 disabled/inactive、无 wants 链接、mtime 2026-05-18。形态可疑但当前无法执行，无法判断是入侵痕迹还是误操作 | ops + 安全责任人 | 核查 SSH 配置、sudoers、authorized_keys、历史登录后定性；保留文件作为证据，不擅自删除 |
+| SEC-02 | `/home/shuhao/桌面/.env` 权限 `664`（同组可写）、50558 字节，与 Dify `.env` 大小接近；对比 `wangsh/.env` 为 `600` | ops | 确认用途后收紧到 `600`，并评估其中凭据是否需要轮换 |
+| OPS-04 | 服务器 2.2.7/2.2.8 `incoming/*.oci.tar` 共 513M 为重复存储（镜像已在本地且 DockerHub 有 tag）；`/swapfile_extra` 16G 未启用且无 fstab 条目 | release-ops | 按授权清理后核对 `swapon --show` 与 `docker images` 无异常 |
 | DOC-01 | 本轮撤回误关闭结论；其余旧关闭集合仅为历史记录，不作为当前验收依据 | project-governance | 原编号逐项有实现、环境和验收证据；工作树删除不等于需求退役 |
-| RELEASE-01 | 2.2.6/c45ad0e已发布，workflow及远端标签复核、本机六镜像digest/amd64通过；候选完整合成smoke补fixture后14 PASS/0 WARN/0 FAIL、13页UI通过；后续正式镜像Chrome/WebKit普通debug缺8、多断点通过；本地补Engine101/ready门控后原双浏览器各2/2通过，修复未提交发布，不覆盖2.2.6；首轮失败证据保留且未调用真实模型；尚未备份恢复或部署。外网SSH已恢复，后续不再用局域网；生产PG/Redis实际bind与备用production Compose命名卷差异已在独立候选配置保全；服务器官方registry manifest核验及curl连接超时，仍阻断停流部署，未改DNS/代理；依赖分类剩余风险保留 | release-ops + backend + frontend | 隔离候选验收通过，按实际Compose/挂载核准目标及配对备份/隔离恢复；保留基础设施，完成新源码/六镜像digest/release-set与生产行为核验，不覆盖既发tag/镜像 |
 | PRIV-02 | 同意写入/撤回 API 与 `/privacy` 自助页已实现并记录审计；同意版本文本字段、AI 调用前强制校验和告知政策仍未完成 | backend + frontend | 补齐版本/告知文本与调用前校验后关闭；不宣称完整合规闭环 |
 | PRIV-04 | 目标库迁移、运营地区、责任人、渠道与保留期限未核 | ops + 运营责任人 | 逐环境核对迁移与数据流，由责任人确认政策；源码不作合规认证 |
 | PERF-01 | 索引与性能候选需按当前实现重新评估 | backend + ops | 用代表性负载实测，核对查询计划与写入代价；不重复实施已完成项 |
@@ -72,6 +79,8 @@ A 类本轮无待改代码项；DIFY-02 已核验为非缺陷并关闭；D 类�
 
 以下事项已在对应批次修复或确认，详细依据见归档批次记录；不再单独占表。
 
+- **RELEASE-01**（2026-11-04 关闭）：2.2.8 从 `2d9dda0` 完成发布与部署。六镜像按 digest 到齐、官方 registry 核验 `images=6`、本地 RepoDigest/amd64 一致；纯正式镜像隔离合成栈 Chrome/WebKit 各 4/4；停流配对备份（7 文件逐文件 SHA256）与隔离恢复（54 表/49 序列/2221 Redis 键/3 份业务归档全一致）通过；按服务切换后 `current -> 2.2.8/source`，PG/Redis ID/启动时间/挂载不变；专用合成 admin 部署后双浏览器各 4/4 并按精确 ID 停用软删除。证据见[批次记录](../archive/testing/2026-11-04-release-228.md)。**未覆盖**：长时间运行观察、真实课堂并发、回滚脚本实际触发；不据此宣称长期稳定。
+
 - **DIFY-02**（2026-11-02 核验关闭）：`REACT_APP_DIFY_URL`/`config.difyUrl` 是首页外部 Dify 服务入口，默认 `http://wangsh.cn:6606`；它与前端 `WEB_PORT=6608` 不是同一含义，默认值保留，实际地址由部署配置决定。
 - **ASYNC-01**（2026-11-03 修复）：混合列表改为 `union_all` 单 SQL 排序/分页，`total` 使用数据库 COUNT；SQLite 合成测试覆盖 skip 与全量总数。
 - **ASYNC-02**（2026-11-03 修复）：`run_analysis_in_fresh_loop` 每任务结束/异常都 `engine.dispose()`，避免跨事件循环复用 asyncpg 连接；成功与异常回归通过。
@@ -91,6 +100,10 @@ A 类本轮无待改代码项；DIFY-02 已核验为非缺陷并关闭；D 类�
 - **ACCEPT-01 / ACCEPT-03 / DOC-01 / OPS-02 / COMMIT-01**：原文曾以 lucid 工作树删除认定失效；2026-11-02 订正为“历史材料退出，非事项自动取消”，已恢复跟踪边界。
 
 ## 变更日志
+
+- 2026-11-04：完成四方台账对齐盘点（本地/GitHub/DockerHub/服务器），两个独立只读审计交叉复核。发布链路五段一致；新增未结 LEDGER-01/02/03、SEC-01/02、OPS-04。现行计划转入[四方台账对齐与会话复盘](2026-11-04-four-way-ledger-alignment.md)，上一阶段计划 superseded。
+
+- 2026-11-04：**2.2.8 部署生产并关闭 RELEASE-01**。六镜像按 digest 到齐 + 官方 registry 核验，纯正式镜像合成栈双浏览器各 4/4；停流配对备份与隔离恢复通过；按服务切换，PG/Redis 未重建；专用合成 admin 部署后各 4/4 并按精确 ID 清理；合成栈与临时通道收尾。未做长时间观察与回滚实测。
 
 - 2026-11-04：TTY附着竞态本地实现完成，按Engine101及当前session ready门控恢复原Chrome/WebKit两场景，保留单路输出、世代与鉴权；后端191/JWT-WS78/前端295及类型构建治理通过。修复未提交发布，RELEASE-01仍等待正式源/registry/备份恢复及生产验收，不覆盖2.2.6。
 

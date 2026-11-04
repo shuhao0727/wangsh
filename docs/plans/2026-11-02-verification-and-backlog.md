@@ -1,23 +1,19 @@
 # 代码复核、真实环境验收与台账核验计划
 
-> 状态：active
+> 状态：superseded（2026-11-04，2.2.8 部署完成后转入[四方台账对齐与会话复盘](2026-11-04-four-way-ledger-alignment.md)；B/C 类未结事项继续在[唯一台账](project-consolidation.md)跟踪）
 > Owner：project-governance（执行：本会话主工程师）
-> 最近复核：2026-11-04（接力续验与生产预检）
-> 范围：`/Users/wsh/wangsh`，共享主仓库 `main`；2.2.6构建源及标签为 `c45ad0e`，旧2.2.5 tag仍为 `189205c`；原始基线与结果保留在历史记录。
+> 最近复核：2026-11-04（2.2.8 部署完成）
+> 范围：`/Users/wsh/wangsh`，共享主仓库 `main`；2.2.8 构建源 `2d9dda0`，已发布标签 2.2.5/2.2.6/2.2.7 均保持不动。
 
 ## 当前状态
 
 - 更新：2026-11-04。
-- 当前阶段：2.2.7/5e6c369已发布但Linux正式候选DAP回环路径不通，未部署；已实现可信Docker内DAP修复，服务器修订合成栈Chrome/WebKit各4/4通过、后端205及认证撤销78通过。当前准备2.2.8重新提交构建，保留全部既发tag/镜像。
-- 本轮执行：按已批准续修方案，Docker exec固定代理仅连可信exact-ID沙箱内部127.0.0.1，不开放宿主DAP端口。共享主仓库分支/暂存保留，独立临时检出提交2.2.8；远端门禁与正式六镜像候选再验后才切换生产。
-- 本轮范围：2.2.8提交/推送、合入main、正式构建发布与部署验收；仅外网wangsh.cn:6607及用户已允许的临时SSH镜像通道，保留TLS/digest核验。生产数据、回滚资源、开发栈保留，不改DNS/长期代理/TLS或baseline。
-- 下一步：提交已在服务器修订候选通过的Linux DAP修复，运行2.2.8完整远端门禁/正式workflow；正式镜像双浏览器通过后配对备份、隔离恢复和恢复副本启动核准，再按服务切换。生产仍2.2.2/healthy且未停流。
-- 阻塞与前置：生产当前实际应用2.2.2、认证ready、迁移20261026_0001，无active课堂及动态PythonLab容器。PG/Redis实际为旧发布目录bind，备用 `docker-compose.production.yml` 却指向命名卷；差异阻断直接启动，须保留实际目标且不重建基础设施。旧release-set2.2.0不适用于2.2.6；完整候选运行、现场备份/恢复与切换尚未完成。
-- 候选验收历史：正式2.2.6完整合成smoke补fixture后14 PASS/13页UI通过，但Chrome/WebKit普通debug缺8；独立时序与1.5秒诊断等待支持附着竞态，原失败保留。
-- 本地修复：已实现Engine101真实附着、binary ready及当前session门控，不加固定延时。原Chrome/WebKit普通debug/多断点各2/2通过，Step/input另各2/2通过；后端191、真实JWT/SQLite/ASGI78、前端模块295及类型/构建/治理通过，尚未提交/发布。不覆盖既发2.2.6，详细见[批次证据](../archive/testing/2026-11-04-release-226.md)。
-- 服务器发布门禁：独立2.2.6候选目录已准备，按运行中PG/Redis绝对bind及uploads/PDF卷生成受限配置，凭据/认证/SSRF策略与运行中一致。`verify-release-set` 访问官方Docker Hub manifest超时，真实curl也超时；未绕过registry核验、未改DNS/代理。此项仍阻断停流、备份切换与部署。
-- 2.2.7远端首轮：提交ce78e0d/发布PR已创建，5项通过；backend-pytest为3766 passed/123 skipped/1 failed，仅新增超大header关闭断言在Linux收到ConnectionResetError而非EOF。先隔离Linux复现，再保持拒绝/kill/fd关闭断言的等价跨平台修正，不改产品逻辑或门禁。用户已准许本次临时SSH镜像通道，官方TLS与原digest核验实测通过；不改系统DNS或长期代理。
-- 2.2.7正式候选阻断：六镜像/registry/本地RepoDigest/amd64、打包源码hash均核准；Chrome输入通过但3个debug首次暂停前失败。实测沙箱内部5678可连、backend容器到宿主loopback三个候选均拒绝；已批准可信Docker内DAP通道修复及2.2.8重新发布。保留宿主回环绑定，不放大端口暴露、不增加超时；WebKit首轮因测试依赖链接误拆未跑，原失败保留，须双浏览器重新验正式产物。生产仍未停流。
+- 当前阶段：**2.2.8 已部署生产**。`210655a` 经 PR #17 六项门禁合入 `2d9dda0`，workflow41783222115 发布六镜像，release-set SHA256 `cda44253f4ba39880ed45c20b16fc817392e2d5e3ee4cf020043cdf8bc9e9ba0`。六镜像按 digest 到齐并经官方 registry 核验，纯正式镜像合成栈 Chrome/WebKit 各 4/4，停流配对备份与隔离恢复通过，按服务切换后 `current -> 2.2.8/source`，PG/Redis 未重建。
+- 部署后验收：专用合成普通 admin（id 544）在真实 Chrome/WebKit 各 4/4 通过（登录、运行、单/多断点、Step、input），随后按精确 ID 撤销令牌、停用并软删除，凭据文件已销毁；未修改真实用户或课堂数据。
+- 本轮执行：Docker exec 固定代理仅连可信 exact-ID 沙箱内部 127.0.0.1，宿主 DAP 端口仍回环绑定；共享主仓库分支/暂存保留，独立临时检出提交 2.2.8。
+- 外部入口：生产实际入口为 `wangsh.cn:6608`；`6607` 属另一套 Next.js 应用，不是 WangSh 网关，本轮未改动。
+- 收尾：2.2.7/2.2.8 合成栈容器/卷/网络已清除，临时 SSH 转发与回环 CONNECT 中继已停止，服务器 18827/16608 无监听；配对备份与证据保留在 `/home/shuhao/wangsh-releases/2.2.8/`。
+- 未覆盖：长时间运行观察、真实课堂并发、回滚脚本实际触发均未做；不将“已部署”写成“已长时间稳定运行”。
 - 硬边界：**门禁未通过不重启生产、不切换镜像，不抬高 baseline 或强推标签**；保留数据库、Redis、上传与 PythonLab 工作区。PRIV/B/C 产品与真实数据边界仍保留，旧批次“不提交/不操作生产”仅表示当时授权范围。
 
 ## 阶段 B（台账）推进记录（2026-11-03）
@@ -188,6 +184,8 @@
 - 隔离/合成通过不等于生产验收；发布仍需独立授权。
 
 ## 变更日志
+
+- 2026-11-04：2.2.8 完成部署。六镜像按 digest 到齐并经官方 registry 核验，纯正式镜像合成栈 Chrome/WebKit 各 4/4；停流配对备份 + 隔离恢复（54 表/49 序列/2221 Redis 键/3 份归档）通过；按服务切换后 `current -> 2.2.8/source`，PG/Redis 未重建；专用合成 admin 部署后双浏览器各 4/4 并精确清理；合成栈与临时通道已收尾。证据见[批次记录](../archive/testing/2026-11-04-release-228.md)。
 
 - 2026-11-04：按用户“先修调试”及确认方案，实现可信generation的Engine101附着和binary ready、前端当前会话门控；后端191、JWT/SQLite/ASGI78、前端295及类型/构建/治理通过。原Chrome/WebKit普通debug/多断点均2/2恢复，Step/input及调试input补验通过；正式2.2.6未改，修订候选未提交发布，本轮不连接生产。
 

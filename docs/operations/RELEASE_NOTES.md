@@ -2,7 +2,7 @@
 
 > 状态：active
 > Owner：release-ops
-> 最近整理：2026-10-31
+> 最近整理：2026-11-04
 > 归档条件：版本记录不再承担当前指导作用，独有证据保留并更新索引后归档。
 
 本文按版本和日期保留变更、配置影响、发布证据与回滚点。下方“已部署”“未发布”均为
@@ -11,7 +11,8 @@
 2026-10-31 及更早的未发布批次记录已删除（lucid 工作树已删除、改动未合入 main）。
 2026-10-24 及更早的正式版本记录见 发布历史（正文已清理）。
 
-近期版本：[2.2.2](#v222ai-伙伴评分真正可用2026-10-29-0950-已部署)、
+近期版本：[2.2.8](#v228linux-docker内dap通道2026-11-04-已部署)、
+[2.2.2](#v222ai-伙伴评分真正可用2026-10-29-0950-已部署)、
 [2.2.1](#v221dify-连续对话与评分修复s4-缺陷性能与前端体验2026-10-28-2339-已部署)、
 [2.2.0](#v220代码审查瘦身热点归类与使用记录详情2026-10-26-2052-部署)。
 
@@ -20,7 +21,23 @@
 
 ---
 
-## v2.2.8：Linux Docker内DAP通道（发布准备，未部署）
+## v2.2.8：Linux Docker内DAP通道（2026-11-04 已部署）
+
+- 修复源 `210655a` 经 PR #17 六项门禁合入 main 的 `2d9dda0`；
+  [workflow41783222115](https://github.com/shuhao0727/wangsh/actions/runs/41783222115) 发布六镜像，
+  release-set SHA256 `cda44253f4ba39880ed45c20b16fc817392e2d5e3ee4cf020043cdf8bc9e9ba0`。
+- 六镜像按 digest 精确到达服务器（三个原生拉取，三个经本次授权的临时 SSH 通道 + OCI 原 digest 传输，
+  逐 blob 校验，未重建或重打包 manifest），官方 registry 核验 `images=6`。
+- 纯正式镜像隔离合成栈 Chrome/WebKit 各 4/4 通过；随即停流做 PG/Redis 配对快照与
+  上传/PDF/PythonLab 归档，隔离恢复 54 表/49 序列/2221 Redis 键/3 份业务归档全部一致，
+  新代码在恢复数据上正常启动。
+- 按服务切换：PG/Redis 未重建（ID、启动时间、挂载不变），应用与网关切到 2.2.8，
+  `current` 指向 `/home/shuhao/wangsh-releases/2.2.8/source`；部署后专用合成 admin 账号
+  在真实浏览器 Chrome/WebKit 各 4/4 通过后按精确 ID 停用并软删除。
+- 证据：`docs/archive/testing/2026-11-04-release-228.md`；服务器
+  `/home/shuhao/wangsh-releases/2.2.8/{backups,evidence}`。
+
+## v2.2.8（原记录）：Linux Docker内DAP通道（发布准备）
 
 - 2.2.7正式候选证实：沙箱内部debugpy监听正常，但backend容器无法访问Linux宿主loopback
   映射。按可信session/token/exact container ID在workspace fence内建立Docker exec固定代理，
