@@ -144,3 +144,26 @@ sha256 前 20 位 `f051cda0ae32ca770b31`。
 - 未回溯 5-18 之前的日志（当前 `/var/log/auth.log` 归档仅保留到 4 个轮转文件）。
 - 未分析 `log` 与 `sshdd.so` 的完整行为（仅做字符串与符号层面判断）。
 - 未验证攻击者是否已窃取应用数据或数据库内容。
+
+## 八、后续垃圾清理与旧卷删除（同日）
+
+在事件处置之后又做了一轮主机清理，证据保存在同一目录下：
+
+- **清理**：`/tmp` 一次性产物（`cmp-cur`、`main-current.tgz`、`dify-knn-resources`、
+  `verify-221`、`ai_partner_evaluation.py.new/.bak`、`weekly-school-plan.json`、
+  8 个 `log-redactor` 目录）与孤立的 `~/.vscode-server/bin/6928394f…`，合计约 515MB。
+- **删除三个无引用的数据库旧卷**（经用户确认）：`wangsh_postgres_data`(111M)、
+  匿名卷 `4a4e943e…`(110M)、`wangsh_redis_data`(45M)。删前记录每个卷的文件数、
+  字节数、时间边界、`PG_VERSION` 与文件清单 sha256 到
+  `deletion-20261104/deletion-metadata.json`。三者均无容器引用，
+  且未被当前 compose 声明（当前仅声明 `typst_pdfs`、`uploads_data`）。
+- **`/tmp/weekly-school-archive-before.sqlite`**：只读核对确认其为运维操作前的副本
+  （106 条 records），活库 `/home/shuhao/education-policy-archive/data/archive.sqlite`
+  由运行中的 `education-policy-archive` 容器使用且记录更多（139 条），
+  **活库未受影响**。副本删除前已在证据目录保留一份。
+- 结果：磁盘 69G→50G（本日累计释放约 19G），`docker system df` 的
+  `Local Volumes` 由 315MB 降至 37.7MB。生产八容器 healthy、`/api/health` 2.2.8、
+  十条红线复验 `ALL_PASS`。
+
+**说明**：`~/.vscode-server` 剩余的当前版本、`snap`、`journal` 与
+`dify-releases` 均属在用或自动管理，未做处理。
