@@ -9,5 +9,5 @@ export function shouldConnectBackendTerminal(params: {
   sessionId?: string | null;
   runnerStatus?: string | null;
 }): boolean {
-  return Boolean(params.sessionId) && params.runnerStatus !== "starting";
+  return Boolean(params.sessionId);
 }

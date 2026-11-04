@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Bug,
   Code,
@@ -93,6 +93,7 @@ export const RightPanel = React.memo(function RightPanel() {
     beautifyError,
     onRefreshBeautify,
     onClearPendingOutput,
+    onTerminalConnection,
     autoOptimizeCode: _autoOptimizeCode,
     setAutoOptimizeCode: _setAutoOptimizeCode,
     onOptimizeCode,
@@ -141,8 +142,12 @@ export const RightPanel = React.memo(function RightPanel() {
   const firstError = rebuildError ?? runner.error ?? runnerError ?? null;
   const wsToken = useWsAccessToken();
   const terminalWsUrl = shouldConnectBackendTerminal({ sessionId: runner.sessionId, runnerStatus: runner.status }) && wsToken.status === "ready" && wsToken.token
-    ? wsUrl(pythonlabApiPath(`/sessions/${runner.sessionId}/terminal`), wsToken.token)
+    ? wsUrl(pythonlabApiPath(`/sessions/${runner.sessionId}/terminal?terminal_protocol=1`), wsToken.token)
     : undefined;
+  const terminalSessionId = runner.sessionId;
+  const handleTerminalReady = useCallback((ready: boolean) => {
+    if (terminalSessionId) onTerminalConnection({ sessionId: terminalSessionId, ready });
+  }, [onTerminalConnection, terminalSessionId]);
   const shouldUseBackendTerminal = resolveShouldUseBackendTerminal({ activeRunnerKind, sessionId: runner.sessionId });
 
   const controlMatrix = useMemo(() => resolveDebugControlMatrix(runner.status, debugCapabilities), [debugCapabilities, runner.status]);
@@ -590,7 +595,7 @@ export const RightPanel = React.memo(function RightPanel() {
                 {!shouldUseBackendTerminal && terminalBridge ? (
                   <PyodideTerminal ref={terminalUiRef as any} bridge={terminalBridge} fontSize={editorFontSize} showLineNumbers />
                 ) : terminalWsUrl ? (
-                  <XtermTerminal ref={terminalUiRef as any} wsUrl={terminalWsUrl} fontSize={editorFontSize} showLineNumbers />
+                  <XtermTerminal ref={terminalUiRef as any} wsUrl={terminalWsUrl} onConnectionReady={handleTerminalReady} fontSize={editorFontSize} showLineNumbers />
                 ) : (
                   <div className="h-full flex items-center justify-center">
                     <span className="text-sm text-text-tertiary">

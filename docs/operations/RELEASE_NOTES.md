@@ -20,14 +20,43 @@
 
 ---
 
-## v2.2.6：发布准备（尚未构建、未部署）
+## v2.2.7：TTY附着修复发布准备（2026-11-04，尚未构建部署）
 
-- 修复PR的6项必需检查全部通过并合入main；从新发布提交统一构建六个linux/amd64镜像，
-  不覆盖已发2.2.5标签或镜像。新版本覆盖门禁、调试状态守卫、严格smoke与PDF禁eval修复。
-- 版本源统一2.2.6；另核准lock中is-docker的下载URL/integrity及实际包均为2.2.1，恢复被
-  历史应用版本替换误改的元数据，未升级该依赖或其他包。
-- 配对备份/恢复、release-set/产物身份及部署行为证据须在切换前完成；服务器连接当前受阻，
-  本段不代表镜像已发布或生产已生效。当前结果仍见测试状态与RELEASE-01。
+- 用户授权重新提交、构建发布与部署；七个版本源同步2.2.7，纳入下述本地TTY修复及必要测试，
+  不升级依赖，不覆盖已发2.2.6或旧版本镜像/标签。构建必须绑定新的main提交与release-set。
+- 本地类型、主前端875项、后端191项及双浏览器已通过属于修复候选证据；2.2.7远端门禁、
+  正式镜像及生产验收仍未执行。服务器外网SSH可达，官方registry仍超时，未停止生产。
+
+## 2026-11-04：PythonLab TTY附着竞态修复（本地候选，未发布）
+
+- debug终端从“Docker attach进程已创建”改为Engine101握手后就绪，使用当前Docker上下文，
+  按可信session/token/exact container ID附着；失败/取消清理本次传输，不删未知容器。
+- binary ready确认与程序文本分离；前端按当前会话门控启动/configurationDone/Continue/Step，
+  断开、stop/reset或旧世代失效；保留TTY单路输出与原烟测完成门限，不用固定延时。
+- 最终修订生产build的原Chrome channel/WebKit四场景各4/4通过，普通debug输出8、多断点5且
+  session0；后端191项、JWT/SQLite/ASGI78项、主前端875项通过（PythonLab295为子集）。
+  调试input及无断点既有合同补验通过；WebKit原有DAP关闭console信息保留，实际范围见测试状态。
+- 这是未提交的本地修订源码和产物，不是已发2.2.6镜像更新；未发布/部署，本轮不连接生产。
+
+## v2.2.6：镜像已发布，生产未部署（2026-11-04核对）
+
+- 2026-11-03由构建源 `c45ad0ef2cdbd7844874fcfbfc6c5e817408d42c` 完成
+  [发布workflow41661803455](https://github.com/shuhao0727/wangsh/actions/runs/41661803455)，
+  source-guard、三项quality-gate与build-and-push成功；六个linux/amd64镜像及release-set已发布。
+  2026-11-04联网复核workflow及远端2.2.6标签仍精确指向构建源，不重发或覆盖旧2.2.5。
+- artifact为 `release-set-41661803455`，清单SHA256为
+  `f663933820e95584499a7190b6c56cf7b2a3816d78a23a8fb589b07026721ea7`；
+  六镜像身份及本轮验收详见[批次证据](../archive/testing/2026-11-04-release-226.md)。
+- 覆盖门禁、调试状态守卫、严格smoke与PDF禁eval修复；lock中is-docker恢复为同tarball/
+  integrity对应的实际2.2.1元数据，未升级该依赖，不宣称依赖漏洞清零。
+- 外网SSH已恢复，后续只使用 `wangsh.cn:6607`。现场仍为2.2.2/healthy；PG/Redis实际bind
+  与备用production Compose命名卷不一致，独立候选配置保留真实挂载，不重建基础设施。
+- 候选完整合成smoke14项及13页UI通过，但原脚本Chrome/WebKit普通debug均缺最终输出8；
+  独立时序/附着等待对照支持TTY竞态，尚未修复，不能把延迟诊断当发布验收通过。
+- 服务器官方registry manifest核验连接超时，发布门禁仍阻断；未停流、配对备份/隔离恢复或
+  切换应用。镜像已发布不等于生产已生效，当前结论见测试状态与RELEASE-01。
+- 订正：本节此前停留“发布准备/尚未构建”，落后于已完成workflow；本轮按现存清单及联网
+  结果订正，不以旧文档重复发布，也不将本机验收冒充生产部署。
 
 ## 2026-11-03：RELEASE-01 门禁修复（已合入main，未部署）
 

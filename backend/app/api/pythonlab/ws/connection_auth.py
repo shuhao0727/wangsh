@@ -51,6 +51,15 @@ class SessionWebSocket:
         await self.check_session()
         await self.raw.send_text(data)
 
+    async def send_bytes(self, data):
+        await self.check_session()
+        await self.raw.send_bytes(data)
+
+    async def notify_terminal_ready(self, *, plain_mode):
+        await self.check_session()
+        if not plain_mode and self.raw.query_params.get('terminal_protocol') == '1':
+            await self.send_bytes(b'{"type":"pythonlab.terminal.ready","version":1}')
+
     async def close(self, code=1000, reason=None):
         if self.closed:
             return

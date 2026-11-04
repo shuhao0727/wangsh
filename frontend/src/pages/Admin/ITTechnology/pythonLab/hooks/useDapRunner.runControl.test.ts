@@ -1,4 +1,5 @@
 import { act, cleanup, renderHook } from "@testing-library/react";
+import { useEffect } from "react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
 import { createDebugCapabilityMapV1, resolveDebugControlMatrix } from "../adapters/debugCapabilityMap";
@@ -11,6 +12,7 @@ const fixture = vi.hoisted(() => ({
   sessionNumber: 0,
   createGate: null as Promise<void> | null,
   connectGate: null as Promise<void> | null,
+  terminalAutoReady: true,
 }));
 
 vi.mock("../services/pythonlabSessionApi", () => ({
@@ -115,6 +117,7 @@ beforeEach(() => {
   fixture.sessionNumber = 0;
   fixture.createGate = null;
   fixture.connectGate = null;
+  fixture.terminalAutoReady = true;
   MemoryWebSocket.instances = [];
   vi.stubGlobal("WebSocket", MemoryWebSocket);
 });
@@ -126,9 +129,26 @@ afterEach(async () => {
   vi.clearAllMocks();
 });
 
+function renderRunner() {
+  return renderHook(() => {
+    const runner = useDapRunner({ code: "a = 1\nprint(a)\n", debugMap: null });
+    // Simulate the terminal component's acknowledgement, not the DAP transport.
+    const { onTerminalConnection } = runner;
+    const sessionId = runner.state.sessionId;
+    useEffect(() => {
+      if (fixture.terminalAutoReady && sessionId) {
+        onTerminalConnection({ sessionId, ready: true });
+      }
+    }, [onTerminalConnection, sessionId]);
+    return runner;
+  });
+}
+
 async function startPaused() {
-  const hook = renderHook(() => useDapRunner({ code: "a = 1\nprint(a)\n", debugMap: null }));
-  await act(async () => { await hook.result.current.startDebug({ initialBreakpoints: [{ line: 2, enabled: true }] }); });
+  const hook = renderRunner();
+  let starting!: Promise<void>;
+  await act(async () => { starting = hook.result.current.startDebug({ initialBreakpoints: [{ line: 2, enabled: true }] }); });
+  await act(async () => { await starting; });
   const socket = MemoryWebSocket.instances.at(-1)!;
   await act(async () => { socket.event("stopped"); });
   expect(hook.result.current.state.status).toBe("paused");
@@ -136,9 +156,69 @@ async function startPaused() {
   return { ...hook, socket };
 }
 
+test("startup waits for the terminal acknowledgement before opening DAP", async () => {
+  fixture.terminalAutoReady = false;
+  const { result } = renderRunner();
+  let starting!: Promise<void>;
+  await act(async () => { starting = result.current.startDebug(); });
+  expect(result.current.state.status).toBe("starting");
+  expect(result.current.state.sessionId).toBe("synthetic-1");
+  expect(MemoryWebSocket.instances).toHaveLength(0);
+  await act(async () => { result.current.onTerminalConnection({ sessionId: "old", ready: true }); });
+  expect(MemoryWebSocket.instances).toHaveLength(0);
+  await act(async () => {
+    result.current.onTerminalConnection({ sessionId: "synthetic-1", ready: true });
+    await starting;
+  });
+  expect(MemoryWebSocket.instances).toHaveLength(1);
+  expect(result.current.state.status).toBe("running");
+});
+
+test("unmount cancels startup while waiting for terminal readiness", async () => {
+  fixture.terminalAutoReady = false;
+  const { result, unmount } = renderRunner();
+  let starting!: Promise<void>;
+  await act(async () => { starting = result.current.startDebug(); });
+  unmount();
+  await starting;
+  expect(MemoryWebSocket.instances).toHaveLength(0);
+});
+
+test.each(["continueRun", "stepOver", "stepInto", "stepOut"] as const)("%s waits for terminal reattachment and reset cancels it", async (action) => {
+  const { result, socket } = await startPaused();
+  fixture.terminalAutoReady = false;
+  await act(async () => { result.current.onTerminalConnection({ sessionId: "synthetic-1", ready: false }); });
+  const before = socket.sent.length;
+  const control = result.current[action]();
+  expect(socket.sent).toHaveLength(before);
+  const stopping = result.current.reset();
+  await act(async () => {
+    socket.respond(socket.lastRequest("disconnect"));
+    await stopping;
+    await control;
+    result.current.onTerminalConnection({ sessionId: "synthetic-1", ready: true });
+  });
+  expect(socket.sent.filter((message) => ["continue", "next", "stepIn", "stepOut"].includes(message.command || ""))).toHaveLength(0);
+  expect(result.current.state.status).toBe("stopped");
+});
+
 function controls(status: ReturnType<typeof useDapRunner>["state"]["status"]) {
   return resolveDebugControlMatrix(status, createDebugCapabilityMapV1("legacy"));
 }
+
+test("a close immediately after ready prevents the queued Continue from running", async () => {
+  const { result, socket } = await startPaused();
+  await act(async () => { result.current.onTerminalConnection({ sessionId: "synthetic-1", ready: false }); });
+  const before = socket.sent.length;
+  const control = result.current.continueRun();
+  await act(async () => {
+    result.current.onTerminalConnection({ sessionId: "synthetic-1", ready: true });
+    result.current.onTerminalConnection({ sessionId: "synthetic-1", ready: false });
+    await control;
+  });
+  expect(socket.sent).toHaveLength(before);
+  expect(result.current.state.status).toBe("paused");
+});
 
 test.each(["generation", "lifecycleEpoch", "sessionId"] as const)("the running fallback validates %s independently", (changed) => {
   const generation = { current: 0 };
@@ -274,10 +354,8 @@ test("an already settled response cannot overwrite a replacement session startup
     await continuing;
   });
   const statusBeforeReady = result.current.state.status;
-  await act(async () => {
-    gate.resolve();
-    await replacement;
-  });
+  await act(async () => { gate.resolve(); });
+  await act(async () => { await replacement; });
   expect(statusBeforeReady).toBe("starting");
   expect(result.current.state.sessionId).toBe("synthetic-2");
   expect(result.current.state.status).toBe("running");
@@ -296,10 +374,8 @@ test("a replaced pending Continue is rejected by the real controller disconnect"
     socket.respond(request);
   });
   const statusBeforeReady = result.current.state.status;
-  await act(async () => {
-    gate.resolve();
-    await replacement;
-  });
+  await act(async () => { gate.resolve(); });
+  await act(async () => { await replacement; });
   expect(statusBeforeReady).toBe("starting");
   expect(socket.readyState).toBe(MemoryWebSocket.CLOSED);
   expect(result.current.state.sessionId).toBe("synthetic-2");
@@ -308,7 +384,7 @@ test("a replaced pending Continue is rejected by the real controller disconnect"
 test.each(["stopped", "terminated"])("startup completion does not overwrite %s during handshake", async (event) => {
   const gate = deferred();
   fixture.connectGate = gate.promise;
-  const { result } = renderHook(() => useDapRunner({ code: "a = 1\nprint(a)\n", debugMap: null }));
+  const { result } = renderRunner();
   let starting!: Promise<void>;
   await act(async () => { starting = result.current.startDebug(); });
   const socket = MemoryWebSocket.instances.at(-1)!;

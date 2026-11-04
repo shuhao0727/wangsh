@@ -23,6 +23,7 @@ import { pythonlabSessionApi } from "../services/pythonlabSessionApi";
 import type { DapCapabilities, RunnerState } from "./useDapRunner";
 import { canUseSharedArrayBuffer, type PyodideTerminalBridge } from "./usePyodideRunner";
 import { useUnifiedRunner } from "./useUnifiedRunner";
+import type { TerminalConnectionState } from "../core/terminalReadiness";
 
 type BreakpointUpdater = (prev: Breakpoint[]) => Breakpoint[];
 
@@ -56,6 +57,7 @@ export interface DebugSessionApi {
   onHistoryForward: () => void;
   onHistoryToLatest: () => void;
   onClearPendingOutput: () => void;
+  onTerminalConnection: (state: TerminalConnectionState) => void;
 }
 
 export function useDebugSession(params: {
@@ -332,6 +334,10 @@ export function useDebugSession(params: {
     historyToLatestOnUnifiedRunner();
   }, [historyToLatestOnUnifiedRunner]);
 
+  const onTerminalConnection = useCallback((state: TerminalConnectionState) => {
+    dapApiRef.current.onTerminalConnection(state);
+  }, []);
+
   const onClearPendingOutput = useCallback(() => {
     clearUnifiedPendingOutput();
   }, [clearUnifiedPendingOutput]);
@@ -376,5 +382,6 @@ export function useDebugSession(params: {
     onHistoryForward,
     onHistoryToLatest,
     onClearPendingOutput,
+    onTerminalConnection,
   };
 }

@@ -25,6 +25,7 @@ import {
   startPlainPythonlabSessionMonitor,
 } from "../core/debugSessionBootstrap";
 import { logger } from "@services/logger";
+import { createTerminalReadiness, type TerminalConnectionState } from "../core/terminalReadiness";
 
 // --- Types ---
 
@@ -306,6 +307,15 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
   const debugMapRef = useRef<DebugMap | null>(debugMap);
   const modeRef = useRef<"debug" | "plain">("debug");
   const lifecycleEpochRef = useRef(0);
+  const terminalReadinessRef = useRef(createTerminalReadiness());
+  useEffect(() => () => {
+    startTokenRef.current += 1;
+    lifecycleEpochRef.current += 1;
+    terminalReadinessRef.current.reset();
+  }, []);
+  const onTerminalConnection = useCallback(({ sessionId, ready }: TerminalConnectionState) => {
+    terminalReadinessRef.current.update(sessionId, ready);
+  }, []);
   const runControlGenerationRef = useRef(0);
   const beginRunningTransition = useCallback(() => createPythonlabRunningTransition({
     generation: runControlGenerationRef,
@@ -410,6 +420,7 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
   }, []);
 
   const clearTrackedSessionId = useCallback(() => {
+    terminalReadinessRef.current.reset();
     sessionIdRef.current = null;
     dispatch({ type: "SET_SESSION_ID", payload: null });
   }, []);
@@ -451,6 +462,7 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
     const preserveSession = options?.preserveSession === true;
     startTokenRef.current += 1;
     lifecycleEpochRef.current += 1;
+    terminalReadinessRef.current.reset();
     traceLifecycle("cleanup", { preserveSession });
     emphasisSeqRef.current += 1;
     stackFetchSeqRef.current += 1;
@@ -654,6 +666,10 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
             token,
           });
 
+          if (!terminalReadinessRef.current.isReady(params.expectedSessionId)) {
+            await terminalReadinessRef.current.wait(params.expectedSessionId);
+          }
+          if (!isCurrent()) return { ok: false, aborted: true, errorMessage: null };
           const onRunning = beginRunningTransition();
           const initCaps = await connectPythonlabDapController({
             client: clientRef.current,
@@ -661,6 +677,10 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
             clientConnId,
             sessionId: params.expectedSessionId,
             refreshBreakpoints: () => refreshBreakpoints(),
+            beforeConfiguration: async () => {
+              await terminalReadinessRef.current.wait(params.expectedSessionId);
+              if (!isCurrent() || !terminalReadinessRef.current.isReady(params.expectedSessionId)) throw new Error("终端等待已取消");
+            },
             traceLifecycle: (phase, extra) =>
               traceLifecycle(phase, {
                 reconnect: true,
@@ -752,6 +772,7 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
     startInFlightRef.current = true;
     const myToken = (startTokenRef.current += 1);
     const myEpoch = (lifecycleEpochRef.current += 1);
+    terminalReadinessRef.current.reset();
     traceLifecycle("start_session", { mode, token: myToken, epoch: myEpoch });
 
     // Immediate status update
@@ -797,12 +818,14 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
         traceLifecycle,
         onSessionCreated: (session) => {
           sessionIdRef.current = session.session_id;
-          dispatch({ type: "SET_SESSION_ID", payload: session.session_id });
+          terminalReadinessRef.current.select(session.session_id);
         },
       });
       if (!sessionBoot) return;
 
       const { session, readyMeta } = sessionBoot;
+      // Expose only a READY sandbox; the terminal can now attach while DAP is starting.
+      dispatch({ type: "SET_SESSION_ID", payload: session.session_id });
       const sourceMismatch = detectSourceMismatch({
         sessionCodeSha: String(readyMeta?.code_sha256 ?? ""),
         debugMapCodeSha: debugMapRef.current?.codeSha256,
@@ -839,6 +862,11 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
         });
         return;
       }
+
+      // Do not let configurationDone run a short program before TTY is attached.
+      await terminalReadinessRef.current.wait(session.session_id);
+      if (startTokenRef.current !== myToken || lifecycleEpochRef.current !== myEpoch) return;
+      if (!terminalReadinessRef.current.isReady(session.session_id)) throw new Error("终端连接已断开，请重试");
 
       // 3. Acquire token for WS (prefer stored token; fall back to refresh)
       const token = await resolvePythonlabWsToken();
@@ -947,6 +975,10 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
         // Use the launch snapshot so "click breakpoint then immediately debug"
         // does not race against the store->runner breakpoint sync effect.
         refreshBreakpoints: () => refreshBreakpoints(launchBreakpoints),
+        beforeConfiguration: async () => {
+          await terminalReadinessRef.current.wait(session.session_id);
+          if (startTokenRef.current !== myToken || lifecycleEpochRef.current !== myEpoch || !terminalReadinessRef.current.isReady(session.session_id)) throw new Error("终端等待已取消");
+        },
         traceLifecycle,
       });
       resetReconnectState();
@@ -995,6 +1027,7 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
 
   const stopDebug = useCallback(async () => {
     runControlGenerationRef.current += 1;
+    terminalReadinessRef.current.reset();
     await stopPythonlabDebugSession({
       client: clientRef.current,
       sessionId: sessionIdRef.current,
@@ -1009,23 +1042,38 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
     });
   }, [clearTrackedSessionId, cleanup]);
 
-  const continueRun = useCallback(() => continuePythonlabDebugSession({
+  const withAttachedTerminal = useCallback((request: (onRunning: () => void) => Promise<void>) => {
+    const sessionId = sessionIdRef.current;
+    const epoch = lifecycleEpochRef.current;
+    const onRunning = beginRunningTransition();
+    const generation = runControlGenerationRef.current;
+    if (!sessionId) return Promise.resolve();
+    if (terminalReadinessRef.current.isReady(sessionId)) return request(onRunning);
+    return terminalReadinessRef.current.wait(sessionId).then(() => {
+      if (sessionIdRef.current !== sessionId || lifecycleEpochRef.current !== epoch || runControlGenerationRef.current !== generation || !terminalReadinessRef.current.isReady(sessionId)) return;
+      return request(onRunning);
+    }).catch((error: unknown) => {
+      if (sessionIdRef.current === sessionId && lifecycleEpochRef.current === epoch && runControlGenerationRef.current === generation) {
+        dispatch({ type: "SET_ERROR", payload: error instanceof Error ? error.message : "终端连接未就绪" });
+      }
+    });
+  }, [beginRunningTransition]);
+
+  const continueRun = useCallback(() => withAttachedTerminal((onRunning) => continuePythonlabDebugSession({
     client: clientRef.current,
-    onRunning: beginRunningTransition(),
-  }), [beginRunningTransition]);
+    onRunning,
+  })), [withAttachedTerminal]);
 
   const pauseRun = useCallback(async () => {
     runControlGenerationRef.current += 1;
     await pausePythonlabDebugSession({ client: clientRef.current });
   }, []);
 
-  const stepRun = useCallback(async (kind: "over" | "into" | "out") => {
-    await stepPythonlabDebugSession({
-      client: clientRef.current,
-      kind,
-      onRunning: beginRunningTransition(),
-    });
-  }, [beginRunningTransition]);
+  const stepRun = useCallback((kind: "over" | "into" | "out") => withAttachedTerminal((onRunning) => stepPythonlabDebugSession({
+    client: clientRef.current,
+    kind,
+    onRunning,
+  })), [withAttachedTerminal]);
   const stepOver = useCallback(() => stepRun("over"), [stepRun]);
   const stepInto = useCallback(() => stepRun("into"), [stepRun]);
   const stepOut = useCallback(() => stepRun("out"), [stepRun]);
@@ -1137,6 +1185,7 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
       })(),
     },
     error: state.error,
+    onTerminalConnection,
     startDebug,
     runPlain,
     stopDebug,
