@@ -88,7 +88,13 @@ def test_rejected_or_invalid_handshake_never_exposes_a_ready_fd(daemon, response
         with pytest.raises(RuntimeError, match='终端'):
             await attach
         assert daemon['process'].killed
-        assert await asyncio.get_running_loop().sock_recv(daemon['peer'], 1) == b''
+        # Linux resets a stream closed with unread oversized header bytes; macOS
+        # reports EOF. Both prove peer closure, never an attach acknowledgement.
+        try:
+            closed_data = await asyncio.get_running_loop().sock_recv(daemon['peer'], 1)
+        except ConnectionResetError:
+            closed_data = b''
+        assert closed_data == b''
     asyncio.run(scenario())
 
 

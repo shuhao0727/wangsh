@@ -17,6 +17,7 @@
 
 | 检查 | 命令 / 范围 | 结果 |
 |---|---|---|
+| 2.2.7 PR首轮远端门禁 | ce78e0d、[ci-quality41760578668](https://github.com/shuhao0727/wangsh/actions/runs/41760578668) | 5项通过，backend3766 passed/123 skipped/1 failed：Linux超大header拒绝后peer返回ConnectionResetError，原测试只认EOF；Linux隔离同例先红，等价保留关闭断言后Linux/macOS均10 passed，等待新远端门禁，不改生产附着逻辑 |
 | 2.2.6发布身份复核 | `gh run view 41661803455`、`git ls-remote --tags origin`、release-set SHA256 | 构建源c45ad0e、workflow成功、2.2.6标签一致；六镜像清单不变，未重新发布 |
 | 本机候选与运行隔离 | 按digest拉取、逐镜像inspect、canonical配置及8容器实际挂载/网络/端口核对 | 六镜像均linux/amd64且Image ID匹配；仅wangsh_sim专属卷、工作区和回环16608；正常开发7容器未变 |
 | 生产候选完整smoke | 精确构建源副本、合成空库/凭据、容器loopback本地供应商桩 | **14 PASS/0 WARN/0 FAIL、exit0**；13页UI全通过。首轮12/1/1失败因缺合成供应商/内容fixture，原证据保留；未调用真实模型 |
@@ -55,7 +56,7 @@
 | 迁移守卫 | `python3 -I -B backend/scripts/check_migration_guard.py` | 50文件通过，未运行迁移 |
 | 版本一致性 | `node scripts/check-version-consistency.mjs` | 发布准备2.2.6通过；lock根版本同步，is-docker元数据恢复为已装包/同integrity tarball实际2.2.1，其他依赖不升级 |
 | 2.2.6干净安装尝试 | 合成目录、Node20.20.2/npm10.8.2普通npm ci，未触碰项目node_modules | 两次分别ECONNRESET与registry.npmjs.org元数据EIDLETIMEOUT；属下载失败，未记通过。后续必须由发布workflow的质量门禁验证，不关闭TLS/不放宽安装参数 |
-| 文档门禁 | `node scripts/check-markdown-contracts.mjs`、Markdown合同、`git diff --check` | 本轮110 files / 709 links / 0 missing；历史2026-11-03为109/702。新增批次证据后更新当前派生计数，不覆盖历史 |
+| 文档门禁 | `node scripts/check-markdown-contracts.mjs`、Markdown合同、`git diff --check` | 本轮110 files / 711 links / 0 missing；历史2026-11-03为109/702，TTY修复批次110/709。新增批次证据后更新当前派生计数，不覆盖历史 |
 | 脚本语法 / 差异 | 已改 shell 的 `bash -n`、Node `--check`、`git diff --check` | 通过 |
 
 根合同首轮为133/134：仅文档派生链接数过期；更新当前统计后全量复验通过。后续增加容器CLI等合同后为151项，未删除失败断言刷绿。

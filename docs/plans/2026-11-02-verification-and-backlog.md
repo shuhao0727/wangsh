@@ -16,6 +16,7 @@
 - 候选验收历史：正式2.2.6完整合成smoke补fixture后14 PASS/13页UI通过，但Chrome/WebKit普通debug缺8；独立时序与1.5秒诊断等待支持附着竞态，原失败保留。
 - 本地修复：已实现Engine101真实附着、binary ready及当前session门控，不加固定延时。原Chrome/WebKit普通debug/多断点各2/2通过，Step/input另各2/2通过；后端191、真实JWT/SQLite/ASGI78、前端模块295及类型/构建/治理通过，尚未提交/发布。不覆盖既发2.2.6，详细见[批次证据](../archive/testing/2026-11-04-release-226.md)。
 - 服务器发布门禁：独立2.2.6候选目录已准备，按运行中PG/Redis绝对bind及uploads/PDF卷生成受限配置，凭据/认证/SSRF策略与运行中一致。`verify-release-set` 访问官方Docker Hub manifest超时，真实curl也超时；未绕过registry核验、未改DNS/代理。此项仍阻断停流、备份切换与部署。
+- 2.2.7远端首轮：提交ce78e0d/发布PR已创建，5项通过；backend-pytest为3766 passed/123 skipped/1 failed，仅新增超大header关闭断言在Linux收到ConnectionResetError而非EOF。先隔离Linux复现，再保持拒绝/kill/fd关闭断言的等价跨平台修正，不改产品逻辑或门禁。用户已准许本次临时SSH镜像通道，官方TLS与原digest核验实测通过；不改系统DNS或长期代理。
 - 硬边界：**门禁未通过不重启生产、不切换镜像，不抬高 baseline 或强推标签**；保留数据库、Redis、上传与 PythonLab 工作区。PRIV/B/C 产品与真实数据边界仍保留，旧批次“不提交/不操作生产”仅表示当时授权范围。
 
 ## 阶段 B（台账）推进记录（2026-11-03）
