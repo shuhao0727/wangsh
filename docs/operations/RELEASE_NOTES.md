@@ -19,6 +19,25 @@
 历史命令中的 `build_images.sh` 已删除，仅供追溯；当前构建入口为
 `scripts/deploy.sh build` 或 `scripts/deploy.sh build-amd64`。
 
+## 历史发布留痕订正（2026-11-04 核验）
+
+以下三条为 2026-11-04 四方台账对齐时逐个核实的结论，用于说明历史版本的可复现边界。
+不据此补推镜像、不改写已发布 tag。
+
+- **2.2.5 发布链路缺失，镜像源码不可自证**：`2.2.5` tag 指向 `189205c`，但该提交没有
+  `dockerhub-amd64` 发布 run（该 workflow 历史 run 中不存在对应记录），六个 DockerHub 仓库
+  也没有 `2.2.5-build-<run>` staging tag 与 `release-set-*` artifact。同提交的 `ci-quality`
+  run 41592108696 结论为 **failure**。DockerHub 上存在 `2.2.5` 镜像标签，但缺少 workflow
+  与清单证据链，不能证明其与 tag 代码一致。2.2.5 从未部署生产，已被 2.2.6 取代。
+- **2.2.1 镜像构建源与 tag 不一致**：`2.2.1` tag 指向 `a3a5a54`；DockerHub 上的 2.2.1
+  镜像构建自更早的提交（tag 说明中自述），即镜像早于标签代码。已发布标签不重写，
+  该差异保留为历史事实。
+- **2.2.2 / 2.2.3 未发布到 DockerHub**：`2.2.2`、`2.2.3` 在 git 有 tag，但在
+  `wangsh-backend`、`wangsh-typst-worker`、`wangsh-pythonlab-worker`、`pythonlab-sandbox`、
+  `wangsh-frontend`、`wangsh-gateway` 六个仓库全部返回 404。服务器本地保有 2.2.2 回滚镜像集
+  （五个 `:2.2.2` 加 `pythonlab-sandbox:2.2.1`），**这是该版本唯一的镜像副本**，
+  清理服务器时必须保留。
+
 ---
 
 ## v2.2.8：Linux Docker内DAP通道（2026-11-04 已部署）
