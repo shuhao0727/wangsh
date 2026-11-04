@@ -19,6 +19,7 @@ from loguru import logger
 
 from app.core.sandbox.docker_paths import DockerMountMixin, _workspace_root
 from app.core.sandbox.docker_terminal import attach_docker_tty
+from app.core.sandbox.docker_dap import connect_docker_dap
 
 def _resolve_memory_mb_limit(limits: Dict[str, Any], default_mem: int) -> int:
     requested_raw = limits.get("memory_mb") if isinstance(limits, dict) else None
@@ -476,8 +477,7 @@ class DockerProvider(DockerMountMixin, SandboxProvider):
         name = self._container_name(meta)
         return await self._docker_is_running(name)
 
-    async def attach_tty(self, session_id: str, meta: Dict[str, Any]) -> Tuple[Any, int]:
-        """Attach the exact owned generation and wait for the Engine stream."""
+    async def _open_owned_stream(self, session_id, meta, connect):
         name = self._container_name(meta)
         ws_path = self._ws_path_for_session(meta)
         async with WorkspaceOwnership(_workspace_root(), ws_path) as ownership:
@@ -487,7 +487,17 @@ class DockerProvider(DockerMountMixin, SandboxProvider):
             container_id = record['container_id']
             if not await self._docker_is_running(container_id):
                 raise RuntimeError('终端运行环境未就绪。')
-            return await attach_docker_tty(container_id)
+            return await connect(container_id)
+
+    async def attach_tty(self, session_id: str, meta: Dict[str, Any]) -> Tuple[Any, int]:
+        """Attach the exact owned generation and wait for the Engine stream."""
+        return await self._open_owned_stream(session_id, meta, attach_docker_tty)
+
+    async def open_dap(self, session_id: str, meta: Dict[str, Any]):
+        """The existing Docker capability reaches only this sandbox's loopback."""
+        return await self._open_owned_stream(
+            session_id, meta, lambda container_id: connect_docker_dap(container_id, self.debugpy_port)
+        )
 
     async def exec_tty(self, session_id: str, meta: Dict[str, Any], command: List[str]) -> Tuple[Any, int]:
         """

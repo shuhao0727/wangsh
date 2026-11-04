@@ -75,6 +75,7 @@ CI 的 `repo-config` 独立执行这19项；`backend-pytest` 仅排除该自含�
 - `pythonlab/test_sandbox_worker_recovery.py` 是隔离分类/任务分支回归，覆盖可信 Docker CLI 连接错误、权限/非法资源拒绝、provider 暂时错误及重试耗尽；不能把所有 `RuntimeError` / HTTP transport 错误当作可重试，也不能以单测代替真实 broker。
 - 专用报告另保留真实 Redis broker、prefork worker SIGKILL、同 ID 重投、原锁自然到期、真实 CLI 连接故障以及容器复用/执行/stop 回收证据。该专项有合成 settings/cache、故障 gate 和可见性配置，不是原封生产栈；每条 retry lineage 的上限不是同 task ID 的全局重试计数，真实 broker 耗尽仍未证明。
 - `pythonlab/test_docker_terminal_attach.py` 用合成socketpair与子进程替身验证Engine101就绪、首段输出保留、拒绝/超时/取消清理；`test_terminal_readiness_protocol.py` 核对binary控制帧鉴权及exact generation附着。必须沿用上方禁dotenv/外连/正常conftest的运行边界；不是实际Docker上下文或浏览器通过证明。
+- `pythonlab/test_docker_dap_transport.py` 用合成exec双向字节流核对ready/首包、拒绝、超时/取消、关闭及无宿主TCP降级；`test_terminal_readiness_protocol.py` 的generation核对同时覆盖DAP与TTY。Linux真实Docker及服务器双浏览器证据单列，不能用替身通过替代正式镜像运行。
 - provider/task的归属与启动恢复回归、真实Chrome/WebKit/DAP/TTY另按本批证据核准，不以此修改原烟测门限。
 - 最终 Docker 的 worker start/ping 不等于最终 sandbox E2E。Chrome/WebKit、多断点 Continue、DAP/TTY、混版本及旧 FAILED 状态恢复仍需单列，不能将专项证据记为最终 E2E 通过，也不能笼统退回“真实 worker 完全未测”。分层结果与运行器只见 [TEST_STATUS](../../docs/testing/TEST_STATUS.md)。
 

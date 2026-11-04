@@ -30,7 +30,8 @@ def test_revoked_terminal_never_sends_ready_or_binary_output():
     raw.send_bytes.assert_not_awaited()
 
 
-def test_ownership_mismatch_never_opens_docker_transport(tmp_path, monkeypatch):
+@pytest.mark.parametrize('operation', ['attach_tty', 'open_dap'])
+def test_ownership_mismatch_never_opens_docker_transport(tmp_path, monkeypatch, operation):
     from app.core.sandbox import docker as module
     from app.core.sandbox.docker_runtime import WorkspaceOwnership
     root = tmp_path / 'workspaces'
@@ -44,13 +45,15 @@ def test_ownership_mismatch_never_opens_docker_transport(tmp_path, monkeypatch):
             owner.claim('new-session', meta, provider._container_name(meta), 'b' * 64)
         attach = AsyncMock()
         monkeypatch.setattr(module, 'attach_docker_tty', attach)
+        monkeypatch.setattr(module, 'connect_docker_dap', attach)
         with pytest.raises(RuntimeError, match='归属'):
-            await provider.attach_tty('old-session', meta)
+            await getattr(provider, operation)('old-session', meta)
         attach.assert_not_awaited()
     asyncio.run(scenario())
 
 
-def test_current_ownership_checks_each_generation_field(tmp_path, monkeypatch):
+@pytest.mark.parametrize('operation', ['attach_tty', 'open_dap'])
+def test_current_ownership_checks_each_generation_field(tmp_path, monkeypatch, operation):
     from app.core.sandbox import docker as module
     from app.core.sandbox.docker_runtime import WorkspaceOwnership
     root = tmp_path / 'workspaces'
@@ -65,14 +68,16 @@ def test_current_ownership_checks_each_generation_field(tmp_path, monkeypatch):
         meta['sandbox_owner_token'] = record['token']
         attach = AsyncMock()
         monkeypatch.setattr(module, 'attach_docker_tty', attach)
+        monkeypatch.setattr(module, 'connect_docker_dap', attach)
         for field, value in [('docker_container_id', 'b' * 64), ('sandbox_owner_token', 'stale')]:
             with pytest.raises(RuntimeError, match='归属'):
-                await provider.attach_tty('session', {**meta, field: value})
+                await getattr(provider, operation)('session', {**meta, field: value})
         attach.assert_not_awaited()
     asyncio.run(scenario())
 
 
-def test_owned_terminal_uses_exact_id_after_fence(tmp_path, monkeypatch):
+@pytest.mark.parametrize('operation', ['attach_tty', 'open_dap'])
+def test_owned_terminal_uses_exact_id_after_fence(tmp_path, monkeypatch, operation):
     from app.core.sandbox import docker as module
     from app.core.sandbox.docker_runtime import WorkspaceOwnership
     root = tmp_path / 'workspaces'
@@ -88,6 +93,10 @@ def test_owned_terminal_uses_exact_id_after_fence(tmp_path, monkeypatch):
         monkeypatch.setattr(provider, '_docker_is_running', AsyncMock(return_value=True))
         attach = AsyncMock(return_value=('synthetic-process', 11))
         monkeypatch.setattr(module, 'attach_docker_tty', attach)
-        assert await provider.attach_tty('session', meta) == ('synthetic-process', 11)
-        attach.assert_awaited_once_with('a' * 64)
+        monkeypatch.setattr(module, 'connect_docker_dap', attach)
+        assert await getattr(provider, operation)('session', meta) == ('synthetic-process', 11)
+        if operation == 'open_dap':
+            attach.assert_awaited_once_with('a' * 64, provider.debugpy_port)
+        else:
+            attach.assert_awaited_once_with('a' * 64)
     asyncio.run(scenario())

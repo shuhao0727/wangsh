@@ -20,12 +20,24 @@
 
 ---
 
-## v2.2.7：TTY附着修复发布准备（2026-11-04，尚未构建部署）
+## v2.2.8：Linux Docker内DAP通道（发布准备，未部署）
 
-- 用户授权重新提交、构建发布与部署；七个版本源同步2.2.7，纳入下述本地TTY修复及必要测试，
-  不升级依赖，不覆盖已发2.2.6或旧版本镜像/标签。构建必须绑定新的main提交与release-set。
-- 本地类型、主前端875项、后端191项及双浏览器已通过属于修复候选证据；2.2.7远端门禁、
-  正式镜像及生产验收仍未执行。服务器外网SSH可达，官方registry仍超时，未停止生产。
+- 2.2.7正式候选证实：沙箱内部debugpy监听正常，但backend容器无法访问Linux宿主loopback
+  映射。按可信session/token/exact container ID在workspace fence内建立Docker exec固定代理，
+  仅连接沙箱自身127.0.0.1；不公开DAP、不回退其他主机、失败取消回收传输。
+- 服务器修订合成栈Chrome/WebKit原四场景各4/4通过；后端隔离205项、JWT/ASGI78项通过，
+  治理errors0/warnings41、baseline未变。当前准备2.2.8新构建，不覆盖已发2.2.7。
+
+## v2.2.7：已发布，Linux正式候选阻断（2026-11-04，未部署）
+
+- 修复ce78e0d及Linux关闭断言续修d87f7e9经6项PR门禁合入main的5e6c369；
+  [workflow41763078161](https://github.com/shuhao0727/wangsh/actions/runs/41763078161)成功发布六镜像，
+  2.2.7 tag精确指向构建源，release-set SHA256为
+  b694677b5234d943f59e29be9323e1e5a70eea96446ce6e9a4033d4acaa4c969。
+- 六镜像官方registry、本地RepoDigest/amd64及打包源码hash核准；mirror缺失的layer按用户
+  允许的SSH+OCI原digest无损传输，逐blob校验，未改manifest或跳过清单门禁。
+- 服务器正式候选Chrome输入通过，但调试首次暂停前失败；内部5678可连、backend三个宿主
+  候选地址均拒绝，确认Linux回环可达性缺口。生产未停流，转入2.2.8，不覆盖已发版本。
 
 ## 2026-11-04：PythonLab TTY附着竞态修复（本地候选，未发布）
 

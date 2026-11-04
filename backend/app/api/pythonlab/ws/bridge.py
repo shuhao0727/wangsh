@@ -27,6 +27,7 @@ from app.api.pythonlab.constants import (
 )
 from app.api.pythonlab.utils import now_iso
 from app.api.pythonlab.ws.connection import _read_dap_message, _write_dap_message
+from app.api.pythonlab.ws.dap_transport import connect_dap
 from app.api.pythonlab.ws.validation import _validate_dap_request_payload
 
 
@@ -483,38 +484,7 @@ class DapSessionBridge:
                     pass
             self.reader = None
             self.writer = None
-            startup_phase = not self.first_inbound_event.is_set()
-            max_rounds = 12 if startup_phase else 2
-            last_err: Optional[Exception] = None
-            last_host: Optional[str] = None
-            for round_idx in range(max_rounds):
-                for cand in self.host_candidates:
-                    try:
-                        self.reader, self.writer = await asyncio.wait_for(asyncio.open_connection(cand, self.port), timeout=5.0)
-                        self.ws_log("dap_tcp_connected", host=cand, port=self.port)
-                        return
-                    except Exception as exc:
-                        last_err = exc
-                        last_host = cand
-                if (
-                    startup_phase
-                    and round_idx < max_rounds - 1
-                    and last_err is not None
-                    and self._is_retryable_connect_error(last_err)
-                ):
-                    self.ws_log(
-                        "dap_tcp_connect_retry",
-                        host=last_host,
-                        port=self.port,
-                        attempt=round_idx + 1,
-                        max_attempts=max_rounds,
-                        error=f"{type(last_err).__name__}: {last_err}",
-                    )
-                    await asyncio.sleep(min(1.0, 0.15 + 0.1 * round_idx))
-                    continue
-                break
-            await self._send_output(f"Failed to connect to DAP backend ({self.host_candidates}:{self.port}): {last_err}\n")
-            raise last_err if last_err else RuntimeError("dap connect failed")
+            self.reader, self.writer = await connect_dap(self, asyncio.open_connection)
 
     async def _replay_state_after_reconnect_bootstrap(self) -> None:
         """在重连引导后重放状态"""
