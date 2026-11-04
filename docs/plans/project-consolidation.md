@@ -28,8 +28,8 @@
 | LEDGER-01 | 本地 `main` 落后 `origin/main` 5 个提交，生产 2.2.8 构建源 `2d9dda0` 不在本地历史；工作区另有 40 项未提交改动 | release-ops | **2026-11-04 已关闭**：审核查明 34 项内容与已发布 2.2.8 逐字节相同，stash→ff-only→pop 后仅提交 8 个文档为 `c795313` 并已推送；`git merge-base --is-ancestor 2d9dda0 HEAD` 为真，本地与 origin/main 同步 |
 | LEDGER-02 | 2.2.5 缺发布链路（2026-11-04 已核实：tag 指向 `189205c`，无 `dockerhub-amd64` run、无 staging tag、无 `release-set-*` artifact；同提交 `ci-quality` 41592108696 为 failure）；镜像源码不可自证 | release-ops | 已在[发布记录](../operations/RELEASE_NOTES.md#历史发布留痕订正2026-11-04-核验)标注；不补推伪造发布，标注即关闭 |
 | LEDGER-03 | DockerHub 缺 2.2.2/2.2.3（2026-11-04 六仓库逐个核实全部 404）；2.2.1 镜像构建源早于 tag `a3a5a54` | release-ops | 已在发布记录逐条标注；2.2.2 本地镜像列入不可删红线，标注即关闭 |
-| SEC-01 | `/etc/systemd/system/log.service` 的 `ExecStart=/usr/bin/log -sshd`、`User=root`、目标文件不存在；unit 为 disabled/inactive、无 wants 链接、mtime 2026-05-18。形态可疑但当前无法执行，无法判断是入侵痕迹还是误操作 | ops + 安全责任人 | 核查 SSH 配置、sudoers、authorized_keys、历史登录后定性；保留文件作为证据，不擅自删除 |
-| SEC-02 | `/home/shuhao/桌面/.env` 权限 `664`（同组可写）、50558 字节，与 Dify `.env` 大小接近；对比 `wangsh/.env` 为 `600` | ops | 确认用途后收紧到 `600`，并评估其中凭据是否需要轮换 |
+| SEC-01 | **已处置**：2026-05-18 植入的后门账号 `systemd`(uid 1001)、sudoers `NOPASSWD:ALL` 行、root crontab `@reboot`、`log.service`（含 immutable 属性）已全部清除；2026-10-26 存在一次来自 `77.239.124.120` 的成功密码登录 | ops + 安全责任人 | **2026-11-04 已关闭**：六项逐一复验通过，证据归档 `/root/security-remediation-20261104/`；遗留：入侵入口未定、SSH 密码认证仍开启。详见[事件记录](../archive/operations/2026-11-04-backdoor-account-incident.md) |
+| SEC-02 | 桌面 `.env` 权限过宽（`664`，50558 字节） | ops | **2026-11-04 已关闭**：确认为旧版 Dify 配置副本（73 含密键中 72 与 `dify/docker/.env` 一致），已归档为 `600 root:root` 并移除桌面副本；其中历史凭据是否需轮换交由 Dify 侧评估 |
 | OPS-04 | 服务器重复存储与冗余文件 | release-ops | **2026-11-04 关闭**：清理 `.npm` 248M、`2.2.7/incoming` 412M、`/tmp` 临时目录 252 个、`~/.vscode-server` 旧版三个 1.5G、`/swapfile_extra` 16G（校验未启用/无 fstab/无进程占用），`/var/log/btmp.1` 截断 45.7M；磁盘 69G→51G。`/home/shuhao/dify` 实测仅 670KB（非审计所报 100MB）且属 Dify 项目，保留不删。十条红线清理后复验全部一致 |
 | DOC-01 | 本轮撤回误关闭结论；其余旧关闭集合仅为历史记录，不作为当前验收依据 | project-governance | 原编号逐项有实现、环境和验收证据；工作树删除不等于需求退役 |
 | PRIV-02 | 同意写入/撤回 API 与 `/privacy` 自助页已实现并记录审计；同意版本文本字段、AI 调用前强制校验和告知政策仍未完成 | backend + frontend | 补齐版本/告知文本与调用前校验后关闭；不宣称完整合规闭环 |
@@ -100,6 +100,8 @@ A 类本轮无待改代码项；DIFY-02 已核验为非缺陷并关闭；D 类�
 - **ACCEPT-01 / ACCEPT-03 / DOC-01 / OPS-02 / COMMIT-01**：原文曾以 lucid 工作树删除认定失效；2026-11-02 订正为“历史材料退出，非事项自动取消”，已恢复跟踪边界。
 
 ## 变更日志
+
+- 2026-11-04：**处置服务器后门账号事件（SEC-01/SEC-02 关闭）**。确认 2026-05-18 植入后门（账号 `systemd` uid 1001 + sudoers NOPASSWD + root crontab `@reboot` + log.service + XMRig 挖矿程序 + sshdd.so LD_PRELOAD rootkit），2026-10-26 有一次来自 `77.239.124.120` 的成功密码登录。更早会话已隔离 rootkit 主体但遗漏账号与四项持久化（log.service 被加 immutable）。本次清除全部六项并逐一复验；桌面 `.env` 归档收紧。生产八容器 healthy、`/api/health` 2.2.8 未受影响。证据在 `/root/security-remediation-20261104/`。
 
 - 2026-11-04：**完成 sudo 阶段清理**。删除 `/swapfile_extra`（16G，删前三重校验：未启用、fstab 无条目、无进程打开）与 `~/.vscode-server` 旧版，截断 `btmp.1`；磁盘 69G→51G（累计释放约 18.2G）。`/home/shuhao/dify` 经四种方法实测仅 670KB（审计所报 100MB 有误）且属 Dify 项目，决定保留。清理后十条红线复验 `ALL_PASS: true`，八容器 RestartCount 全 0、启动时间未变，生产 healthy/2.2.8。密码经 stdin 管道传入，未落盘、未入 argv、未进日志。
 

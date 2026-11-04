@@ -27,6 +27,7 @@
 | [testing/2026-11-02-maintenance-batches.md](testing/2026-11-02-maintenance-batches.md) | 2026-11-02 仓库整理各批次的检查结果与未采纳判断 |
 | [testing/2026-11-04-release-226.md](testing/2026-11-04-release-226.md) | 2.2.6发布身份、接力候选验收、外网现场与部署准入阻断 |
 | [testing/2026-11-04-release-228.md](testing/2026-11-04-release-228.md) | 2.2.8正式镜像验收、配对备份与隔离恢复、生产切换与部署后行为验收 |
+| [operations/2026-11-04-backdoor-account-incident.md](operations/2026-11-04-backdoor-account-incident.md) | 服务器后门账号与挖矿程序事件的证据链、清除动作与复验结果 |
 
 当前未结事项统一见[项目整理台账](../plans/project-consolidation.md#未结事项)；
 归档不表示已修复、已验收，也不延续历史操作授权。
