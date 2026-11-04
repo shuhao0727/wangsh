@@ -30,7 +30,7 @@
 | LEDGER-03 | DockerHub 缺 2.2.2/2.2.3（2026-11-04 六仓库逐个核实全部 404）；2.2.1 镜像构建源早于 tag `a3a5a54` | release-ops | 已在发布记录逐条标注；2.2.2 本地镜像列入不可删红线，标注即关闭 |
 | SEC-01 | `/etc/systemd/system/log.service` 的 `ExecStart=/usr/bin/log -sshd`、`User=root`、目标文件不存在；unit 为 disabled/inactive、无 wants 链接、mtime 2026-05-18。形态可疑但当前无法执行，无法判断是入侵痕迹还是误操作 | ops + 安全责任人 | 核查 SSH 配置、sudoers、authorized_keys、历史登录后定性；保留文件作为证据，不擅自删除 |
 | SEC-02 | `/home/shuhao/桌面/.env` 权限 `664`（同组可写）、50558 字节，与 Dify `.env` 大小接近；对比 `wangsh/.env` 为 `600` | ops | 确认用途后收紧到 `600`，并评估其中凭据是否需要轮换 |
-| OPS-04 | 服务器重复存储与冗余文件 | release-ops | **2026-11-04 部分完成**：已清理 `.npm` 248M、`2.2.7/incoming` 412M、252 个 `/tmp` 临时目录 1.1M、`~/.vscode-server` 旧版三个 1.5G，合计约 2.2G；`/swapfile_extra`、`/var/log/btmp.1`、`/home/shuhao/dify` 因无免密 sudo 未处理，保留待人工或以 sudo 执行 |
+| OPS-04 | 服务器重复存储与冗余文件 | release-ops | **2026-11-04 关闭**：清理 `.npm` 248M、`2.2.7/incoming` 412M、`/tmp` 临时目录 252 个、`~/.vscode-server` 旧版三个 1.5G、`/swapfile_extra` 16G（校验未启用/无 fstab/无进程占用），`/var/log/btmp.1` 截断 45.7M；磁盘 69G→51G。`/home/shuhao/dify` 实测仅 670KB（非审计所报 100MB）且属 Dify 项目，保留不删。十条红线清理后复验全部一致 |
 | DOC-01 | 本轮撤回误关闭结论；其余旧关闭集合仅为历史记录，不作为当前验收依据 | project-governance | 原编号逐项有实现、环境和验收证据；工作树删除不等于需求退役 |
 | PRIV-02 | 同意写入/撤回 API 与 `/privacy` 自助页已实现并记录审计；同意版本文本字段、AI 调用前强制校验和告知政策仍未完成 | backend + frontend | 补齐版本/告知文本与调用前校验后关闭；不宣称完整合规闭环 |
 | PRIV-04 | 目标库迁移、运营地区、责任人、渠道与保留期限未核 | ops + 运营责任人 | 逐环境核对迁移与数据流，由责任人确认政策；源码不作合规认证 |
@@ -100,6 +100,8 @@ A 类本轮无待改代码项；DIFY-02 已核验为非缺陷并关闭；D 类�
 - **ACCEPT-01 / ACCEPT-03 / DOC-01 / OPS-02 / COMMIT-01**：原文曾以 lucid 工作树删除认定失效；2026-11-02 订正为“历史材料退出，非事项自动取消”，已恢复跟踪边界。
 
 ## 变更日志
+
+- 2026-11-04：**完成 sudo 阶段清理**。删除 `/swapfile_extra`（16G，删前三重校验：未启用、fstab 无条目、无进程打开）与 `~/.vscode-server` 旧版，截断 `btmp.1`；磁盘 69G→51G（累计释放约 18.2G）。`/home/shuhao/dify` 经四种方法实测仅 670KB（审计所报 100MB 有误）且属 Dify 项目，决定保留。清理后十条红线复验 `ALL_PASS: true`，八容器 RestartCount 全 0、启动时间未变，生产 healthy/2.2.8。密码经 stdin 管道传入，未落盘、未入 argv、未进日志。
 
 - 2026-11-04：**执行阶段一（对齐）与阶段二（服务器清理）**。本地 stash→ff-only→pop 后提交 `c795313` 并推送，LEDGER-01 关闭；LEDGER-02/03 的 2.2.5 链路缺失、2.2.2/2.2.3 未上 DockerHub、2.2.1 构建源偏差均已逐个核实并写入发布记录。服务器清理按白名单脚本执行，十条红线基线与清理后逐项复验一致（compose sha256、PG inode/mtime、回滚六镜像、悬空镜像、2.2.8 六镜像、容器集、配对备份 8 文件、PythonLab 工作区、活 swap）；`CURRENT_PRODUCTION.txt` 由 2.1.6 订正为 2.2.8 并保留 `.bak-20261104`。
 
