@@ -258,7 +258,7 @@ async def terminal_ws(websocket: WebSocket, session_id: str, db: AsyncSession = 
 
     pumps = []
     try:
-        await websocket.check_session()
+        await websocket.notify_terminal_ready(plain_mode=plain_mode)
         pumps = [asyncio.create_task(pump_ws_to_tty()), asyncio.create_task(pump_tty_to_ws())]
         await asyncio.wait(pumps, return_when=asyncio.FIRST_COMPLETED)
     except Exception as e:

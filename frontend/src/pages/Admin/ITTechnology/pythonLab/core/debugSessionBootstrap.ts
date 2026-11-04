@@ -146,10 +146,11 @@ export async function connectPythonlabDapController(params: {
   sessionId: string;
   refreshBreakpoints: () => Promise<void>;
   traceLifecycle: TraceLifecycle;
+  beforeConfiguration?: () => Promise<void>;
 }): Promise<Record<string, unknown> | null> {
-  const { client, url, clientConnId, sessionId, refreshBreakpoints, traceLifecycle } = params;
+  const { client, url, clientConnId, sessionId, refreshBreakpoints, traceLifecycle, beforeConfiguration } = params;
 
-  let configuredSent = false;
+  let configuration: Promise<void> | null = null;
   let initializedResolved = false;
   let resolveInitialized: (() => void) | null = null;
   const initializedPromise = new Promise<void>((resolve) => {
@@ -160,11 +161,13 @@ export async function connectPythonlabDapController(params: {
     };
   });
 
-  const configureSessionOnce = async () => {
-    if (configuredSent) return;
-    configuredSent = true;
-    await refreshBreakpoints();
-    await client.sendConfigurationDone(10000);
+  const configureSessionOnce = () => {
+    configuration ??= (async () => {
+      await refreshBreakpoints();
+      await beforeConfiguration?.();
+      await client.sendConfigurationDone(10000);
+    })();
+    return configuration;
   };
 
   client.on("initialized", async () => {

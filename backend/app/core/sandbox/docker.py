@@ -18,6 +18,7 @@ from app.core.sandbox.docker_runtime import (
 from loguru import logger
 
 from app.core.sandbox.docker_paths import DockerMountMixin, _workspace_root
+from app.core.sandbox.docker_terminal import attach_docker_tty
 
 def _resolve_memory_mb_limit(limits: Dict[str, Any], default_mem: int) -> int:
     requested_raw = limits.get("memory_mb") if isinstance(limits, dict) else None
@@ -476,35 +477,17 @@ class DockerProvider(DockerMountMixin, SandboxProvider):
         return await self._docker_is_running(name)
 
     async def attach_tty(self, session_id: str, meta: Dict[str, Any]) -> Tuple[Any, int]:
-        """
-        Attach to the session's TTY using docker attach.
-        Returns a (reader, writer) pair or process object.
-        Actually, we return the process object so caller can access stdin/stdout.
-        """
+        """Attach the exact owned generation and wait for the Engine stream."""
         name = self._container_name(meta)
-        deadline = time.monotonic() + 5
-        while not await self._docker_is_running(name):
-            if time.monotonic() >= deadline:
-                raise RuntimeError("Container not running")
-            await asyncio.sleep(0.1)
-        
-        # Use docker attach with a pseudo-tty so docker won't reject non-tty stdin.
-        cmd = ["docker", "attach", name]
-        master_fd, slave_fd = pty.openpty()
-        try:
-            process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdin=slave_fd,
-                stdout=slave_fd,
-                stderr=slave_fd,
-                close_fds=True
-            )
-        except Exception:
-            os.close(master_fd)
-            os.close(slave_fd)
-            raise
-        os.close(slave_fd)
-        return process, master_fd
+        ws_path = self._ws_path_for_session(meta)
+        async with WorkspaceOwnership(_workspace_root(), ws_path) as ownership:
+            record = ownership.read()
+            if not ownership.owns(record, session_id, meta) or record.get('container_name') != name:
+                raise RuntimeError('终端会话归属已变化，拒绝附着。')
+            container_id = record['container_id']
+            if not await self._docker_is_running(container_id):
+                raise RuntimeError('终端运行环境未就绪。')
+            return await attach_docker_tty(container_id)
 
     async def exec_tty(self, session_id: str, meta: Dict[str, Any], command: List[str]) -> Tuple[Any, int]:
         """

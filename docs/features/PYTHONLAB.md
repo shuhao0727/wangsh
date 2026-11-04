@@ -26,6 +26,8 @@
   Pause/Reset/终止或会话替换使旧回包失效，不能把新paused/stopped覆盖回running。
 
 - 后端终端在切换到调试器/参考页时保持挂载与 TTY 连接，避免 Docker attach 的实时输出因组件卸载丢失，尤其是到达 `input()` 后才打开终端的提示。非活动页保留可测量尺寸，但使用 `visibility`、`inert` 与 `aria-hidden` 隔离显示、焦点和辅助技术；后台 WS 建连不得抢走调试器焦点。本地 Pyodide 终端沿用原有按页挂载生命周期。
+- 调试终端附着以可信journal的session/token/exact container ID为边界，持有共享workspace fence，使用当前Docker CLI连接的Engine attach HTTP101握手确认流已建立；不把CLI进程创建或WebSocket open当作ready，不按名称附着别的generation。
+- 前端对READY会话请求 `terminal_protocol=1`，附着成功后收到独立binary ready控制帧才启动DAP；原stdout/stderr仍走文本，不解析学生输出作为控制。启动、configurationDone、Continue/Step与重连均核对当前会话就绪和既有世代；断开、reset、停止、卸载或换session取消/失效等待，超时不自动放行。未协商协议的旧终端客户端不接收控制帧。
 - Python 调试 attach 关闭 `redirectOutput`，程序 stdout/stderr 由 TTY 单路显示，避免 DAP 与 TTY 双路写入导致重复行或提示被插入其他输出；DAP 的协议诊断输出仍按既有通道保留。终端生命周期结束时仍须释放 WS 与 Xterm，不能为了保留输出而跨 session 保留旧连接。
 - 控制按钮与浏览器验收统一遵循下文“调试控制区交互约束”和“调试控制区真实浏览器验证”。
 - 这不是历史日志回放机制：页面刷新/关闭或真实 TTY 中断期间的输出保全、连续重试耗尽、跨主机和混版本恢复仍须单独验证。专项采用冻结输入时必须同时记录源码与运行镜像；AUTH schema/ready gate/enrollment 变更后的集成验收须另行停流、迁移和重测，不能沿用 AUTH 前冻结后端的通过结论。

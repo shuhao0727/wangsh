@@ -2,20 +2,31 @@
 
 > 状态：active
 > Owner：testing
-> 最近更新：2026-11-03
+> 最近更新：2026-11-04
 
 本页只维护最近验证；早期整理批次见[归档](../archive/README.md)，未结事项见[唯一台账](../plans/project-consolidation.md)。
 
 ## 基线与边界
 
-- 当前源码：`/Users/wsh/wangsh`，发布准备分支 `release/2.2.6`；修复PR提交 `e7f122a` 的6项必需CI全部通过，已合入 `main` 的 `ef4d517`。当前同步2.2.6版本源及核准lock元数据，发布构建/候选验收/生产切换尚未完成；2.2.5 tag仍为189205c，不覆盖旧镜像。
-- 2026-11-03 发布前只读核对：局域网 SSH `192.168.5.3:22` 可用；生产 `/api/health` 为 200 / healthy / 2.2.2，DB/Redis healthy，worker 为 uid 1000。六个 2.2.5 候选镜像已在服务器，不等于源码身份、发布准入或部署验收通过；本次未重启服务。
-- 下表原有合成/开发栈结果为各批历史验证，不代表远端 CI 已通过。2026-11-02 的“未连接生产、未提交”仅适用于当时批次；本轮修复方法与隔离边界见[批次复验](../archive/testing/2026-11-02-maintenance-batches.md#release-01-门禁修复复验2026-11-03)。
+- 当前源码：`/Users/wsh/wangsh`共享main，HEAD/已发2.2.6 tag仍c45ad0e；本地TTY修复、测试和记录未提交。用户已授权2.2.7重新提交/构建发布/部署，七个版本源同步到2.2.7，待远端门禁；不覆盖2.2.6/2.2.5，不改变共享分支或暂存状态。
+- 2.2.6的[发布workflow41661803455](https://github.com/shuhao0727/wangsh/actions/runs/41661803455)已成功，六镜像/release-set已发布；2026-11-04联网复核workflow与远端标签。此前“尚未构建”是文档未跟进，现据实际证据订正，不能因此重复发布。
+- 后续仅用 `wangsh.cn:6607`，不再用局域网。外网现场确认生产仍为2.2.2/healthy，迁移20261026_0001、AUTH ready；生产容器未重启。实际PG/Redis为旧发布目录bind，备用production配置命名卷不适用；独立候选配置已保全真实目标。
+- **部署仍阻断**：服务器官方Docker Hub manifest核验和独立curl均连接超时；未绕过门禁或改代理/DNS。尚未停流、配对备份/隔离恢复或切换，2.2.6不算已部署。
 
 ## 本轮结果
 
 | 检查 | 命令 / 范围 | 结果 |
 |---|---|---|
+| 2.2.6发布身份复核 | `gh run view 41661803455`、`git ls-remote --tags origin`、release-set SHA256 | 构建源c45ad0e、workflow成功、2.2.6标签一致；六镜像清单不变，未重新发布 |
+| 本机候选与运行隔离 | 按digest拉取、逐镜像inspect、canonical配置及8容器实际挂载/网络/端口核对 | 六镜像均linux/amd64且Image ID匹配；仅wangsh_sim专属卷、工作区和回环16608；正常开发7容器未变 |
+| 生产候选完整smoke | 精确构建源副本、合成空库/凭据、容器loopback本地供应商桩 | **14 PASS/0 WARN/0 FAIL、exit0**；13页UI全通过。首轮12/1/1失败因缺合成供应商/内容fixture，原证据保留；未调用真实模型 |
+| 服务器外网现场与配置 | 既有可信SSH、应用Settings+psql交叉核对、worker inspect、实际挂载 | 2.2.2/healthy、AUTH ready、迁移20261026_0001；候选保留真实PG/Redis bind与卷/网络/安全策略，未切换 |
+| TTY握手/归属后端回归 | 禁dotenv/外连/真实子进程与conftest的隔离运行器；5文件 | **191 passed**；首段输出保留、HTTP拒绝/残缺/过大header、超时/取消、协议鉴权及exact generation，未接生产 |
+| 真实JWT/ASGI撤销回归 | 合成JWT/SQLite ORM/ASGI WS、内存cache | **78 passed / 1 skipped / 20 deselected**；专用Redis未提供，相关分支未覆盖，不计通过 |
+| TTY修复前端门禁 | `type-check`、主应用Vitest、PythonLab模块、脚本合同、lint、独立副本build:check | **主应用118文件875 passed，PythonLab56文件295 passed（包含关系）**；脚本39 passed、类型/构建通过；lint0 errors/479 warnings，bundle WARN/约12.37MB；普通及相对c45ad0e治理errors0/warnings41，baseline不变 |
+| 修订候选Chrome/WebKit | 最终生产build、原pointer脚本/15s门限、只读修订源码/产物挂载 | **两浏览器各4/4 PASS**：普通debug/多断点/Step/远程input；输出8/5、debug session0。调试input另各1 PASS，ready先于DAP；Chrome诊断0，WebKit debug仍有原有DAP关闭console信息，不称0 error |
+| 真实Chrome/WebKit修前失败 | 原脚本、15s完成门限、独立事件与对照 | **历史各1 PASS/1 FAIL**：普通debug缺8、多断点5；terminal0帧、诊断预等附着1.5秒才显示8。原失败保留，不以延迟实验代替修复；原2.2.6正式镜像仍不含后续本地修复 |
+| 服务器发布门禁 | 独立2.2.6目录 `verify-release-set`、官方registry独立curl | **阻断**：官方manifest连接超时；不因本机拉齐绕过核验，未改DNS/代理或停流部署 |
 | 修复PR远端最终结果 | `e7f122a`；ci-quality41653115601、owner41653115306、PhaseC41653115436、markdown41653115301 | 6项必需检查全部成功，PR已合入ef4d517；不是2.2.6新发布提交的CI或镜像验收结果 |
 | 根层合同 | `node --test scripts/*.test.mjs`；临时仓库与 fake Docker/进程 | 本轮152 passed / 0 failed（原151项加自含用例分离合同）；workflow单独60 passed |
 | 自含用例收集冲突 | 普通pytest重现19个初始化错误；独立 `-I -B -S` 仍19 passed | 仅在CI普通pytest中精确排除该模块，repo-config独立执行保留；新增workflow合同同时守住两处，未删除断言或扩大排除 |
@@ -44,7 +55,7 @@
 | 迁移守卫 | `python3 -I -B backend/scripts/check_migration_guard.py` | 50文件通过，未运行迁移 |
 | 版本一致性 | `node scripts/check-version-consistency.mjs` | 发布准备2.2.6通过；lock根版本同步，is-docker元数据恢复为已装包/同integrity tarball实际2.2.1，其他依赖不升级 |
 | 2.2.6干净安装尝试 | 合成目录、Node20.20.2/npm10.8.2普通npm ci，未触碰项目node_modules | 两次分别ECONNRESET与registry.npmjs.org元数据EIDLETIMEOUT；属下载失败，未记通过。后续必须由发布workflow的质量门禁验证，不关闭TLS/不放宽安装参数 |
-| 文档门禁 | `node scripts/check-markdown-contracts.mjs` | 本轮109 files / 702 links / 0 missing；首轮因派生计数过期失败，更正当前统计后复验，不覆盖历史记录 |
+| 文档门禁 | `node scripts/check-markdown-contracts.mjs`、Markdown合同、`git diff --check` | 本轮110 files / 709 links / 0 missing；历史2026-11-03为109/702。新增批次证据后更新当前派生计数，不覆盖历史 |
 | 脚本语法 / 差异 | 已改 shell 的 `bash -n`、Node `--check`、`git diff --check` | 通过 |
 
 根合同首轮为133/134：仅文档派生链接数过期；更新当前统计后全量复验通过。后续增加容器CLI等合同后为151项，未删除失败断言刷绿。
@@ -53,10 +64,10 @@
 
 ## 未验证与保留项
 
-- **发布准入仍未完成**：修复PR六项检查已成功并合入main；2.2.6发布提交需重新通过CI及正式构建，核准源码/产物/release-set、配对备份/隔离恢复后才部署。当前192.168.5.3可ping但SSH/6608超时，域名SSH握手前断开，尚未现场备份或切换；历史healthy不代表当前实时状态。
+- **部署准入仍未完成**：TTY真实附着确认与前端会话门控已在本地修订候选恢复原双浏览器失败，未提交/发布，已发2.2.6不包含此修复。服务器registry超时、本轮未连接生产，须核准新构建源/可信出口及配对备份/恢复后另行切换；healthy不代表新修复已生效。
 - 依赖分类已复核：34为受影响包条目（5low/11moderate/18high），不是34个独立漏洞；完整锁另含未安装optional链而为37项/含1critical。PDF eval路径已最小缓解，其余按生产浏览器/Node/构建条件记录、仍待兼容升级或显式风险取舍；不以未证实利用链等同安全关闭。
-- 本轮仅合成账号与专用tmpfs PG/Redis/namespace/workspace，正常开发7容器ID/启动时间未变；审查server、测试容器/网络与合成凭据已清理。Chrome/WebKit仅覆盖这两个调试场景及PDF合成渲染，其他登录后业务、窄屏/并发、真实上游及完整生产镜像仍未覆盖。
+- 本批仅合成账号、wangsh_sim专属PG/Redis卷/网络/workspace；backend只读修订源码、frontend只读修订生产build，不改正式镜像。最终Chrome/WebKit各4场景、调试input和无断点既有合同通过；WebKit原DAP关闭console信息保留。8容器/四卷/网络已精确收尾、动态沙箱0，正常开发7容器未变，证据保留；真实供应商、生产恢复与广覆盖业务仍未验。
 - 原生显式上传目录保留；旧文件未搬迁、未证明自动恢复。进程身份核验非原子，PID复用竞态仍有边界；reload父消失且子残留时保守报错。
 - D 类已完成代码与定向回归；PRIV 导出仍为内存组装，未实现游标/临时文件/64KiB 流式发送。B/C 类仍未实施，继续保留在台账。
 
-发布行为与配置合同分别见[发布记录](../operations/RELEASE_NOTES.md)、[部署指南](../operations/DEPLOY.md)；本地通过不代表生产生效。
+发布行为与配置合同分别见[发布记录](../operations/RELEASE_NOTES.md)、[部署指南](../operations/DEPLOY.md)；本轮详细证据见[2.2.6批次核验](../archive/testing/2026-11-04-release-226.md)，2026-11-03及更早结果仍为对应批次历史，不代表本轮重跑或生产生效。

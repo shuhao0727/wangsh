@@ -1,5 +1,6 @@
 import { createContext, useContext } from "react";
 import type { RunnerState } from "../hooks/useDapRunner";
+import type { TerminalConnectionState } from "../core/terminalReadiness";
 import type { PyodideTerminalBridge } from "../hooks/usePyodideRunner";
 import type { DebugCapabilityMapV1 } from "../adapters/debugCapabilityMap";
 import type { FlowBeautifyResult } from "../flow/beautify";
@@ -31,6 +32,7 @@ export interface RunnerActionsApi {
   onHistoryForward: () => void;
   onHistoryToLatest: () => void;
   onClearPendingOutput: () => void;
+  onTerminalConnection: (state: TerminalConnectionState) => void;
   beautifyResult: FlowBeautifyResult | null;
   beautifyLoading: boolean;
   beautifyError: string | null;

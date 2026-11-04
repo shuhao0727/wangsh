@@ -521,6 +521,7 @@ const PythonLabStudioInner: React.FC<{
     onHistoryForward,
     onHistoryToLatest,
     onClearPendingOutput,
+    onTerminalConnection,
   } = debugSession;
   const runner = runnerView;
 
@@ -887,6 +888,7 @@ const PythonLabStudioInner: React.FC<{
     onHistoryForward,
     onHistoryToLatest,
     onClearPendingOutput,
+    onTerminalConnection,
     beautifyResult: beautifyResult ?? null,
     beautifyLoading: beautifyLoading ?? false,
     beautifyError: beautifyError ?? null,
@@ -894,7 +896,7 @@ const PythonLabStudioInner: React.FC<{
     autoOptimizeCode,
     setAutoOptimizeCode,
     onOptimizeCode: handleOptimizeCode,
-  }), [runnerView, activeRunnerKind, runnerError, lastLaunchMode, terminalBridge, resolvedDebugCapabilities, onRun, onDebug, onContinue, onPause, onStepOver, onStepInto, onStepOut, onReset, onToggleBreakpoint, onSetBreakpointEnabled, onSetBreakpointCondition, onSetBreakpointHitCount, onAddWatch, onRemoveWatch, onEvaluate, onHistoryBack, onHistoryForward, onHistoryToLatest, onClearPendingOutput, beautifyResult, beautifyLoading, beautifyError, refreshBeautify, autoOptimizeCode, handleOptimizeCode]);
+  }), [runnerView, activeRunnerKind, runnerError, lastLaunchMode, terminalBridge, resolvedDebugCapabilities, onRun, onDebug, onContinue, onPause, onStepOver, onStepInto, onStepOut, onReset, onToggleBreakpoint, onSetBreakpointEnabled, onSetBreakpointCondition, onSetBreakpointHitCount, onAddWatch, onRemoveWatch, onEvaluate, onHistoryBack, onHistoryForward, onHistoryToLatest, onClearPendingOutput, onTerminalConnection, beautifyResult, beautifyLoading, beautifyError, refreshBeautify, autoOptimizeCode, handleOptimizeCode]);
 
   return (
     <CodeCtxProvider value={codeApi}>

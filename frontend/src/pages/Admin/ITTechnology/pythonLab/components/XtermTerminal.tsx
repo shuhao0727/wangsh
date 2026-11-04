@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { canFocusTerminal } from "./terminalVisibility";
 import { logger } from "@services/logger";
+import { isTerminalReadyFrame } from "../core/terminalReadiness";
 import type { Terminal } from "xterm";
 import type { FitAddon } from "xterm-addon-fit";
 
@@ -24,10 +25,11 @@ interface XtermTerminalProps {
   onClear?: () => void;
   fontSize?: number;
   showLineNumbers?: boolean;
+  onConnectionReady?: (ready: boolean) => void;
 }
 
 const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(function XtermTerminal(
-  { wsUrl, className, onClear: _onClear, fontSize = 14, showLineNumbers },
+  { wsUrl, className, onClear: _onClear, fontSize = 14, showLineNumbers, onConnectionReady },
   ref
 ) {
   const showLineNumbersOn = showLineNumbers !== false;
@@ -431,6 +433,7 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
 
       const connect = () => {
           if (disposed) return;
+          onConnectionReady?.(false);
           trace("ws_connect");
           clearTimers();
           closeCurrent();
@@ -439,6 +442,7 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
           wsRef.current = ws;
 
           ws.onopen = () => {
+              if (disposed || wsRef.current !== ws) return;
               reconnectAttemptsRef.current = 0;
               if (canFocusTerminal(containerRef.current)) term.focus();
               flushQueuedInput(ws);
@@ -446,7 +450,11 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
           };
 
           ws.onmessage = (ev) => {
-              if (terminalDisposedRef.current) return;
+              if (disposed || wsRef.current !== ws || terminalDisposedRef.current) return;
+              if (isTerminalReadyFrame(ev.data)) {
+                  onConnectionReady?.(true);
+                  return;
+              }
               const termElement = term?.element;
               if (!termElement || !termElement.isConnected) return;
               const data = ev.data;
@@ -476,6 +484,8 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
           };
 
           ws.onclose = (ev) => {
+              if (disposed || wsRef.current !== ws) return;
+              onConnectionReady?.(false);
               clearTimers();
               trace("ws_close", { code: ev.code });
               if (disposed) return;
@@ -516,6 +526,8 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
           };
 
           ws.onerror = () => {
+              if (disposed || wsRef.current !== ws) return;
+              onConnectionReady?.(false);
               trace("ws_error");
               if (!disposed) {
                   if (terminalDisposedRef.current) return;
@@ -532,6 +544,7 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
 
       return () => {
           disposed = true;
+          onConnectionReady?.(false);
           clearTimers();
           if (wsRef.current) {
               const state = wsRef.current.readyState;
@@ -554,6 +567,7 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
     requestFit,
     scheduleRefreshGutter,
     terminalReadyEpoch,
+    onConnectionReady,
     trace,
     wsUrl,
   ]);
