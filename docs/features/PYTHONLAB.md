@@ -25,6 +25,7 @@
   但仅在同步动作generation、session ID与lifecycle epoch仍一致时回写；较新的stopped、
   Pause/Reset/终止或会话替换使旧回包失效，不能把新paused/stopped覆盖回running。
 
+- Docker会话的DAP连接复用可信session/token/exact ID及workspace fence，通过固定 `docker exec -i` 代理只连接沙箱自身127.0.0.1:debugpy端口；确认ready后透明搬运DAP字节，断开/取消回收本次传输。backend不再依赖访问Linux宿主loopback发布端口，不把DAP改绑0.0.0.0；含Docker身份的会话不在失败后降级到其他主机。非Docker/历史无Docker身份通道保留原有有界TCP策略。
 - 后端终端在切换到调试器/参考页时保持挂载与 TTY 连接，避免 Docker attach 的实时输出因组件卸载丢失，尤其是到达 `input()` 后才打开终端的提示。非活动页保留可测量尺寸，但使用 `visibility`、`inert` 与 `aria-hidden` 隔离显示、焦点和辅助技术；后台 WS 建连不得抢走调试器焦点。本地 Pyodide 终端沿用原有按页挂载生命周期。
 - 调试终端附着以可信journal的session/token/exact container ID为边界，持有共享workspace fence，使用当前Docker CLI连接的Engine attach HTTP101握手确认流已建立；不把CLI进程创建或WebSocket open当作ready，不按名称附着别的generation。
 - 前端对READY会话请求 `terminal_protocol=1`，附着成功后收到独立binary ready控制帧才启动DAP；原stdout/stderr仍走文本，不解析学生输出作为控制。启动、configurationDone、Continue/Step与重连均核对当前会话就绪和既有世代；断开、reset、停止、卸载或换session取消/失效等待，超时不自动放行。未协商协议的旧终端客户端不接收控制帧。

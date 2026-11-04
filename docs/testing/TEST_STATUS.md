@@ -8,7 +8,7 @@
 
 ## 基线与边界
 
-- 当前源码：`/Users/wsh/wangsh`共享main，HEAD/已发2.2.6 tag仍c45ad0e；本地TTY修复、测试和记录未提交。用户已授权2.2.7重新提交/构建发布/部署，七个版本源同步到2.2.7，待远端门禁；不覆盖2.2.6/2.2.5，不改变共享分支或暂存状态。
+- 当前源码：共享main/HEAD仍c45ad0e，已在独立检出提交修复并合入远端main的5e6c369，正式2.2.7/tag发布成功；共享目录人工及暂存状态未清空。Linux正式候选发现DAP回环缺口，Docker内通道修复后服务器修订候选通过，当前七个版本源准备2.2.8，未覆盖既发版本。
 - 2.2.6的[发布workflow41661803455](https://github.com/shuhao0727/wangsh/actions/runs/41661803455)已成功，六镜像/release-set已发布；2026-11-04联网复核workflow与远端标签。此前“尚未构建”是文档未跟进，现据实际证据订正，不能因此重复发布。
 - 后续仅用 `wangsh.cn:6607`，不再用局域网。外网现场确认生产仍为2.2.2/healthy，迁移20261026_0001、AUTH ready；生产容器未重启。实际PG/Redis为旧发布目录bind，备用production配置命名卷不适用；独立候选配置已保全真实目标。
 - **部署仍阻断**：服务器官方Docker Hub manifest核验和独立curl均连接超时；未绕过门禁或改代理/DNS。尚未停流、配对备份/隔离恢复或切换，2.2.6不算已部署。
@@ -17,6 +17,8 @@
 
 | 检查 | 命令 / 范围 | 结果 |
 |---|---|---|
+| Linux DAP通道续修 | 服务器沙箱内监听vs后端宿主候选交叉探针、可信Docker exec修订候选 | 原正式2.2.7 Chrome输入通过/debug3失败；证实宿主loopback不可达。修订后服务器Chrome/WebKit各4/4通过，后端205 passed、JWT/ASGI78 passed/1 skipped/20 deselected；治理0 errors/41 warnings，待2.2.8正式镜像 |
+| 2.2.7正式发布 | main5e6c369、tag、[workflow41763078161](https://github.com/shuhao0727/wangsh/actions/runs/41763078161) | 质量与六镜像构建发布成功；清单b694677b…、六镜像registry/RepoDigest/amd64/source hash核准；未停流部署，正式候选DAP失败保留 |
 | 2.2.7 PR首轮远端门禁 | ce78e0d、[ci-quality41760578668](https://github.com/shuhao0727/wangsh/actions/runs/41760578668) | 5项通过，backend3766 passed/123 skipped/1 failed：Linux超大header拒绝后peer返回ConnectionResetError，原测试只认EOF；Linux隔离同例先红，等价保留关闭断言后Linux/macOS均10 passed，等待新远端门禁，不改生产附着逻辑 |
 | 2.2.6发布身份复核 | `gh run view 41661803455`、`git ls-remote --tags origin`、release-set SHA256 | 构建源c45ad0e、workflow成功、2.2.6标签一致；六镜像清单不变，未重新发布 |
 | 本机候选与运行隔离 | 按digest拉取、逐镜像inspect、canonical配置及8容器实际挂载/网络/端口核对 | 六镜像均linux/amd64且Image ID匹配；仅wangsh_sim专属卷、工作区和回环16608；正常开发7容器未变 |
@@ -56,7 +58,7 @@
 | 迁移守卫 | `python3 -I -B backend/scripts/check_migration_guard.py` | 50文件通过，未运行迁移 |
 | 版本一致性 | `node scripts/check-version-consistency.mjs` | 发布准备2.2.6通过；lock根版本同步，is-docker元数据恢复为已装包/同integrity tarball实际2.2.1，其他依赖不升级 |
 | 2.2.6干净安装尝试 | 合成目录、Node20.20.2/npm10.8.2普通npm ci，未触碰项目node_modules | 两次分别ECONNRESET与registry.npmjs.org元数据EIDLETIMEOUT；属下载失败，未记通过。后续必须由发布workflow的质量门禁验证，不关闭TLS/不放宽安装参数 |
-| 文档门禁 | `node scripts/check-markdown-contracts.mjs`、Markdown合同、`git diff --check` | 本轮110 files / 711 links / 0 missing；历史2026-11-03为109/702，TTY修复批次110/709。新增批次证据后更新当前派生计数，不覆盖历史 |
+| 文档门禁 | `node scripts/check-markdown-contracts.mjs`、Markdown合同、`git diff --check` | 本轮110 files / 713 links / 0 missing；历史2026-11-03为109/702，TTY修复批次110/709。新增批次证据后更新当前派生计数，不覆盖历史 |
 | 脚本语法 / 差异 | 已改 shell 的 `bash -n`、Node `--check`、`git diff --check` | 通过 |
 
 根合同首轮为133/134：仅文档派生链接数过期；更新当前统计后全量复验通过。后续增加容器CLI等合同后为151项，未删除失败断言刷绿。
