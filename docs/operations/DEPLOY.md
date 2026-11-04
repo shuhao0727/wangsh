@@ -43,6 +43,8 @@ COMPOSE_PROJECT_NAME=wangsh ENV_FILE=.env COMPOSE_FILE=docker-compose.production
 ```
 
 - 现场适配 Compose 保留既有四个 external named volumes、网络和绝对 PythonLab workspace；不得用仓库默认 bind 目录替换。旧 `/home/shuhao/wangsh` 配置保留，使用前核对是否仍是启动来源。
+- **双 Compose 事实与 up/down 禁令（2026-11-05 现场核验）**：生产 `wangsh` 项目混用两份配置——postgres/redis 的 compose label 指向 `2.2.0/source/docker-compose.yml`，其余六容器指向 `2.2.8/source/docker-compose.production.json`。**已核实生产 `docker-compose.production.json` 的服务集包含 `postgres` 与 `redis`**（共 8 服务：backend/frontend/gateway/postgres/pythonlab-sandbox/pythonlab-worker/redis/typst-worker），其中 pg/redis 的 bind 恰好指向 `2.2.0/source/data/{postgres,redis}`（与运行实例一致，当前正确，但依赖该文件保持不含仓库默认相对路径）。该文件不在仓库中、内容只在服务器。**禁止以任一历史 compose 文件作 `-f`/override 执行 `docker compose up/down/restart`**，排障只用固定 image ID 的 rollback compose 或只读 `ps`/`exec`/健康检查。
+- **发布命令作用域**：`scripts/deploy.sh` 的 `pull-up`/`up-no-build` 自 2026-11-05 起只对 `release_services`（backend、typst-worker、pythonlab-worker、pythonlab-sandbox、frontend、gateway）执行 `compose up -d --no-build --pull never --no-deps`，不再影响 pg/redis。发布前仍须核对 `COMPOSE_FILE` 指向（若 `COMPOSE_FILE` 为仓库默认 `docker-compose.yml`，其 pg/redis 为相对 bind `./data/postgres`、`./data/redis`，相对路径会按 compose 文件所在目录解析）。
 - 更新应用前通过镜像与迁移准入；保留基础设施，按服务使用 `up -d --no-deps --no-build --pull never`，再等待后端、worker 和网关健康。`restart` 不会换镜像。
 - backend 与 PythonLab worker 保持一致的运行身份（既有部署为 `1000:1000`）及 socket 补充组。调整旧 root 属主工作区前停写、配对备份、逐对象盘点；不递归改整个 data、删锁或重写 journal。
 - registry 与本地 digest 必须逐一匹配；当前脚本没有 `REGISTRY_INSPECT_PREFIX` 代理查询入口，也不因镜像已缓存而跳过核验。
@@ -210,6 +212,10 @@ docker compose --env-file .env.dev -f docker-compose.dev.yml up -d
 发布标签必须指向实际构建提交；打标签在构建前后均可，但不能指向后续文档收尾提交。
 先确认构建目录和工作区，再记录 `git rev-parse HEAD`，将源码、六镜像与 release-set
 关联到同一提交。tag、push 各按明确授权执行，已发布标签不得强推重写。
+
+**tag message 格式（以 2.2.6 为实例，2026-11-05 起沿用）**：tag message 至少写明
+构建提交、发布 workflow run id 与 release-set SHA256；2.2.7/2.2.8 的 message 只有一行
+标题，审计时需回查 workflow，后续发版不要省略。
 
 历史 2.2.1 构建源 `c0b44b6` 与标签 `a3a5a54` 不同；2.2.2 构建源 `7973dc2`
 与标签 `4d774ec` 也不同。事故结果见发布记录和 TEST_STATUS。
@@ -477,6 +483,10 @@ HOST_WORKSPACE_ROOT=/absolute/path/to/wangsh/data/pythonlab/workspaces
 `Authentication required`，健康检查转 degraded。取值形式为
 `${REDIS_HOST:-wangsh-redis-1}`——默认行为不变，但允许在其它 COMPOSE_PROJECT
 （如 simulate / deploy-local）下显式覆盖，避免容器名不同导致解析失败。
+
+**横向边界（2026-11-05 记录）**：backend 与 Dify 同处 `docker_default` 网络意味着
+Dify 若被攻破，攻击面可达 backend 的该网络接口。当前不改变网络拓扑（用户未要求），
+此处仅将既有边界写入运维文档；排障时不要为该连通性扩大白名单或新增网络。
 开发 Compose 的现有 Redis 容器行为保持不变。
 
 `PYTHONLAB_CONTAINER_NAMESPACE` 决定动态沙箱容器前缀以及
@@ -657,6 +667,25 @@ docker compose exec -T postgres sh -c \
 
 确认目标版本、旧源码、镜像、release-set、备份和窗口后执行。下面的 `OLD_VERSION`
 与 `OLD_RELEASE_SET` 须先设置为已核准值，不能照搬旧示例版本。
+
+**本地-only 回滚版（2.2.2 特例）**：2.2.2/2.2.3 未发布到 DockerHub（六仓库 404），
+服务器本地六镜像（五个 `:2.2.2` 加 `pythonlab-sandbox:2.2.1`）是该版本唯一副本，
+`verify-release-set` 与 `pull-up` 的远端核验/拉取路径对其不可用。回滚到 2.2.2 时：
+
+```bash
+# 1) 先用本地镜像 ID 核验（固定 digest/ID 的 rollback compose，不联网、不 pull）
+docker image inspect shuhao07/wangsh-backend:2.2.2 shuhao07/wangsh-frontend:2.2.2 \
+  shuhao07/wangsh-gateway:2.2.2 shuhao07/wangsh-typst-worker:2.2.2 \
+  shuhao07/wangsh-pythonlab-worker:2.2.2 shuhao07/pythonlab-sandbox:2.2.1
+# 2) 用服务器固定的 rollback compose（按 image ID 引用）启动，禁止普通 compose up/restart
+```
+
+旧 release-set 部署完成前不要普通 `compose up/restart`，否则新版 backend 启动会重新
+`upgrade head`（`scripts/rollback.sh` 的 Usage note 有同等警示）。通过健康、代码与关键
+行为后再开放流量。
+
+本地-only 版本的回滚同样适用下面的默认流程（先停写、备份、再用旧镜像 downgrade）；
+区别只在于镜像来源与核验方式，不能因为 DockerHub 缺失而跳过备份与健康核证。
 
 ```bash
 : "${OLD_VERSION:?请先设置已核准旧版本}"

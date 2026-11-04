@@ -8,7 +8,7 @@
 发布与迁移状态见 [发布记录](../operations/RELEASE_NOTES.md)，验收范围见 [测试状态](../testing/TEST_STATUS.md)。
 保留含“未发布”的历史标题以兼容链接，不用标题判定当前部署状态。
 
-> 2026-10-31 lucid 未发布变更：停用认证状态与前端身份围栏见 [AUTH](../features/AUTH.md#停用删除恢复与降权)；分析列表分页见 [AI_AGENTS](../features/AI_AGENTS.md)；隐私两类消息导出/删除及审计结果见 [隐私边界](../security/GDPR.md)。主仓库源码尚未合入这些实现，真实环境须分别核准。
+> 2026-10-31 lucid 变更：停用认证状态与前端身份围栏见 [AUTH](../features/AUTH.md#停用删除恢复与降权)；分析列表分页见 [AI_AGENTS](../features/AI_AGENTS.md)；隐私两类消息导出/删除及审计结果见 [隐私边界](../security/GDPR.md)。相关实现已进入主仓库并随 2.2.5–2.2.8 发布（同意 API `8be5c03`、/privacy 页面 `b9cbd53`）；真实环境行为须分别核准。
 
 ## KNN 运动习惯采集（/it/knn）
 
@@ -1129,7 +1129,7 @@ Content-Type: application/json
 
 课堂权限与数据边界：
 - 学生端全部使用 `require_student`，活动详情、答题、结果、活动列表、SSE 和 active plan 都要求学生与活动具有完全匹配的非空 `class_name`。
-- 活动创建/更新的 `class_name` 最多50字符并去首尾空白，API保留可空草稿兼容；教师页面要求非空班级并在编辑时回填。lucid本地修复尚未发布。
+- 活动创建/更新的 `class_name` 最多50字符并去首尾空白，API保留可空草稿兼容；教师页面要求非空班级并在编辑时回填（已进入主仓库，`schemas/classroom.py`）。
 - 活动 `start`/`restart` 在教师锁与活动行锁后校验最新班级；空值返回 `400`，拒绝早于结束其他活动、删除旧答案、状态变化和事件。已结束空班级活动先显式复制为草稿并补班级；正常 `restart` 使用同一ID并清除旧答案与分析。
 - active plan 仅返回所有活动均属于当前学生班级的计划，并始终移除 `correct_answer`。
 - 教师只能查看和管理自己创建的活动、计划及计划内活动；`admin`、`super_admin` 可全局管理。

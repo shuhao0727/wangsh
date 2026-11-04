@@ -13,15 +13,19 @@ interface Props {
 const ClassSelector: React.FC<Props> = ({ onSelect }) => {
   const [loading, setLoading] = useState(false);
   const [classes, setClasses] = useState<DianmingClass[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     void (async () => {
       setLoading(true);
+      setLoadError(null);
       try {
         const res = await dianmingApi.listClasses();
         setClasses(res);
-      } catch (error) {
+      } catch (error: any) {
         logger.error(error);
+        const status = error?.response?.status;
+        setLoadError(status === 403 ? '无权限查看班级名单，请联系管理员' : '班级名单加载失败，请检查网络后重试');
       } finally {
         setLoading(false);
       }
@@ -40,6 +44,21 @@ const ClassSelector: React.FC<Props> = ({ onSelect }) => {
             </div>
           </div>
         ))}
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-8 text-center">
+        <p className="text-sm text-destructive">{loadError}</p>
+        <button
+          type="button"
+          className="text-sm text-primary underline underline-offset-2"
+          onClick={() => window.location.reload()}
+        >
+          刷新重试
+        </button>
       </div>
     );
   }

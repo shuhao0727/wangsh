@@ -8,9 +8,9 @@
 
 ## 基线与边界
 
-- 当前源码：共享main/HEAD仍c45ad0e，修复提交210655a经PR #17合入main的2d9dda0；2.2.7/2.2.8标签均已发布。**2.2.8已于2026-11-04部署生产**，六镜像按digest核验、配对备份与隔离恢复通过、专用合成账号部署后双浏览器验收后按精确ID清理。共享目录人工及暂存状态未清空。
+- 当前源码：本地 HEAD = origin/main = 含 2.2.8 构建源 `2d9dda0` 的历史（2.2.8 构建源另见[发布记录](../operations/RELEASE_NOTES.md)）。**2.2.8已于2026-11-04部署生产**，六镜像按digest核验、配对备份与隔离恢复通过、专用合成账号部署后双浏览器验收后按精确ID清理。
 - 2.2.6的[发布workflow41661803455](https://github.com/shuhao0727/wangsh/actions/runs/41661803455)已成功，六镜像/release-set已发布；2026-11-04联网复核workflow与远端标签。此前“尚未构建”是文档未跟进，现据实际证据订正，不能因此重复发布。
-- 生产访问：局域网已停用。本轮经既有 SSH 主机核验，实际外部入口为 `wangsh.cn:6608`（网关 80 映射）；本机 DNS 被代理劫持到 198.18.0.7，按真实地址 153.34.245.40 复测。6607 属另一套 Next.js 应用，不是 WangSh 网关，未改动。实际 PG/Redis 为旧发布目录 bind，备用 production 配置命名卷不适用。
+- 生产访问：局域网已停用。本轮经既有 SSH 主机核验，实际外部入口为 `wangsh.cn:6608`（网关 80 映射）；本机 DNS 被代理劫持到 198.18.0.7，按真实地址 153.34.245.40 复测。**6607 为 SSH 端口**（`DEPLOY.md` 与 `~/.ssh/config` 一致；2026-11-05 服务器本机 http/https 探测均无响应，此前"另一套 Next.js 应用"的观察是本机 DNS 劫持期的误判，待 `--resolve` 复测确认）。实际 PG/Redis 为旧发布目录 bind，备用 production 配置命名卷不适用。
 - 2.2.8 停流前五项准入均由现场重新核验：release-set 身份、六镜像官方 registry/本地 RepoDigest、纯正式镜像浏览器行为、真实数据目标、回滚配置。服务器直连 Docker Hub 仍超时，按用户本次授权使用发布范围临时 SSH 通道完成官方核验，未改系统 DNS/代理或跳过校验。
 
 ## 本轮结果
@@ -23,8 +23,8 @@
 | 隔离恢复复核 | tmpfs 专用容器、仅内部网络 | 54 表/49 序列/schema/revision/auth/invalid constraints/角色模式时区全一致；Redis 2221 键值与绝对 TTL 0 不匹配；3 份业务归档字节权限属主通过；新代码在恢复数据上 health healthy；`passed=true` 且精确清理 |
 | 生产切换 | `start_candidate_production.py`、`open_gateway_verified.py` | 按服务启动，PG/Redis ID/启动时间/挂载不变；运行镜像 ID+RepoDigest、打包源码 hash、`APP_VERSION=2.2.8`、网关健康均通过；`current -> 2.2.8/source` |
 | 部署后行为验收 | 专用合成 admin（id 544）、真实 Chrome/WebKit、原 4 场景 | 两浏览器各 4/4 PASS（登录/运行/单多断点/Step/input，输出 8 与 5，结束后 session 0）；随后按精确 ID 撤销令牌、停用并软删除，未改真实用户 |
-| 外部入口 | `wangsh.cn:6608` 按真实地址复测 | `/api/v1/health` 2.2.8 healthy、`/login` 200；6607 为他项目 Next.js，不在本次范围 |
-| Linux DAP通道续修 | 服务器沙箱内监听vs后端宿主候选交叉探针、可信Docker exec修订候选 | 原正式2.2.7 Chrome输入通过/debug3失败；证实宿主loopback不可达。修订后服务器Chrome/WebKit各4/4通过，后端205 passed、JWT/ASGI78 passed/1 skipped/20 deselected；治理0 errors/41 warnings，待2.2.8正式镜像 |
+| 外部入口 | `wangsh.cn:6608` 按真实地址复测 | `/api/v1/health` 2.2.8 healthy、`/login` 200；6607 为 SSH 端口（服务器本机 http/https 无响应），非 Web 入口 |
+| Linux DAP通道续修 | 服务器沙箱内监听vs后端宿主候选交叉探针、可信Docker exec修订候选 | 原正式2.2.7 Chrome输入通过/debug3失败；证实宿主loopback不可达。修订后服务器Chrome/WebKit各4/4通过，后端205 passed、JWT/ASGI78 passed/1 skipped/20 deselected；治理0 errors/41 warnings；已随2.2.8正式镜像发布 |
 | 2.2.7正式发布 | main5e6c369、tag、[workflow41763078161](https://github.com/shuhao0727/wangsh/actions/runs/41763078161) | 质量与六镜像构建发布成功；清单b694677b…、六镜像registry/RepoDigest/amd64/source hash核准；未停流部署，正式候选DAP失败保留 |
 | 2.2.7 PR首轮远端门禁 | ce78e0d、[ci-quality41760578668](https://github.com/shuhao0727/wangsh/actions/runs/41760578668) | 5项通过，backend3766 passed/123 skipped/1 failed：Linux超大header拒绝后peer返回ConnectionResetError，原测试只认EOF；Linux隔离同例先红，等价保留关闭断言后Linux/macOS均10 passed，等待新远端门禁，不改生产附着逻辑 |
 | 2.2.6发布身份复核 | `gh run view 41661803455`、`git ls-remote --tags origin`、release-set SHA256 | 构建源c45ad0e、workflow成功、2.2.6标签一致；六镜像清单不变，未重新发布 |
@@ -65,7 +65,7 @@
 | 迁移守卫 | `python3 -I -B backend/scripts/check_migration_guard.py` | 50文件通过，未运行迁移 |
 | 版本一致性 | `node scripts/check-version-consistency.mjs` | 发布准备2.2.6通过；lock根版本同步，is-docker元数据恢复为已装包/同integrity tarball实际2.2.1，其他依赖不升级 |
 | 2.2.6干净安装尝试 | 合成目录、Node20.20.2/npm10.8.2普通npm ci，未触碰项目node_modules | 两次分别ECONNRESET与registry.npmjs.org元数据EIDLETIMEOUT；属下载失败，未记通过。后续必须由发布workflow的质量门禁验证，不关闭TLS/不放宽安装参数 |
-| 文档门禁 | `node scripts/check-markdown-contracts.mjs`、Markdown合同、`git diff --check` | 本轮114 files / 727 links / 0 missing；历史2026-11-03为109/702，2.2.6批次110/709、部署前110/713、2.2.8部署后111/720、四方对齐后112/724、清理后113/725。新增后门事件记录后更新当前派生计数，不覆盖历史 |
+| 文档门禁 | `node scripts/check-markdown-contracts.mjs`、Markdown合同、`git diff --check` | 2026-11-05台账重审后 114 files / 728 links / 0 missing；历史2026-11-03为109/702，2.2.6批次110/709、部署前110/713、2.2.8部署后111/720、四方对齐后112/724、清理后113/725。新增后门事件记录后更新当前派生计数，不覆盖历史 |
 | 脚本语法 / 差异 | 已改 shell 的 `bash -n`、Node `--check`、`git diff --check` | 通过 |
 
 根合同首轮为133/134：仅文档派生链接数过期；更新当前统计后全量复验通过。后续增加容器CLI等合同后为151项，未删除失败断言刷绿。
@@ -74,10 +74,10 @@
 
 ## 未验证与保留项
 
-- **部署准入仍未完成**：TTY真实附着确认与前端会话门控已在本地修订候选恢复原双浏览器失败，未提交/发布，已发2.2.6不包含此修复。服务器registry超时、本轮未连接生产，须核准新构建源/可信出口及配对备份/恢复后另行切换；healthy不代表新修复已生效。
+- **2.2.8 已部署，但未做**：长时间运行观察、真实课堂并发、回滚/生产恢复脚本实际触发（隔离恢复已验证，二者不混记）；真实供应商、生产恢复演练与广覆盖业务仍未验。
 - 依赖分类已复核：34为受影响包条目（5low/11moderate/18high），不是34个独立漏洞；完整锁另含未安装optional链而为37项/含1critical。PDF eval路径已最小缓解，其余按生产浏览器/Node/构建条件记录、仍待兼容升级或显式风险取舍；不以未证实利用链等同安全关闭。
-- 本批仅合成账号、wangsh_sim专属PG/Redis卷/网络/workspace；backend只读修订源码、frontend只读修订生产build，不改正式镜像。最终Chrome/WebKit各4场景、调试input和无断点既有合同通过；WebKit原DAP关闭console信息保留。8容器/四卷/网络已精确收尾、动态沙箱0，正常开发7容器未变，证据保留；真实供应商、生产恢复与广覆盖业务仍未验。
+- 2.2.8 合成栈仅用专用合成账号、wangsh_sim 专属 PG/Redis 卷/网络/workspace；backend 只读修订源码、frontend 只读修订生产 build，不改正式镜像。8容器/四卷/网络已精确收尾、动态沙箱0，正常开发7容器未变，证据保留。
 - 原生显式上传目录保留；旧文件未搬迁、未证明自动恢复。进程身份核验非原子，PID复用竞态仍有边界；reload父消失且子残留时保守报错。
 - D 类已完成代码与定向回归；PRIV 导出仍为内存组装，未实现游标/临时文件/64KiB 流式发送。B/C 类仍未实施，继续保留在台账。
 
-发布行为与配置合同分别见[发布记录](../operations/RELEASE_NOTES.md)、[部署指南](../operations/DEPLOY.md)；本轮详细证据见[2.2.6批次核验](../archive/testing/2026-11-04-release-226.md)，2026-11-03及更早结果仍为对应批次历史，不代表本轮重跑或生产生效。
+发布行为与配置合同分别见[发布记录](../operations/RELEASE_NOTES.md)、[部署指南](../operations/DEPLOY.md)；2.2.8 详细证据见[批次记录](../archive/testing/2026-11-04-release-228.md)，2026-11-04 及更早结果仍为对应批次历史，不代表本轮重跑或生产生效。

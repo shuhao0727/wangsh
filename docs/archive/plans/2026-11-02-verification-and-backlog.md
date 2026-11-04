@@ -1,6 +1,6 @@
 # 代码复核、真实环境验收与台账核验计划
 
-> 状态：superseded（2026-11-04，2.2.8 部署完成后转入[四方台账对齐与会话复盘](2026-11-04-four-way-ledger-alignment.md)；B/C 类未结事项继续在[唯一台账](project-consolidation.md)跟踪）
+> 状态：superseded（2026-11-04，2.2.8 部署完成后转入四方台账对齐盘点，该盘点已于 2026-11-05 归档；B/C 类未结事项继续在[唯一台账](../../plans/project-consolidation.md)跟踪）
 > Owner：project-governance（执行：本会话主工程师）
 > 最近复核：2026-11-04（2.2.8 部署完成）
 > 范围：`/Users/wsh/wangsh`，共享主仓库 `main`；2.2.8 构建源 `2d9dda0`，已发布标签 2.2.5/2.2.6/2.2.7 均保持不动。
@@ -185,7 +185,7 @@
 
 ## 变更日志
 
-- 2026-11-04：2.2.8 完成部署。六镜像按 digest 到齐并经官方 registry 核验，纯正式镜像合成栈 Chrome/WebKit 各 4/4；停流配对备份 + 隔离恢复（54 表/49 序列/2221 Redis 键/3 份归档）通过；按服务切换后 `current -> 2.2.8/source`，PG/Redis 未重建；专用合成 admin 部署后双浏览器各 4/4 并精确清理；合成栈与临时通道已收尾。证据见[批次记录](../archive/testing/2026-11-04-release-228.md)。
+- 2026-11-04：2.2.8 完成部署。六镜像按 digest 到齐并经官方 registry 核验，纯正式镜像合成栈 Chrome/WebKit 各 4/4；停流配对备份 + 隔离恢复（54 表/49 序列/2221 Redis 键/3 份归档）通过；按服务切换后 `current -> 2.2.8/source`，PG/Redis 未重建；专用合成 admin 部署后双浏览器各 4/4 并精确清理；合成栈与临时通道已收尾。证据见[批次记录](../testing/2026-11-04-release-228.md)。
 
 - 2026-11-04：按用户“先修调试”及确认方案，实现可信generation的Engine101附着和binary ready、前端当前会话门控；后端191、JWT/SQLite/ASGI78、前端295及类型/构建/治理通过。原Chrome/WebKit普通debug/多断点均2/2恢复，Step/input及调试input补验通过；正式2.2.6未改，修订候选未提交发布，本轮不连接生产。
 

@@ -581,10 +581,10 @@ test("formal deploy and pull-up consume release-set before compose pull/up", () 
     deploy.match(/up-no-build\)([\s\S]*?)\n\s*;;/)?.[1] ?? "";
 
   assert.match(deploy, /verify-release-set/);
-  assert.match(deploy, /pull-up\)[\s\S]*verify_release_set[\s\S]*compose pull "\$\{release_services\[@\]\}"[\s\S]*compose up -d --no-build --pull never/);
+  assert.match(deploy, /pull-up\)[\s\S]*verify_release_set[\s\S]*compose pull "\$\{release_services\[@\]\}"[\s\S]*compose up -d --no-build --pull never --no-deps "\$\{release_services\[@\]\}"/);
   assert.match(deploy, /deploy\)[\s\S]*bash "\$\{repo_root\}\/scripts\/deploy\.sh" pull-up[\s\S]*wait_for_detailed_health/);
   assert.match(upNoBuildBody, /verify_release_set/);
-  assert.match(upNoBuildBody, /compose up -d --no-build --pull never/);
+  assert.match(upNoBuildBody, /compose up -d --no-build --pull never --no-deps "\$\{release_services\[@\]\}"/);
 });
 
 test("local production simulation uses local images and can smoke with guaranteed cleanup", () => {
@@ -1378,7 +1378,7 @@ test("pull-up only pulls release services and starts without implicit pulls", ()
     / pull backend typst-worker pythonlab-worker pythonlab-sandbox frontend gateway/,
   );
   assert.doesNotMatch(result.dockerLog, /pull.*(?:postgres|redis)/);
-  assert.match(result.dockerLog, / up -d --no-build --pull never/);
+  assert.match(result.dockerLog, / up -d --no-build --pull never --no-deps backend typst-worker pythonlab-worker pythonlab-sandbox frontend gateway/);
 });
 
 test("PythonLab PR wrappers execute the checked-out PR runtime", () => {

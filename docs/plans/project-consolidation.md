@@ -2,19 +2,16 @@
 
 > 状态：active
 > Owner：project-governance
-> 最近复核：2026-11-02
+> 最近复核：2026-11-05
 > 归档条件：未结事项已关闭，或已转入有明确 owner 和关闭条件的后续台账。
 
 ## 当前状态
 
-- 更新：2026-11-04；**2.2.8 已部署生产**。`210655a` 经 PR #17 合入 `2d9dda0`，workflow41783222115 发布六镜像（清单 `cda44253…`），六镜像按 digest 到齐并经官方 registry 核验；纯正式镜像合成栈 Chrome/WebKit 各 4/4；停流配对备份 + 隔离恢复通过；按服务切换后 `current -> /home/shuhao/wangsh-releases/2.2.8/source`，PG/Redis 未重建；专用合成 admin 部署后双浏览器各 4/4 并按精确 ID 停用软删除。2.2.5/2.2.6/2.2.7 标签与镜像未覆盖。
-- 现行计划：[四方台账对齐与会话复盘](2026-11-04-four-way-ledger-alignment.md)（active）。2.2.8 已部署，RELEASE-01 已关闭；后续外部入口为 `wangsh.cn:6608`。上一阶段计划[代码复核、真实环境验收与台账核验](2026-11-02-verification-and-backlog.md)已 superseded。
-- 边界：不绕过门禁、不覆盖已发tag/镜像、不改业务数据或默认挂载、不清理回滚资源。实际PG/Redis为旧发布目录bind，备用production Compose却指向命名卷；本轮已按实际目标完成备份与切换，未重建基础设施。D类历史修复及B/C产品边界仍按原条目保留。
+- 更新：2026-11-05；**2.2.8 已部署生产**（构建源 `2d9dda0`，`current -> /home/shuhao/wangsh-releases/2.2.8/source`），RELEASE-01 已关闭；外部入口 `wangsh.cn:6608`。
+- 现行计划：2026-11-04 四方对齐记录已完成处置，转入归档（见[计划索引](README.md)）；当前无其他 active 专项计划，未结事项以本台账为准。
+- 安全：服务器后门事件六项持久化已清除；**用户 2026-11-05 明确接受遗留风险**（不轮换密码、SSH 密码认证保持开启、不做主机重装），SEC-03 记录该决定；应用数据保密性未验证。
+- 边界：不绕过门禁、不覆盖已发 tag/镜像、不改业务数据或默认挂载、不清理回滚资源。
 - 2.2.8 部署证据：[批次记录](../archive/testing/2026-11-04-release-228.md)；服务器 `/home/shuhao/wangsh-releases/2.2.8/{backups,evidence}`。未做长时间运行观察、真实课堂并发与回滚实测。
-- 2026-11-04当前执行：用户进一步授权重新提交/发布/构建镜像/部署；当前准备2.2.7并保留2.2.6，TTY本地修复最终Chrome/WebKit各4/4通过、后端191/前端875定向通过。共享主仓库不切分支，临时独立检出提交；远端质量门禁、正式六镜像及备份恢复后才部署，RELEASE-01保持开放。
-- 2.2.7进展：ce78e0d及跨平台测试续修d87f7e9经6项PR门禁合入main的5e6c369；workflow41763078161成功发布，tag/源一致。清单SHA256 b694677b5234d943f59e29be9323e1e5a70eea96446ce6e9a4033d4acaa4c969。临时SSH官方TLS核验通过；部分mirror layer缺失按官方OCI原digest传输核准，不重建。尚未生产停流/备份恢复/切换，RELEASE-01仍开放。
-- 2.2.7正式候选DAP阻断已实证：沙箱内部5678可连，backend无法访问Linux宿主loopback映射；Docker内DAP修订方案已获准并实现，原服务器修订栈Chrome/WebKit各4/4通过，后端205及认证撤销78通过。现准备2.2.8，保留回环绑定与已发2.2.7，不扩大端口暴露；正式新镜像及备份恢复前不切换。
-- 2.2.8进展：210655a经6项PR门禁合入2d9dda0；workflow41783222115成功发布六镜像/tag/清单，cda44253…核准。服务器三镜像到齐，其余官方传输EOF/TLS波动保留并有限重试；纯合成恢复预演整体通过（精确约束改写、属主权限及有效Redis目标订正有据）。未停生产/真实配对备份；用户允许专用admin合成账号作部署后行为验收及精确收尾。
 - PRIV 导出仍为内存组装；文档旧述的游标/临时文件/流式发送未实现，已在 GDPR owner 文档标明。
 
 本页是项目未结事项的唯一台账。当前测试结果见[测试状态](../testing/TEST_STATUS.md)，
@@ -25,33 +22,31 @@
 
 | 编号 | 事项 | Owner | 关闭条件 |
 |---|---|---|---|
-| LEDGER-01 | 本地 `main` 落后 `origin/main` 5 个提交，生产 2.2.8 构建源 `2d9dda0` 不在本地历史；工作区另有 40 项未提交改动 | release-ops | **2026-11-04 已关闭**：审核查明 34 项内容与已发布 2.2.8 逐字节相同，stash→ff-only→pop 后仅提交 8 个文档为 `c795313` 并已推送；`git merge-base --is-ancestor 2d9dda0 HEAD` 为真，本地与 origin/main 同步 |
-| LEDGER-02 | 2.2.5 缺发布链路（2026-11-04 已核实：tag 指向 `189205c`，无 `dockerhub-amd64` run、无 staging tag、无 `release-set-*` artifact；同提交 `ci-quality` 41592108696 为 failure）；镜像源码不可自证 | release-ops | 已在[发布记录](../operations/RELEASE_NOTES.md#历史发布留痕订正2026-11-04-核验)标注；不补推伪造发布，标注即关闭 |
-| LEDGER-03 | DockerHub 缺 2.2.2/2.2.3（2026-11-04 六仓库逐个核实全部 404）；2.2.1 镜像构建源早于 tag `a3a5a54` | release-ops | 已在发布记录逐条标注；2.2.2 本地镜像列入不可删红线，标注即关闭 |
-| SEC-01 | **已处置**：2026-05-18 植入的后门账号 `systemd`(uid 1001)、sudoers `NOPASSWD:ALL` 行、root crontab `@reboot`、`log.service`（含 immutable 属性）已全部清除；2026-10-26 存在一次来自 `77.239.124.120` 的成功密码登录 | ops + 安全责任人 | **2026-11-04 已关闭**：六项逐一复验通过，证据归档 `/root/security-remediation-20261104/`；遗留：入侵入口未定、SSH 密码认证仍开启。详见[事件记录](../archive/operations/2026-11-04-backdoor-account-incident.md) |
-| SEC-02 | 桌面 `.env` 权限过宽（`664`，50558 字节） | ops | **2026-11-04 已关闭**：确认为旧版 Dify 配置副本（73 含密键中 72 与 `dify/docker/.env` 一致），已归档为 `600 root:root` 并移除桌面副本；其中历史凭据是否需轮换交由 Dify 侧评估 |
-| OPS-04 | 服务器重复存储与冗余文件 | release-ops | **2026-11-04 关闭**：清理 `.npm` 248M、`2.2.7/incoming` 412M、`/tmp` 临时目录 252 个、`~/.vscode-server` 旧版三个 1.5G、`/swapfile_extra` 16G（校验未启用/无 fstab/无进程占用），`/var/log/btmp.1` 截断 45.7M；磁盘 69G→51G。`/home/shuhao/dify` 实测仅 670KB（非审计所报 100MB）且属 Dify 项目，保留不删。十条红线清理后复验全部一致 |
-| OPS-05 | 服务器三个无容器引用的数据库旧卷：`wangsh_postgres_data`(111M，最后写入 2026-10-28)、匿名卷 `4a4e943e…`(110M，2026-09-16)、`wangsh_redis_data`(45M，2026-10-28)。判断为改用 bind mount 之前的生产数据快照 | release-ops + 数据 owner | **2026-11-04 已关闭**：用户确认删除。删前记录各卷文件数/字节数/时间边界/PG_VERSION/文件清单 sha256 到 `deletion-metadata.json`；三个卷已移除。磁盘 51G→50G，`Local Volumes` 从 315MB 降至 37.7MB |
-| DOC-01 | 本轮撤回误关闭结论；其余旧关闭集合仅为历史记录，不作为当前验收依据 | project-governance | 原编号逐项有实现、环境和验收证据；工作树删除不等于需求退役 |
-| PRIV-02 | 同意写入/撤回 API 与 `/privacy` 自助页已实现并记录审计；同意版本文本字段、AI 调用前强制校验和告知政策仍未完成 | backend + frontend | 补齐版本/告知文本与调用前校验后关闭；不宣称完整合规闭环 |
-| PRIV-04 | 目标库迁移、运营地区、责任人、渠道与保留期限未核 | ops + 运营责任人 | 逐环境核对迁移与数据流，由责任人确认政策；源码不作合规认证 |
-| PERF-01 | 索引与性能候选需按当前实现重新评估 | backend + ops | 用代表性负载实测，核对查询计划与写入代价；不重复实施已完成项 |
-| UI-01 | UI 路线图仍有待用户确认的页面族 | frontend | 按[UI 路线图](../ui/UI_REDESIGN_ROADMAP.md)逐页记录工程验证与用户确认 |
-| ARCH-01 | 大页面、重复业务、重型模块静默降级与 ECharts 注册加固 | 各模块 owner | 先核依赖与事务边界，再按小范围实现验证；不按行数拆分或盲目恢复旧方案 |
-| ACCEPT-02 | 普通 admin、WebKit/窄屏、并发及前端产物来源未覆盖 | testing + 功能 owner | 按当前代码逐项核对；已回滚、重开发和已验证分别记录 |
+| SEC-03 | **后门事件遗留风险（用户已接受，留待审计追溯）**：入侵入口未定；SSH `passwordauthentication yes` 仍开启（爆破尝试多）；root/shuhao 密码与 Dify 历史凭据**不轮换**；未做全盘完整性校验；未做主机重装；应用数据保密性未验证 | ops + 安全责任人 | **2026-11-05 用户明确风险接受**：不轮换、保持密码认证、不重装。本项保留为记录，不因接受视为风险消除；若后续决定处置，另立行动项 |
+| DOC-01 | 历史审计编号（C 系列等）仅为历史记录，不作为当前验收依据 | project-governance | **2026-11-05 用户确认退役**：C 系列 14 个定义在全仓历史不可恢复（`1dc5b89` 删除 `docs/docker` 62 个文件：56 直接删除、6 迁出），9 项历史关闭集合可查原文；历史条目如需引用须回到 git 历史。退役不声称相关功能已验收 |
+| PRIV-02 | 同意写入/撤回 API 与 `/privacy` 自助页已实现并记录审计；同意版本文本字段、AI 调用前强制校验和告知政策未完成 | backend + frontend | 工程侧"AI 调用前同意校验"属行为变更（未同意即阻断），需产品确认后再实施；版本文本随 PRIV-04 |
+| PRIV-04 | 运营地区、责任人、渠道与保留期限未核 | ops + 运营责任人 | **2026-11-05 用户说明：运营方不存在隐私政策文本**。台账如实记录现状；如未来需要合规文本，由运营方另行提供，不在仓库虚构 |
+| PERF-01 | 索引与性能候选需按当前实现重新评估 | backend + ops | 暂缓：当前无实测性能症状；出现真实性能问题或获授权测试环境后再评估，不预设候选清单 |
+| UI-01 | UI 路线图仍有待用户确认的页面族 | frontend | 按[UI 路线图](../ui/UI_REDESIGN_ROADMAP.md)推进时逐页确认；无 UI 排期时不单独清点 |
+| ARCH-01 | 大页面、重复业务、重型模块静默降级（ECharts 注册加固已完成，见 `frontend/src/lib/echarts.ts:19-42`） | 各模块 owner | 按实际触发的问题小范围处理；不按行数拆分，不做形式清单 |
+| ACCEPT-02 | 窄屏响应式抽查与真实课堂并发未覆盖 | testing + 功能 owner | 窄屏按 UI 路线图断点（`UI_REDESIGN_ROADMAP.md:16`）逐页记录；并发场景与观测指标待真实课堂或压测环境（普通 admin、WebKit、前端产物来源已由 2.2.8 验收覆盖） |
 | HOT-01 | 热点归类的 mock 只验证机制，真实课堂语义未验 | 教学使用方 + ai-agents | 填写教师提问标记，用获准真实记录抽查标签；不沿用旧课堂数量作当前事实 |
 | DIFY-01 | `conversation_id` 阶段二涉及新表、迁移及隐私/归档联动，待取舍 | ai-agents + 数据 owner | 先确认是否实施；若实施再验会话隔离、迁移和上下文。阶段一为有界历史重放 |
-| OPS-01 | 服务器临时脚本、样本与备份清理未见收尾证据 | release-ops | 核实是否已清理及当前用途；清理另按授权执行 |
-| UI-02 | 首页无 AI 伙伴入口；feature flag 全关时 `/it-technology` 无应用入口；登录页无痕上下文疑似旧缓存 | frontend | 确认期望入口与开关关系；旧缓存现象先复现再定性 |
-| XBK-01 | 名册页无勾选/批量调班动作，源码未实现该流程 | xbk + 产品 | 明确是否补此功能与批量变更合同，再实现和验收 |
-| PYLAB-01 | 普通 Pyodide 死循环观察 8 秒未自动停止；运行路径无执行期限 | pythonlab + 产品 | 确认普通运行自动终止的期限与提示，再实现/验 |
-| PROGRAM-01 | 个人程序导航实为 XBK 应用入口；实验模板有本地保存但非代码命名 CRUD | frontend + 产品 | 统一应用入口与代码库含义；若需学生代码库，明确存储/权限与 CRUD 合同后实施 |
-| DIANMING-01 | 随机点名无持久历史；"记录"未明确是否跨刷新保存 | it + 产品 | 确认记录是当前结果还是持久历史；不擅自扩展历史/去重/统计 |
-| WORKER-01 | `docker-compose.yml:314` 与 `docker-compose.dev.yml:213` 的 `user: "0:0"` 把 PythonLab worker 提成 root，与 `Dockerfile.prod` 的 `USER appuser` 及 DEPLOY.md「运行身份」约定相反；该容器同时挂载 `/var/run/docker.sock` | ops + backend | 先确认宿主机 workspace 目录对非 root 可写，再做冒烟后改 `group_add`。`docs/operations/DEPLOY.md` 已要求核对一致运行身份 |
+| OPS-01（服务器清理） | 服务器临时脚本、样本与备份清理未见收尾证据（区别于 `PYTHONLAB.md` 的 OPS-01（debug 网络/DAP）） | release-ops | 核实待清理对象（脚本/样本/备份路径）与当前用途后，另按授权清理 |
+| UI-02 | 入口与开关关系待定：首页无 ai-partner 游戏入口（AI 智能体入口存在）；feature flag 全关时 `/it-technology` 无应用入口 | frontend | **2026-11-05 默认：维持现状用名与入口**；开关关系与"AI 伙伴/AI 智能体"用名如需变更另行提出。前端失败态缺陷另见 UI-03 |
+| UI-03 | 公开启动器把 flag 请求失败伪装为"管理员未开启"，错误/重试分支不可达；点名班级选择器把加载失败与教师 403 显示为空态 | frontend | 失败→错误态+重试；教师 403→"无权限"；保留 fail-closed |
+| XBK-01 | 名册页无勾选/批量调班动作；Excel 导入 upsert 可更新班级并经容量重验 | xbk + 产品 | **2026-11-05 默认：不新增交互式批量调班**，Excel 导入为官方批量路径；出现真实需求另行提出 |
+| PYLAB-01 | 普通 Pyodide 运行路径无执行期限（手动停止/重置可用） | pythonlab + 产品 | **2026-11-05 默认：不设执行上限，保留现有手动停止**；验证停止控件后按此写关闭条件。如需期限另行提出 |
+| PROGRAM-01 | 个人程序页实为 XBK 应用入口 | frontend + 产品 | **2026-11-05 默认：维持双入口现状**，删除未定义的"统一"目标，按现状验收；如需合页或学生代码库另行提出 |
+| DIANMING-01 | 随机点名无持久历史；教师调用名单接口固定 403（`DIANMING.md` 已记载教师—班级授权尚未建立） | it + 产品 | **2026-11-05 默认：记录=本次抽取结果，不持久化**；教师点名维持管理员专用并在台账注明。如需持久历史或教师授权另行提出 |
+| WORKER-01 | ~~`user: "0:0"` 把 worker 提成 root~~ 已于 `09fb1db`（2026-11-03）移除，worker 改 appuser + `group_add`；`09fb1db` 已进入 2.2.6–2.2.8 构建源。**生产时间线**：2.2.2 部署期间 worker 为 root（`git show 2.2.2:docker-compose.yml` 第 314 行为 `user: "0:0"`），2.2.5/2.2.6/2.2.7 从未部署生产，2.2.8 切换后才以 appuser 运行。**2026-11-05 现场核验**：生产 `wangsh-pythonlab-worker` 实际 `User=1000:1000 GroupAdd=[0 984]`，与仓库定义一致 | ops + backend | **uid 提权部分已关闭**（2026-11-05）。残余 docker.sock 架构风险转入 SOCKET-01 |
+| SOCKET-01 | backend 与 PythonLab worker 均挂载 `/var/run/docker.sock`（`docker-compose.yml:219/:328`，dev `:134/:252`）；socket 等于宿主 root 等价能力，是非 root 化后仍存在的架构风险 | ops + backend | 按[工程治理](../development/ENGINEERING_GOVERNANCE.md) 周期性审计表（每半年 Docker socket 复查）评估；若引入 socket 代理等缓解方案，先核实宿主兼容与授权 |
 
 ## 2026-11-02 逐项核验分类
 
 分类：A 可工程闭环（无产品决策/真实数据）、B 需产品/用户决策、C 需真实数据/生产/外部、D 需设计实现。D 类已于 2026-11-03 修复并关闭；B/C 未实施。
+
+> 注：本表是 2026-11-02 的历史快照（当时口径 B 类 12 行，含连带退役组），**不代表 2026-11-05 当前缺口**；当前状态以「未结事项」表为准。
 
 | 编号 | 分类 | 当前证据与结论 |
 |---|---|---|
@@ -80,6 +75,14 @@ A 类本轮无待改代码项；DIFY-02 已核验为非缺陷并关闭；D 类�
 
 以下事项已在对应批次修复或确认，详细依据见归档批次记录；不再单独占表。
 
+- **LEDGER-01**（2026-11-04 关闭）：本地 `main` 落后与工作区 40 项未提交改动已清查——34 项内容与已发布 2.2.8 逐字节相同，stash→ff-only→pop 后仅提交 8 个文档为 `c795313` 并推送；`merge-base --is-ancestor 2d9dda0 HEAD` 为真。
+- **LEDGER-02**（2026-11-04 关闭）：2.2.5 缺发布链路（无 workflow/staging tag/release-set，同提交 `ci-quality` 41592108696 为 failure），已在[发布记录](../operations/RELEASE_NOTES.md#历史发布留痕订正2026-11-04-核验)标注来源不可审计；不补推伪造发布。
+- **LEDGER-03**（2026-11-04 关闭）：DockerHub 缺 2.2.2/2.2.3（六仓库 404）、2.2.1 镜像构建源早于 tag，已逐条标注；2.2.2 服务器本地镜像为唯一回滚副本，列入不可删红线。
+- **SEC-01**（2026-11-04 关闭）：2026-05-18 植入的六项持久化（后门账号 `systemd`、sudoers、crontab、log.service、XMRig、sshdd.so rootkit）已全部清除并逐一复验，证据 `/root/security-remediation-20261104/`。遗留风险转入 SEC-03 跟踪。
+- **SEC-02**（2026-11-04 关闭）：桌面 `.env`（旧版 Dify 配置副本）已归档为 `600 root:root` 并移除桌面副本；凭据轮换按 SEC-03 的用户风险接受处理。
+- **OPS-04**（2026-11-04 关闭）：服务器冗余文件清理（`.npm` 248M、`2.2.7/incoming` 412M、`/tmp` 252 个目录、旧 vscode-server 1.5G、`/swapfile_extra` 16G、`btmp.1` 截断），磁盘 69G→51G；`/home/shuhao/dify`（670KB，属 Dify 项目）保留。
+- **OPS-05**（2026-11-04 关闭）：三个无容器引用的旧数据库卷已删除（`wangsh_postgres_data` 111M、匿名卷 110M、`wangsh_redis_data` 45M）。**如实记录**：创建于 2026-02-15，最后写入 2026-10-28；已知的 2.2.0 生产部署为 2026-10-26 20:52（`release-226:49` 首次记录生产使用 bind 目录；bind 首次生效精确时点无单独记录）；**未做内容级独立备份**，仅记录文件数/字节数/时间边界/`PG_VERSION`/文件清单 sha256 到 `/root/security-remediation-20261104/deletion-20261104/deletion-metadata.json`；经用户确认删除。"迁移前快照"定性无法证实，不作结论。
+
 - **RELEASE-01**（2026-11-04 关闭）：2.2.8 从 `2d9dda0` 完成发布与部署。六镜像按 digest 到齐、官方 registry 核验 `images=6`、本地 RepoDigest/amd64 一致；纯正式镜像隔离合成栈 Chrome/WebKit 各 4/4；停流配对备份（7 文件逐文件 SHA256）与隔离恢复（54 表/49 序列/2221 Redis 键/3 份业务归档全一致）通过；按服务切换后 `current -> 2.2.8/source`，PG/Redis ID/启动时间/挂载不变；专用合成 admin 部署后双浏览器各 4/4 并按精确 ID 停用软删除。证据见[批次记录](../archive/testing/2026-11-04-release-228.md)。**未覆盖**：长时间运行观察、真实课堂并发、回滚脚本实际触发；不据此宣称长期稳定。
 
 - **DIFY-02**（2026-11-02 核验关闭）：`REACT_APP_DIFY_URL`/`config.difyUrl` 是首页外部 Dify 服务入口，默认 `http://wangsh.cn:6606`；它与前端 `WEB_PORT=6608` 不是同一含义，默认值保留，实际地址由部署配置决定。
@@ -102,6 +105,8 @@ A 类本轮无待改代码项；DIFY-02 已核验为非缺陷并关闭；D 类�
 
 ## 变更日志
 
+- 2026-11-05：**D2 生产只读核验完成**（经局域网 192.168.5.3 实际连接，`wangsh.cn` 本机 DNS 仍被代理劫持）。确认：①生产 `docker-compose.production.json` 服务集含 postgres/redis 共 8 服务，其 pg/redis bind 指向 `2.2.0/source/data/{postgres,redis}`（与运行实例一致）；②生产 worker `User=1000:1000 GroupAdd=[0 984]`；③`/api/v1/health` 返回 2.2.8 healthy、DB/Redis healthy；④6607 端口在服务器本机 http/https 均无响应（000，与"SSH 端口"口径一致，Web 入口为 6608）。据此：P1-1 的生产风险由"条件性"变为"已确认服务集含 pg/redis"，`deploy.sh` 白名单（2026-11-05 已实施）为必要修复；WORKER-01 的 uid 部分关闭，残余 socket 风险登记为 SOCKET-01。用户明确：①不轮换服务器凭据、SSH 密码认证保持开启、不做主机重装（SEC-03 记为风险接受，不视为消除）；②批准 D2 生产只读核验包与 `deploy.sh` 发布服务白名单；③运营方不存在隐私政策文本（PRIV-04 按现状记录，不虚构）。同时按重审结论落账六项默认决策：PYLAB-01 不设执行上限、UI-02 维持现状、XBK-01 不新增批量调班、PROGRAM-01 维持双入口、DIANMING-01 记录不持久化、DOC-01 退役。新增 UI-03（前端失败态缺陷）。已关闭条目按维护规则移入摘要，WORKER-01 按真实生产时间线重写。
+
 - 2026-11-04：**垃圾扫描与旧卷删除（OPS-05 关闭）**。清理 `/tmp` 一次性产物与孤立 vscode-server 版本约 515MB；经用户确认后删除三个无引用的旧数据库卷（`wangsh_postgres_data` 111M、匿名卷 110M、`wangsh_redis_data` 45M，共 266M），删前记录文件数/字节/时间边界/PG_VERSION/清单 sha256 到 `deletion-metadata.json` 并保留 3.4MB 的 SQLite 副本。`/tmp/weekly-school-archive-before.sqlite` 经只读核对确认是运维前副本（106 条记录），活库 `archive.sqlite`（139 条，容器使用中）未受影响，副本已删除。磁盘 69G→50G（本日累计 19G）。生产八容器 healthy、`/api/health` 2.2.8、十条红线 `ALL_PASS`。
 
 - 2026-11-04：**处置服务器后门账号事件（SEC-01/SEC-02 关闭）**。确认 2026-05-18 植入后门（账号 `systemd` uid 1001 + sudoers NOPASSWD + root crontab `@reboot` + log.service + XMRig 挖矿程序 + sshdd.so LD_PRELOAD rootkit），2026-10-26 有一次来自 `77.239.124.120` 的成功密码登录。更早会话已隔离 rootkit 主体但遗漏账号与四项持久化（log.service 被加 immutable）。本次清除全部六项并逐一复验；桌面 `.env` 归档收紧。生产八容器 healthy、`/api/health` 2.2.8 未受影响。证据在 `/root/security-remediation-20261104/`。
@@ -110,7 +115,7 @@ A 类本轮无待改代码项；DIFY-02 已核验为非缺陷并关闭；D 类�
 
 - 2026-11-04：**执行阶段一（对齐）与阶段二（服务器清理）**。本地 stash→ff-only→pop 后提交 `c795313` 并推送，LEDGER-01 关闭；LEDGER-02/03 的 2.2.5 链路缺失、2.2.2/2.2.3 未上 DockerHub、2.2.1 构建源偏差均已逐个核实并写入发布记录。服务器清理按白名单脚本执行，十条红线基线与清理后逐项复验一致（compose sha256、PG inode/mtime、回滚六镜像、悬空镜像、2.2.8 六镜像、容器集、配对备份 8 文件、PythonLab 工作区、活 swap）；`CURRENT_PRODUCTION.txt` 由 2.1.6 订正为 2.2.8 并保留 `.bak-20261104`。
 
-- 2026-11-04：完成四方台账对齐盘点（本地/GitHub/DockerHub/服务器），两个独立只读审计交叉复核。发布链路五段一致；新增未结 LEDGER-01/02/03、SEC-01/02、OPS-04。现行计划转入[四方台账对齐与会话复盘](2026-11-04-four-way-ledger-alignment.md)，上一阶段计划 superseded。
+- 2026-11-04：完成四方台账对齐盘点（本地/GitHub/DockerHub/服务器），两个独立只读审计交叉复核。发布链路五段一致；新增未结 LEDGER-01/02/03、SEC-01/02、OPS-04。现行计划转入四方对齐盘点（已于 2026-11-05 归档，约束内容沉淀到 DEPLOY/RELEASE_NOTES 与本台账），上一阶段计划 superseded。
 
 - 2026-11-04：**2.2.8 部署生产并关闭 RELEASE-01**。六镜像按 digest 到齐 + 官方 registry 核验，纯正式镜像合成栈双浏览器各 4/4；停流配对备份与隔离恢复通过；按服务切换，PG/Redis 未重建；专用合成 admin 部署后各 4/4 并按精确 ID 清理；合成栈与临时通道收尾。未做长时间观察与回滚实测。
 

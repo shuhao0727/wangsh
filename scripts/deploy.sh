@@ -534,7 +534,7 @@ case "${cmd}" in
     require_docker
     verify_release_set "${2:-${release_set_default}}"
     verify_local_release_set_images "${2:-${release_set_default}}"
-    compose up -d --no-build --pull never
+    compose up -d --no-build --pull never --no-deps "${release_services[@]}"
     compose ps
     ;;
   pull-up)
@@ -543,7 +543,7 @@ case "${cmd}" in
     verify_release_set "${2:-${release_set_default}}"
     compose pull "${release_services[@]}"
     verify_local_release_set_images "${2:-${release_set_default}}"
-    compose up -d --no-build --pull never
+    compose up -d --no-build --pull never --no-deps "${release_services[@]}"
     compose ps
     ;;
   verify-release-set)

@@ -109,15 +109,18 @@ const ITTechnologyPage: React.FC = () => {
     setLoading(true); setError(null);
     try {
       const keys = ['it_dianming_enabled', 'it_survey_enabled', 'it_mindmap_enabled', 'it_python_lab_enabled', 'it_machine_learning_enabled', 'it_ai_exploration_enabled', 'it_agent_exploration_enabled', 'it_game_lock_cracker_enabled', 'it_game_repo_enabled'];
-      const results = await Promise.all(
-        keys.map(key => featureFlagsApi.getPublic(key).catch(() => ({ value: { enabled: false } } as any)))
-      );
+      const results = await Promise.allSettled(keys.map(key => featureFlagsApi.getPublic(key)));
+      const failures = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
+      if (failures.length === results.length) {
+        throw new Error('加载配置失败，请检查网络后重试');
+      }
       const newFlags: Record<string, boolean> = {};
       results.forEach((res, i) => {
         const k = keys[i];
-        const enabled = res.value?.enabled === true;
+        const value = res.status === 'fulfilled' ? (res.value as any)?.value : undefined;
+        const enabled = value?.enabled === true;
         if (!enabled && k === 'it_python_lab_enabled' && process.env.REACT_APP_ENV === 'development') {
-          newFlags[k] = res.value?.enabled !== false;
+          newFlags[k] = value?.enabled !== false;
           return;
         }
         newFlags[k] = enabled;

@@ -2,8 +2,8 @@
 
 > 状态：reference
 > Owner：backend
-> 最近复核：2026-10-31
-> 范围：2026-10-31 lucid 本地修正后的接口合同，尚未合入主仓库或发布；实例证据另见测试状态，未核准生产。
+> 最近复核：2026-11-05
+> 范围：2026-10-31 lucid 本地修正后的接口合同；相关实现已于 2026-11 进入主仓库并随 2.2.5–2.2.8 发布（同意 API `8be5c03`、/privacy 页面 `b9cbd53`），**生产行为未单独验收**；实例证据另见测试状态。
 
 本文说明 WangSh 已实现的数据导出、删除和摘要能力，供开发者与管理员集成使用。
 文件名保留 `GDPR.md` 以兼容现有入口；源码中出现 GDPR 名称、存在审计表或通过接口测试，
@@ -32,7 +32,7 @@ API 总入口与认证合同见 [API.md](../development/API.md) 和 [AUTH.md](..
 
 导出响应包含：
 
-- `user_info`：当前用户的 ID、用户名、姓名、学号、邮箱、角色、班级、学年和启用状态。
+- `user_info`：当前用户的 ID、用户名、姓名、学号、角色、班级、学年和启用状态（当前用户模型无邮箱列，导出中不含邮箱）。
 - `conversations`、`conversations_count`：本人 `ZntConversation` 记录，包括已归档记录；每条保留会话、智能体、消息内容、时间与归档标记等字段。
 - `discussion_messages`、`discussion_messages_count`：本人 `GroupDiscussionMessage` 记录及数量。
 - `export_date` 和 `data_subject`：导出时间及说明。
@@ -81,7 +81,7 @@ curl --fail-with-body "$WANGSH_API_BASE/api/v1/users/privacy/me/export" \
 
 同意管理当前提供 `GET/PUT/DELETE /api/v1/users/privacy/me/consents`，支持 `AI_USAGE`、`DATA_ANALYSIS` 两类；写入/撤回记录 `CONSENT_GRANTED` / `CONSENT_WITHDRAWN` 审计，前端入口为 `/privacy`（登录用户菜单）。接口只记录同意意愿，不删除历史数据；**尚未在所有 AI 调用前强制校验同意，也没有同意版本文本字段**，不能宣称完整合规闭环。告知文本、运营地区、责任人、保留期限和撤回渠道仍由运营方确认（PRIV-04）。
 
-审计记录包含当前用户、时间、真实连接来源和限长 User Agent；代理地址边界见 [AUTH](../features/AUTH.md)。审计保留期限仍由运营方制定。
+审计记录包含当前用户、时间、连接来源（socket peer 地址；经网关部署时可能为网关地址，未截断 User Agent）；代理地址边界见 [AUTH](../features/AUTH.md)。审计保留期限仍由运营方制定。
 
 ## 迁移与验证
 

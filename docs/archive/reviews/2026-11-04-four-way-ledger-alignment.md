@@ -1,6 +1,6 @@
 # WangSh 四方台账对齐与会话复盘
 
-> 状态：active
+> 状态：archived（2026-11-05 归档：执行结果已回填台账与运维文档，本页仅作追溯；当前入口见[唯一台账](../../plans/project-consolidation.md)）
 > Owner：release-ops + project-governance
 > 盘点日期：2026-11-04
 > 范围：本地仓库 / GitHub / DockerHub / 生产服务器
