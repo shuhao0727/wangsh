@@ -220,7 +220,9 @@ class DockerProvider(DockerMountMixin, SandboxProvider):
                     f"python -c \"{kill_py}\" >/dev/null 2>&1 || true; "
                     f"sleep 0.25; "
                     f"env PYDEVD_DISABLE_FILE_VALIDATION=1 PYDEVD_CONNECT_TIMEOUT=15 "
-                    f"python -Xfrozen_modules=off -m debugpy --listen 0.0.0.0:{self.debugpy_port} --wait-for-client /workspace/main.py; "
+                    # 只监听容器内回环：DAP 经 docker exec 在容器内连接（docker_dap.py），
+                    # 监听 0.0.0.0 会让同一 bridge 上其他学生的调试容器直连本调试器。
+                    f"python -Xfrozen_modules=off -m debugpy --listen 127.0.0.1:{self.debugpy_port} --wait-for-client /workspace/main.py; "
                     f"rc=$?; "
                     f"echo \"debugpy exited rc=$rc (iter=$i)\" 1>&2; "
                     f"sleep 0.8; "
@@ -262,7 +264,9 @@ class DockerProvider(DockerMountMixin, SandboxProvider):
                 cmd.extend(["--cap-add", "NET_BIND_SERVICE"])
                 # 只绑定回环地址：暴露到全部网卡时，任何能访问服务器端口的人都能直连
                 # DAP 调试端口执行代码、读取学生源码，且不经过登录校验。
-                cmd.extend(["-p", f"127.0.0.1:{self.debugpy_port}:{self.debugpy_port}"])
+                # 宿主端口留空由 Docker 分配：固定端口会让同机第二个调试容器
+                # 启动失败（port is already allocated），实际端口由 _get_dynamic_port 读回。
+                cmd.extend(["-p", f"127.0.0.1::{self.debugpy_port}"])
             else:
                 # Plain mode: fully isolate network to prevent student code from accessing external services
                 cmd.extend(["--network", "none"])

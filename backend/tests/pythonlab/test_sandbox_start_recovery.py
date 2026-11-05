@@ -310,10 +310,12 @@ def test_new_container_keeps_existing_network_and_dap_contract(docker_env, mode)
     assert f'wangsh.pythonlab.runtime-mode={mode}' in cmd
     if mode == 'debug':
         assert '--network' not in cmd
-        # 调试端口只绑定回环地址，避免暴露到全部网卡被未授权直连
-        assert cmd[cmd.index('-p')+1] == '127.0.0.1:5678:5678'
+        # 调试端口只绑定回环地址，避免暴露到全部网卡被未授权直连；
+        # 宿主端口留空由 Docker 分配，固定端口会让同机第二个学生调试失败（PYLAB-02）。
+        assert cmd[cmd.index('-p')+1] == '127.0.0.1::5678'
         assert result['dap_port'] == 45678
-        assert '--listen 0.0.0.0:5678' in cmd[-1]
+        # debugpy 只监听容器内回环，避免同一 bridge 上其他调试容器直连（PYLAB-02 复查）。
+        assert '--listen 127.0.0.1:5678' in cmd[-1]
     else:
         assert cmd[cmd.index('--network')+1] == 'none'
         assert '-p' not in cmd

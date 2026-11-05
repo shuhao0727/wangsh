@@ -191,8 +191,12 @@ Compose 与 `.env.example` 覆盖为 128；`docker.py` 的 `_resolve_memory_mb_l
 
 ```bash
 python -Xfrozen_modules=off -m debugpy \
-  --listen 0.0.0.0:${PYTHONLAB_DEBUGPY_PORT:-5678} --wait-for-client /workspace/main.py
+  --listen 127.0.0.1:${PYTHONLAB_DEBUGPY_PORT:-5678} --wait-for-client /workspace/main.py
 ```
+
+debugpy 只监听容器内回环（2026-11-05，PYLAB-02）：后端经 `docker exec` 在容器内转接 DAP，
+不需要容器外直连；监听 `0.0.0.0` 会让同一 bridge 上其他学生的调试容器连到本调试器。
+宿主侧 `-p 127.0.0.1::5678` 由 Docker 分配端口，仅作为启动契约读回。
 
 ---
 
