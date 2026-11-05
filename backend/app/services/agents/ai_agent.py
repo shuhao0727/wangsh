@@ -410,14 +410,19 @@ async def test_agent(
         test_endpoint = _resolve_test_endpoint(ctx)
 
         # 测试连接同样会真实出站，按与对话路径相同的白名单规则硬校验。
+        # 校验实际请求的地址：普通智能体请求 api_endpoint 拼接 test_endpoint 后的完整 URL；
+        # Dify 由 run_dify_test 在 api_endpoint 后拼候选路径（同主机），校验 api_endpoint。
         from app.services.agents.endpoint_security import assert_agent_outbound_endpoint
 
-        if test_endpoint:
-            await assert_agent_outbound_endpoint(str(test_endpoint))
-        else:
-            await assert_agent_outbound_endpoint(str(ctx.api_endpoint))
+        target = (
+            _join_api_url(ctx.api_endpoint, test_endpoint)
+            if test_endpoint and not ctx.is_dify
+            else ctx.api_endpoint
+        )
+        await assert_agent_outbound_endpoint(target)
 
-        async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
+        # 不跟随重定向：硬校验只覆盖首个 URL，3xx 按失败处理。
+        async with httpx.AsyncClient(timeout=60.0, follow_redirects=False) as client:
             if test_endpoint:
                 if ctx.is_dify:
                     from app.services.agents.dify_test import run_dify_test

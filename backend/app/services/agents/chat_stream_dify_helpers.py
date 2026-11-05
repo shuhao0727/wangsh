@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 import httpx
 
 from app.core.config import settings
+from app.services.agents.agent_testing import redirect_rejected_message
 from app.services.agents.assistant_answer_sanitizer import (
     ReasoningContentFilter,
     sanitize_reasoning_strings,
@@ -298,6 +299,12 @@ def _dify_final_error(last_error, state: Dict[str, Any], status_code: Optional[i
             "message": "Dify 服务暂时不可用，请稍后重试",
             "provider_status": status_code,
         }
+    if status_code is not None and 300 <= status_code < 400:
+        return {
+            "error": "dify_upstream_error",
+            "message": redirect_rejected_message(status_code),
+            "provider_status": status_code,
+        }
     if state.get("saw_answer_delta"):
         error_code = "dify_stream_incomplete" if last_error == "incomplete_stream" else "dify_stream_interrupted"
         return {
@@ -436,7 +443,10 @@ async def _stream_dify_candidate(
 ):
     """流式请求单个候选 URL；产出 SSE 帧，最后产出控制元组 (动作, last_error, last_status)。"""
     try:
-        async with client.stream("POST", url, headers=headers, json=try_payload) as resp:
+        # 共享客户端默认跟随重定向（其他用途需要），智能体出站按请求关闭：硬校验只覆盖首个 URL。
+        async with client.stream(
+            "POST", url, headers=headers, json=try_payload, follow_redirects=False
+        ) as resp:
             if resp.status_code != 200:
                 yield ("retry", *_dify_status_error(resp.status_code))
                 return

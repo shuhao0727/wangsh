@@ -310,16 +310,15 @@ const AgentForm: React.FC<AgentFormProps> = ({
       if (editingAgent?.id) {
         try {
           const testResp = await aiAgentsApi.testAgent(editingAgent.id, "测试API连接");
+          // 外层 success 只表示请求完成；测试是否通过以后端 AgentTestResponse.success 为准。
+          const testData = testResp.data as { success?: boolean; message?: string; response_time?: number };
+          const passed = testData.success === true;
           connectivityResult = {
-            success: testResp.success,
-            message: testResp.success
-              ? String((testResp.data as Record<string,unknown>)?.message || testResp.message || "连接测试成功")
-              : testResp.message || "测试失败",
+            success: passed,
+            message: testData.message || (passed ? "连接测试成功" : "测试失败"),
             timestamp: new Date().toISOString(),
             response_time:
-              typeof (testResp.data as Record<string,unknown>)?.response_time === "number"
-                ? ((testResp.data as Record<string,unknown>).response_time as number)
-                : undefined,
+              typeof testData.response_time === "number" ? testData.response_time : undefined,
           };
         } catch (error) {
           logger.warn("智能体测试失败:", error);

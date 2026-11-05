@@ -142,7 +142,14 @@ async def perform_chat_test(
         return f"\n🧠 聊天测试: ⚠️ 模型调用错误 ({str(error)[:50]})"
 
 
+def redirect_rejected_message(status_code: int) -> str:
+    """智能体出站一律不跟随重定向：出站硬校验只覆盖首个 URL，跟随 3xx 会绕过 SSRF 防护。"""
+    return f"上游返回重定向（HTTP {status_code}），已拒绝跟随，请填写最终地址"
+
+
 def _status_hint(status_code: int) -> str:
+    if 300 <= status_code < 400:
+        return f"\n↪️ 错误原因: {redirect_rejected_message(status_code)}"
     return {
         401: "\n🔒 错误原因: 认证失败 (API Key 无效或过期)",
         403: "\n🚫 错误原因: 拒绝访问 (权限不足)",
@@ -188,10 +195,12 @@ async def test_models_endpoint(
             timestamp=datetime.now(),
         )
 
+    # 3xx 不回显响应体：重定向响应只用于提示改填最终地址。
+    body_preview = "" if 300 <= response.status_code < 400 else f"\n📄 响应: {response.text[:500]}"
     error_message = (
         f"❌ API连接测试失败\n\n📋 类型: {agent.agent_type}\n"
         f"🔗 端点: {ctx.api_endpoint}\n🛑 状态码: {response.status_code}"
-        f"{_status_hint(response.status_code)}\n📄 响应: {response.text[:500]}"
+        f"{_status_hint(response.status_code)}{body_preview}"
     )
     return AgentTestResponse(
         success=False,
@@ -213,7 +222,7 @@ async def test_basic_endpoint(
     try:
         response = await client.get(ctx.api_endpoint, headers=headers, timeout=30.0)
         response_time = elapsed_ms(start_time, time_module)
-        if response.status_code < 400:
+        if response.status_code < 300:
             return AgentTestResponse(
                 success=True,
                 message=(

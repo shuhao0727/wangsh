@@ -239,11 +239,12 @@ const AdminAIAgents: React.FC = () => {
       }
 
       const response = await aiAgentsApi.testAgent(id, testMessage);
-      if (!response.success) {
-        showMessage.error(response.message || "测试失败");
+      // 外层 success 只表示请求完成；测试是否通过以后端 AgentTestResponse.success 为准。
+      const testData = response.data as { success?: boolean; message?: string; response_time?: number };
+      if (testData.success !== true) {
+        showMessage.error(testData.message || "测试失败");
         return;
       }
-      const testData = response.data as { message?: string; response_time?: number };
       showMessage.success(
         `测试成功${testData.response_time ? `（${testData.response_time.toFixed(2)}ms）` : ""}`,
       );

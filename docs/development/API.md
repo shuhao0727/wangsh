@@ -513,7 +513,7 @@ PythonLab WS 接入补充（2026-09-09）：terminal/DAP 在业务缓存、termi
 | POST | `/ai-agents/` | 创建智能体 | 管理员 |
 | PUT | `/ai-agents/{agent_id}` | 更新智能体 | 管理员 |
 | DELETE | `/ai-agents/{agent_id}` | 删除智能体 | 管理员 |
-| POST | `/ai-agents/test` | 测试智能体连接 | 管理员 |
+| POST | `/ai-agents/test` | 测试智能体连接（2026-11-05 起校验实际请求的完整地址，A-1；不跟随重定向，3xx 判失败且不回显响应体，A-2；结果以 `data.success` 为准） | 管理员 |
 | POST | `/ai-agents/{agent_id}/discover-models` | 发现可用模型 | 管理员 |
 | POST | `/ai-agents/stream` | 流式对话（SSE） | 是 |
 | GET | `/ai-agents/conversations` | 获取对话列表 | 是 |

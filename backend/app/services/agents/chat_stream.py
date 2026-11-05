@@ -10,6 +10,7 @@ from loguru import logger
 
 from app.core.config import settings
 from app.core.http_client import get_http_client
+from app.services.agents.agent_testing import redirect_rejected_message
 from app.services.agents.chat_common import prepare_chat_context
 from app.services.agents.endpoint_security import (
     EndpointNotAllowedError,
@@ -165,7 +166,18 @@ async def stream_agent_chat(
         client = get_http_client()
         for idx, candidate_model in enumerate(candidate_models):
             payload = provider.build_stream_payload(chat_messages, candidate_model)
-            async with client.stream("POST", chat_url, headers=headers, json=payload) as resp:
+            # 共享客户端默认跟随重定向（其他用途需要），智能体出站按请求关闭：硬校验只覆盖首个 URL。
+            async with client.stream(
+                "POST", chat_url, headers=headers, json=payload, follow_redirects=False
+            ) as resp:
+                if 300 <= resp.status_code < 400:
+                    breaker.record_failure(circuit_key)
+                    yield _sse_error({
+                        "error": f"provider_status_{resp.status_code}",
+                        "message": redirect_rejected_message(resp.status_code),
+                        "provider_status": resp.status_code,
+                    })
+                    return
                 if resp.status_code != 200:
                     body_bytes = await resp.aread()
                     body_text = body_bytes.decode("utf-8", errors="ignore")

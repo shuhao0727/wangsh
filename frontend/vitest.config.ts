@@ -37,6 +37,8 @@ export default defineConfig({
       "src/hooks/useAppMeta.metadata.test.tsx",
       "src/layouts/AdminLayout.mobile.test.tsx",
       "src/pages/Admin/Dashboard/index.permissions.test.tsx",
+      // 测试连接结果以后端 data.success 判定（FE-TEST-01），防止失败被显示成成功。
+      "src/pages/Admin/AIAgents/**/*.test.{ts,tsx}",
       "src/lib/**/*.test.{ts,tsx}",
       "src/services/**/*.test.{ts,tsx}",
     ],

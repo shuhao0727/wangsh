@@ -80,7 +80,7 @@ class _FakeStreamContext:
 
 
 class _FakeClient:
-    def stream(self, method, url, headers=None, json=None):
+    def stream(self, method, url, headers=None, json=None, follow_redirects=None):
         return _FakeStreamContext(_FakeResponse())
 
 
@@ -107,7 +107,7 @@ class _SlowProgressResponse:
 
 
 class _SlowProgressClient:
-    def stream(self, method, url, headers=None, json=None):
+    def stream(self, method, url, headers=None, json=None, follow_redirects=None):
         return _FakeStreamContext(_SlowProgressResponse())
 
 
@@ -197,7 +197,7 @@ class _SingleResponseClient:
     def __init__(self, response):
         self.response = response
 
-    def stream(self, method, url, headers=None, json=None):
+    def stream(self, method, url, headers=None, json=None, follow_redirects=None):
         return _FakeStreamContext(self.response)
 
 
@@ -464,7 +464,7 @@ def test_dify_does_not_retry_after_partial_output(monkeypatch):
         def __init__(self):
             self.calls = 0
 
-        def stream(self, method, url, headers=None, json=None):
+        def stream(self, method, url, headers=None, json=None, follow_redirects=None):
             self.calls += 1
             response = _PartialDifyResponse() if self.calls == 1 else _UnexpectedSecondResponse()
             return _FakeStreamContext(response)
@@ -521,7 +521,7 @@ def test_stream_chat_rejects_inactive_agent_before_provider_call(monkeypatch):
 
 def test_dify_clean_eof_without_terminal_event_is_reported(monkeypatch):
     class _DifyClient:
-        def stream(self, method, url, headers=None, json=None):
+        def stream(self, method, url, headers=None, json=None, follow_redirects=None):
             return _FakeStreamContext(_DifyIncompleteResponse())
 
     monkeypatch.setattr(chat_stream, "get_http_client", lambda: _DifyClient())
@@ -562,7 +562,7 @@ def test_dify_terminal_event_split_across_chunks_completes(monkeypatch):
             yield b'end"}\n\n'
 
     class _DifyClient:
-        def stream(self, method, url, headers=None, json=None):
+        def stream(self, method, url, headers=None, json=None, follow_redirects=None):
             return _FakeStreamContext(_DifyCompleteResponse())
 
     monkeypatch.setattr(chat_stream, "get_http_client", lambda: _DifyClient())
@@ -628,7 +628,7 @@ def test_dify_filters_reasoning_blocks_and_agent_thought_events(monkeypatch):
             yield b'data: {"event":"message_end"}\n\n'
 
     class _DifyClient:
-        def stream(self, method, url, headers=None, json=None):
+        def stream(self, method, url, headers=None, json=None, follow_redirects=None):
             return _FakeStreamContext(_DifyReasoningResponse())
 
     monkeypatch.setattr(chat_stream, "get_http_client", lambda: _DifyClient())
@@ -666,7 +666,7 @@ def test_dify_workflow_finished_outputs_answer_completes(monkeypatch):
             yield 'data: {\"event\":\"workflow_finished\",\"data\":{\"outputs\":{\"answer\":\"最终答案\"}}}\n\n'.encode('utf-8')
 
     class _DifyClient:
-        def stream(self, method, url, headers=None, json=None):
+        def stream(self, method, url, headers=None, json=None, follow_redirects=None):
             return _FakeStreamContext(_DifyWorkflowResponse())
 
     monkeypatch.setattr(chat_stream, "get_http_client", lambda: _DifyClient())
@@ -705,7 +705,7 @@ def test_dify_message_end_answer_completes_without_reasoning_leak(monkeypatch):
             yield 'data: {\"event\":\"message_end\",\"data\":{\"answer\":\"最终答案\"}}\n\n'.encode('utf-8')
 
     class _DifyClient:
-        def stream(self, method, url, headers=None, json=None):
+        def stream(self, method, url, headers=None, json=None, follow_redirects=None):
             return _FakeStreamContext(_DifyMessageEndResponse())
 
     monkeypatch.setattr(chat_stream, "get_http_client", lambda: _DifyClient())
@@ -738,7 +738,7 @@ def test_dify_drops_unparseable_trailing_data_that_may_contain_reasoning(monkeyp
             yield b'data: {"event":"message","answer":"<think>private reasoning'
 
     class _DifyClient:
-        def stream(self, method, url, headers=None, json=None):
+        def stream(self, method, url, headers=None, json=None, follow_redirects=None):
             return _FakeStreamContext(_DifyTruncatedReasoningResponse())
 
     monkeypatch.setattr(chat_stream, "get_http_client", lambda: _DifyClient())
@@ -776,7 +776,7 @@ def test_dify_preserves_event_fields_when_crlf_is_split_across_chunks(monkeypatc
             yield b'\ndata: {"event":"message_end"}\r\n\r\n'
 
     class _DifyClient:
-        def stream(self, method, url, headers=None, json=None):
+        def stream(self, method, url, headers=None, json=None, follow_redirects=None):
             return _FakeStreamContext(_DifyCrLfResponse())
 
     monkeypatch.setattr(chat_stream, "get_http_client", lambda: _DifyClient())
@@ -814,7 +814,7 @@ def test_dify_filters_reasoning_split_across_message_delta_events(monkeypatch):
             yield b'data: {"event":"message_end"}\n\n'
 
     class _DifyClient:
-        def stream(self, method, url, headers=None, json=None):
+        def stream(self, method, url, headers=None, json=None, follow_redirects=None):
             return _FakeStreamContext(_DifyMessageDeltaResponse())
 
     monkeypatch.setattr(chat_stream, "get_http_client", lambda: _DifyClient())
@@ -849,7 +849,7 @@ def test_dify_empty_message_end_is_an_explicit_error(monkeypatch):
             yield b'data: {"event":"message_end"}\n\n'
 
     class _DifyClient:
-        def stream(self, method, url, headers=None, json=None):
+        def stream(self, method, url, headers=None, json=None, follow_redirects=None):
             return _FakeStreamContext(_DifyEmptyResponse())
 
     calls = {"success": 0, "failure": 0}
@@ -883,7 +883,7 @@ def test_dify_reasoning_only_message_end_is_not_success(monkeypatch):
             yield b'data: {"event":"message_end"}\n\n'
 
     class _DifyClient:
-        def stream(self, method, url, headers=None, json=None):
+        def stream(self, method, url, headers=None, json=None, follow_redirects=None):
             return _FakeStreamContext(_DifyReasoningOnlyResponse())
 
     monkeypatch.setattr(chat_stream, "get_http_client", lambda: _DifyClient())

@@ -3,6 +3,7 @@ import httpx
 from datetime import datetime
 from typing import Optional
 from app.schemas.agents import AgentTestResponse
+from app.services.agents.agent_testing import redirect_rejected_message
 
 async def run_dify_test(api_endpoint: str, headers: dict, test_message: str, model_name: Optional[str]) -> AgentTestResponse:
     base_url = api_endpoint.rstrip("/")
@@ -18,12 +19,17 @@ async def run_dify_test(api_endpoint: str, headers: dict, test_message: str, mod
         "inputs": {}
     }
     timeout = httpx.Timeout(10.0, connect=6.0, read=10.0)
-    async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+    # 不跟随重定向：出站硬校验只覆盖 api_endpoint 所在主机。
+    async with httpx.AsyncClient(timeout=timeout, follow_redirects=False) as client:
         last_error = None
         for path in chat_paths:
             url = f"{base_url}{path}"
             try:
                 async with client.stream("POST", url, headers=headers, json=payload) as resp:
+                    if 300 <= resp.status_code < 400:
+                        # 不读取、不回显重定向响应体；终止探测，避免被后续路径的错误覆盖。
+                        last_error = redirect_rejected_message(resp.status_code)
+                        break
                     ct = resp.headers.get("content-type", "").lower()
                     if resp.status_code == 200 and "text/event-stream" in ct:
                         display_model = (model_name or "").replace("-", " ").replace("_", " ").title()

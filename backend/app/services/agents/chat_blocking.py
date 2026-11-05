@@ -3,6 +3,7 @@
 import asyncio
 from typing import Any, Dict, Optional
 
+from app.services.agents.agent_testing import redirect_rejected_message
 from app.services.agents.chat_common import prepare_chat_context
 from app.services.agents.endpoint_security import assert_agent_provider_endpoints
 from app.services.agents.providers import (
@@ -78,7 +79,8 @@ async def run_agent_chat_blocking(
     if getattr(ctx.provider, "is_openrouter", False):
         candidate_models = openrouter_model_candidates(ctx.model) or [ctx.model]
 
-    async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
+    # 不跟随重定向：出站硬校验只覆盖首个 URL，3xx 按失败处理。
+    async with httpx.AsyncClient(timeout=60.0, follow_redirects=False) as client:
         last_error: Optional[str] = None
         for idx, candidate_model in enumerate(candidate_models):
             payload = ctx.provider.build_blocking_payload(ctx.chat_messages, candidate_model)
@@ -89,6 +91,9 @@ async def run_agent_chat_blocking(
                 return ctx.provider.parse_blocking_response(resp.json())
 
             status_code = int(resp.status_code) if resp else 0
+            if 300 <= status_code < 400:
+                last_error = f"provider_status_{status_code}: {redirect_rejected_message(status_code)}"
+                break
             msg = provider_error_message(status_code)
             detail = extract_provider_detail(resp.text if resp else "")
             can_fallback = (
@@ -121,11 +126,14 @@ async def _blocking_dify(provider: DifyProvider, messages, model, user, inputs) 
         payload["inputs"] = inputs
 
     candidates = provider.candidate_urls()
-    async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
+    async with httpx.AsyncClient(timeout=60.0, follow_redirects=False) as client:
         last_err = None
         for url in candidates:
             try:
                 resp = await client.post(url, headers=headers, json=payload)
+                if 300 <= resp.status_code < 400:
+                    last_err = f"status_{resp.status_code}: {redirect_rejected_message(resp.status_code)}"
+                    continue
                 if resp.status_code != 200:
                     last_err = f"status_{resp.status_code}"
                     continue
