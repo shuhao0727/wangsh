@@ -9,7 +9,8 @@
 
 | 入口 | 用途 |
 |---|---|
-| [当前项目整理台账](project-consolidation.md) | 唯一当前台账：工作位置、改动依赖、未结事项、owner 与关闭条件；**当前无其他 active 专项计划** |
+| [当前项目整理台账](project-consolidation.md) | 唯一当前台账：工作位置、改动依赖、未结事项、owner 与关闭条件 |
+| [2.2.2→2.2.8 审查问题修复计划](2026-11-05-release-228-review-fixes.md) | **active**：2026-11-05 发布增量审查确认问题的分阶段修复方案与待决策事项；执行前需老大拍板 |
 | [UI 路线图](../ui/UI_REDESIGN_ROADMAP.md) | 页面整理进度；分别记录工程验证与用户确认 |
 | [测试状态](../testing/TEST_STATUS.md) | 当前结果、环境、范围和未覆盖项 |
 | [归档索引](../archive/README.md) | 归档入口；正文已于 2026-11-01 清理 |
