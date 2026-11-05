@@ -4,34 +4,37 @@ import asyncio
 from loguru import logger
 from typing import Optional, Dict, Any
 from app.core.config import settings
+from app.services.agents.endpoint_security import (
+    EndpointNotAllowedError,
+    assert_agent_outbound_endpoint,
+)
 
 class CodeGeneratorClient:
     """
     智能体代码生成客户端
     负责调用外部 Agent API 将流程图转换为 Python 代码
     """
-    
+
     def __init__(self):
         self.api_url = settings.AGENT_API_URL
         self.api_key = settings.AGENT_API_KEY
+        # 不跟随重定向：出站校验只校验首个 URL，跟随 3xx 会被上游带到内网/元数据地址。
         self.client = httpx.AsyncClient(
             timeout=60.0,
-            follow_redirects=True,
+            follow_redirects=False,
             limits=httpx.Limits(max_keepalive_connections=5, max_connections=10)
         )
 
     @staticmethod
-    def _format_http_error(e: Exception) -> str:
+    def _format_http_error(e: Exception, secret: Optional[str] = None) -> str:
+        """对外只返回状态码与固定文案；上游响应体只写服务端日志（限长、去掉密钥）。"""
         if isinstance(e, httpx.HTTPStatusError):
             status = e.response.status_code
-            body = ""
-            try:
-                body = e.response.text or ""
-            except Exception:
-                body = ""
-            if body:
-                return f"HTTP {status}: {body[:600]}"
-            return f"HTTP {status}: {e}"
+            body = (e.response.text or "")[:500]
+            if secret:
+                body = body.replace(secret, "***")
+            logger.warning("Agent API upstream HTTP {} body: {}", status, body)
+            return f"HTTP {status}: 上游服务返回错误，详情见服务端日志"
         return str(e)
 
     @staticmethod
@@ -182,6 +185,15 @@ class CodeGeneratorClient:
         target_url = self._normalize_chat_completions_url(target_url)
         model_name = self._resolve_model_name(target_url, model)
 
+        # 出站硬校验：对归一化后的最终 URL 校验一次，覆盖请求体 api_url 与 feature flag 两条路径。
+        # 规则与智能体出站一致（受信内部端点白名单、本机 Ollama 例外），前提是调用入口 admin-only
+        # 或地址由管理员配置。被拒即返回，不进入重试。
+        try:
+            await assert_agent_outbound_endpoint(target_url)
+        except EndpointNotAllowedError as exc:
+            logger.warning("[endpoint-security] Agent Chat 出站端点被拒绝: {}", exc)
+            return {"success": False, "error": f"目标地址不允许：{exc}", "message": ""}
+
         headers = {
             "Authorization": f"Bearer {target_key}",
             "Content-Type": "application/json"
@@ -202,18 +214,26 @@ class CodeGeneratorClient:
                     json=payload,
                     headers=headers
                 )
+                # 3xx 不跟随也不重试：重试只会得到同一个重定向。
+                if 300 <= response.status_code < 400:
+                    logger.warning("Agent Chat API 上游返回重定向 HTTP {}，已拒绝跟随", response.status_code)
+                    return {
+                        "success": False,
+                        "error": f"上游返回重定向（HTTP {response.status_code}），已拒绝跟随，请填写最终地址",
+                        "message": "",
+                    }
                 response.raise_for_status()
                 data = response.json()
-                
+
                 content = ""
                 if "choices" in data and len(data["choices"]) > 0:
                     content = data["choices"][0]["message"]["content"]
-                
+
                 # Allow empty content for now, or just return what we have
                 return {"success": True, "message": content or "(No content returned)", "error": ""}
 
             except Exception as e:
-                err_text = self._format_http_error(e)
+                err_text = self._format_http_error(e, target_key)
                 logger.error(f"Agent Chat API error: {err_text}")
                 if attempt == retries - 1:
                     return {"success": False, "error": err_text, "message": ""}

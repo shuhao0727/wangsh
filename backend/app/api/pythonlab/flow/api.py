@@ -152,10 +152,10 @@ async def generate_code_from_flow(
 @router.post("/flow/test_agent_connection")
 async def test_agent_connection(
     payload: Dict[str, Any],
-    current_user: Dict[str, Any] = Depends(require_user)
+    current_user: Dict[str, Any] = Depends(require_admin)
 ):
     """
-    测试智能体连接配置
+    测试智能体连接配置（仅管理员：api_url 来自请求体，服务器会向其出站）
     Uses chat_completion with a simple ping to verify connectivity and auth.
     """
     api_url = payload.get("api_url")

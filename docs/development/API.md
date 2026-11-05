@@ -875,7 +875,7 @@ PythonLab WS 接入补充（2026-09-09）：terminal/DAP 在业务缓存、termi
 | POST | `/api/v2/pythonlab/flow/prompt_template` | 创建提示模板 | 管理员 |
 | POST | `/api/v2/pythonlab/ai/chat` | AI 聊天 | 是 |
 | POST | `/api/v2/pythonlab/flow/generate_code` | 生成代码 | 是 |
-| POST | `/api/v2/pythonlab/flow/test_agent_connection` | 测试智能体连接 | 是 |
+| POST | `/api/v2/pythonlab/flow/test_agent_connection` | 测试智能体连接（2026-11-05 起仅管理员，出站经 SSRF 硬校验、不跟随重定向、不回显上游响应体，SSRF-FLOW-01） | 管理员 |
 | POST | `/api/v2/pythonlab/flow/parse` | 解析流程图 | 是 |
 
 ## 十三、自适应测评（/assessment）
