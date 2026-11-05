@@ -65,7 +65,7 @@
 | 迁移守卫 | `python3 -I -B backend/scripts/check_migration_guard.py` | 50文件通过，未运行迁移 |
 | 版本一致性 | `node scripts/check-version-consistency.mjs` | 发布准备2.2.6通过；lock根版本同步，is-docker元数据恢复为已装包/同integrity tarball实际2.2.1，其他依赖不升级 |
 | 2.2.6干净安装尝试 | 合成目录、Node20.20.2/npm10.8.2普通npm ci，未触碰项目node_modules | 两次分别ECONNRESET与registry.npmjs.org元数据EIDLETIMEOUT；属下载失败，未记通过。后续必须由发布workflow的质量门禁验证，不关闭TLS/不放宽安装参数 |
-| 文档门禁 | `node scripts/check-markdown-contracts.mjs`、Markdown合同、`git diff --check` | 2026-11-05台账重审后 114 files / 728 links / 0 missing；历史2026-11-03为109/702，2.2.6批次110/709、部署前110/713、2.2.8部署后111/720、四方对齐后112/724、清理后113/725。新增后门事件记录后更新当前派生计数，不覆盖历史 |
+| 文档门禁 | `node scripts/check-markdown-contracts.mjs`、Markdown合同、`git diff --check` | 2026-11-05台账重审后 115 files / 731 links / 0 missing；历史2026-11-03为109/702，2.2.6批次110/709、部署前110/713、2.2.8部署后111/720、四方对齐后112/724、清理后113/725。新增后门事件记录后更新当前派生计数，不覆盖历史 |
 | 脚本语法 / 差异 | 已改 shell 的 `bash -n`、Node `--check`、`git diff --check` | 通过 |
 
 根合同首轮为133/134：仅文档派生链接数过期；更新当前统计后全量复验通过。后续增加容器CLI等合同后为151项，未删除失败断言刷绿。

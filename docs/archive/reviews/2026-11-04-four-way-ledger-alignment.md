@@ -189,3 +189,13 @@ WorkingDirectory=/usr/bin
 9. 本地仓库快进与 40 个未提交改动的处置
 10. `log.service` 是否深入排查
 11. 桌面 `.env` 权限收紧与凭据轮换评估
+
+## 九、草稿「待确认」项的后续核实（2026-11-05）
+
+当时草稿留下 5 个待确认项，整理时经外网 `wangsh.cn` 只读核验：
+
+- 两个独立审计 Agent 结果：已完成并合入本页与台账，不再悬挂。
+- `/home/shuhao/wangsh/data/` 下除 pythonlab 外：**仅 `pythonlab`**。
+- 2.2.6/2.2.7/2.2.8 三份 production env 是否相同：**这三个 source 目录均不存在 `.env`**（运行时环境变量另有来源），问题前提不成立。
+- `candidate-simulation.env` 是否只含合成凭据：候选栈已清理，材料不再存在，无法也不需复核。
+- Dify 栈与 WangSh 资源交叠：`docker_default` 网络上有 1 个 wangsh 容器（backend），即本页 §二 F 记录的 Dify 网络边界；无其他交叠。

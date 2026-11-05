@@ -31,6 +31,7 @@
 | [plans/2026-11-02-verification-and-backlog.md](plans/2026-11-02-verification-and-backlog.md) | 代码复核、真实环境验收与台账核验计划（2026-11-04 被四方对齐计划取代，2026-11-05 归档） |
 | [plans/2026-11-04-local-changes-audit.md](plans/2026-11-04-local-changes-audit.md) | 本地 41 项未提交改动审核（stash→ff-only→pop 处置依据，2026-11-05 归档） |
 | [reviews/2026-11-04-four-way-ledger-alignment.md](reviews/2026-11-04-four-way-ledger-alignment.md) | 本地/GitHub/DockerHub/服务器四方台账对齐盘点；约束内容已沉淀到 DEPLOY/RELEASE_NOTES/台账（2026-11-05 归档） |
+| [reviews/2026-11-02-c-series-candidates.md](reviews/2026-11-02-c-series-candidates.md) | 2026-11-02 审查 59 个候选（C 系列）的编号、位置、机制与验证状态，供 DOC-01 追溯；不代表当前代码仍有该问题 |
 
 当前未结事项统一见[项目整理台账](../plans/project-consolidation.md#未结事项)；
 归档不表示已修复、已验收，也不延续历史操作授权。
