@@ -8,7 +8,7 @@
 ## 当前状态
 
 - 更新：2026-11-05；**2.2.8 已部署生产**（构建源 `2d9dda0`，`current -> /home/shuhao/wangsh-releases/2.2.8/source`），RELEASE-01 已关闭；外部入口 `wangsh.cn:6608`。
-- 现行计划：2026-11-04 四方对齐记录已完成处置，转入归档（见[计划索引](README.md)）；**2026-11-05 新增 active 专项计划**：[2.2.2→2.2.8 审查问题修复计划](2026-11-05-release-228-review-fixes.md)（2026-11-05 老大已按推荐拍板，执行中；已修条目已提交本地 main、未推送，见计划当前状态）。未结事项仍以本台账为准。
+- 现行计划：2026-11-04 四方对齐记录已完成处置，转入归档（见[计划索引](README.md)）；**2026-11-05 新增 active 专项计划**：[2.2.2→2.2.8 审查问题修复计划](2026-11-05-release-228-review-fixes.md)（2026-11-05 老大已按推荐拍板，执行中；已修条目已推送 origin/main，见计划当前状态）。未结事项仍以本台账为准。
 - 安全：服务器后门事件六项持久化已清除；**用户 2026-11-05 明确接受遗留风险**（不轮换密码、SSH 密码认证保持开启、不做主机重装），SEC-03 记录该决定；应用数据保密性未验证。
 - 边界：不绕过门禁、不覆盖已发 tag/镜像、不改业务数据或默认挂载、不清理回滚资源。
 - 2.2.8 部署证据：[批次记录](../archive/testing/2026-11-04-release-228.md)；服务器 `/home/shuhao/wangsh-releases/2.2.8/{backups,evidence}`。未做长时间运行观察、真实课堂并发与回滚实测。
@@ -38,20 +38,20 @@
 | UI-04 | P3 【2.2.8 审查验收中发现，早于区间】`/admin/it-technology` 对 admin 开放（`IT_TECHNOLOGY_MANAGEMENT_ROLES = ADMIN_ROLES`），但 PythonLab 智能体配置弹窗打开时读 `GET /system/feature-flags`，该接口要求超级管理员（`feature_flags.py:58-61`），普通管理员得到 403、弹窗字段为空；保存同样需要超级管理员。2026-11-05 开发栈合成管理员实测 | frontend + 权限 | 老大决定：入口只对超级管理员显示，或放开该 flag 的读取；未决前维持现状 |
 | XBK-01 | 名册页无勾选/批量调班动作；Excel 导入 upsert 可更新班级并经容量重验 | xbk + 产品 | **2026-11-05 默认：不新增交互式批量调班**，Excel 导入为官方批量路径；出现真实需求另行提出 |
 | PYLAB-01 | 普通 Pyodide 运行路径无执行期限（手动停止/重置可用） | pythonlab + 产品 | **2026-11-05 默认：不设执行上限，保留现有手动停止**；验证停止控件后按此写关闭条件。如需期限另行提出 |
-| PYLAB-02 | **多名学生无法同时调试**：调试容器固定发布宿主 `127.0.0.1:5678:5678`（`docker.py` debug 分支的 `-p`，`cd868f8` 引入，早于 2.2.2，生产 2.2.8 受影响），同机第二个调试容器 `docker run` 报 `port is already allocated`，学生看到"运行环境启动失败，请联系老师检查配置"。2026-11-05 provider 层真实 Docker 复现：u990001 成功、u990002 失败。**本地已修（`98f1c46`，已提交本地 main、未推送）**：`-p 127.0.0.1::5678` + debugpy `--listen 127.0.0.1`（后者防修复后同 bridge 调试容器互连）；pytest 472/60 skipped；provider 层双用户同时启动、各自 DAP initialize 成功、仅回环监听 | pythonlab | 2026-11-05 开发栈两名合成学生同时调试 soak 各 6/6、三项 PythonLab smoke 通过。合入后发布部署，**在生产验证两名学生同时调试**后关闭；debug 容器网络隔离见下方 PYLAB-NET-01 |
+| PYLAB-02 | **多名学生无法同时调试**：调试容器固定发布宿主 `127.0.0.1:5678:5678`（`docker.py` debug 分支的 `-p`，`cd868f8` 引入，早于 2.2.2，生产 2.2.8 受影响），同机第二个调试容器 `docker run` 报 `port is already allocated`，学生看到"运行环境启动失败，请联系老师检查配置"。2026-11-05 provider 层真实 Docker 复现：u990001 成功、u990002 失败。**本地已修（`98f1c46`，已推送 origin/main）**：`-p 127.0.0.1::5678` + debugpy `--listen 127.0.0.1`（后者防修复后同 bridge 调试容器互连）；pytest 472/60 skipped；provider 层双用户同时启动、各自 DAP initialize 成功、仅回环监听 | pythonlab | 2026-11-05 开发栈两名合成学生同时调试 soak 各 6/6、三项 PythonLab smoke 通过。合入后发布部署，**在生产验证两名学生同时调试**后关闭；debug 容器网络隔离见下方 PYLAB-NET-01 |
 | PROGRAM-01 | 个人程序页实为 XBK 应用入口 | frontend + 产品 | **2026-11-05 默认：维持双入口现状**，删除未定义的"统一"目标，按现状验收；如需合页或学生代码库另行提出 |
 | DIANMING-01 | 随机点名无持久历史；教师调用名单接口固定 403（`DIANMING.md` 已记载教师—班级授权尚未建立） | it + 产品 | **2026-11-05 默认：记录=本次抽取结果，不持久化**；教师点名维持管理员专用并在台账注明。如需持久历史或教师授权另行提出 |
 | WORKER-01 | ~~`user: "0:0"` 把 worker 提成 root~~ 已于 `09fb1db`（2026-11-03）移除，worker 改 appuser + `group_add`；`09fb1db` 已进入 2.2.6–2.2.8 构建源。**生产时间线**：2.2.2 部署期间 worker 为 root（`git show 2.2.2:docker-compose.yml` 第 314 行为 `user: "0:0"`），2.2.5/2.2.6/2.2.7 从未部署生产，2.2.8 切换后才以 appuser 运行。**2026-11-05 现场核验**：生产 `wangsh-pythonlab-worker` 实际 `User=1000:1000 GroupAdd=[0 984]`，与仓库定义一致 | ops + backend | **uid 提权部分已关闭**（2026-11-05）。残余 docker.sock 架构风险转入 SOCKET-01 |
 | SOCKET-01 | backend 与 PythonLab worker 均挂载 `/var/run/docker.sock`（`docker-compose.yml:219/:328`，dev `:134/:252`）；socket 等于宿主 root 等价能力，是非 root 化后仍存在的架构风险 | ops + backend | 按[工程治理](../development/ENGINEERING_GOVERNANCE.md) 周期性审计表（每半年 Docker socket 复查）评估；若引入 socket 代理等缓解方案，先核实宿主兼容与授权 |
 | OPS-06 | `deploy.sh simulate` 的 `run_sim_deploy`/`run_sim_compose` 未传 `REDIS_HOST`：模拟项目 redis 容器名为 `wangsh_sim-redis-1`，compose 默认 `wangsh-redis-1` 连不上，后端 unhealthy；2026-11-05 实测复现，以环境变量覆盖绕过 | release-ops | 在 sim 函数中传入 `REDIS_HOST="${sim_project}-redis-1"`（或在 DEPLOY.md 标注必须手工覆盖），并复跑 `simulate` 验证 |
-| SSRF-FLOW-01 | **P1** 【2.2.8 审查】`/api/v2/pythonlab/flow/test_agent_connection` 只要求登录（`require_user`），请求体 `api_url` 不做出站校验、跟随重定向并回显上游响应体前 600 字；任何登录用户（含学生）可让服务器请求局域网/本机服务并读回。早于 2.2.2，生产 2.2.8 受影响 | backend + 安全 | **2026-11-05 老大选热修 + A+B；`d6375a3`，独立审查通过，已提交本地 main、未推送**。开发栈 API 与浏览器验收通过。剩余：发布前只读核对生产两个 feature flag 能否通过新出站校验，随 2.2.9 发布 |
+| SSRF-FLOW-01 | **P1** 【2.2.8 审查】`/api/v2/pythonlab/flow/test_agent_connection` 只要求登录（`require_user`），请求体 `api_url` 不做出站校验、跟随重定向并回显上游响应体前 600 字；任何登录用户（含学生）可让服务器请求局域网/本机服务并读回。早于 2.2.2，生产 2.2.8 受影响 | backend + 安全 | **2026-11-05 老大选热修 + A+B；`d6375a3`，独立审查通过，已推送 origin/main**。开发栈 API 与浏览器验收通过。剩余：发布前只读核对生产两个 feature flag 能否通过新出站校验，随 2.2.9 发布 |
 | PYLAB-NET-01 | P2 【2.2.8 审查】debug 容器在默认 bridge 且可出站，学生代码联网限制只靠工作区内可改写的 `sitecustomize`（PythonLab 文档 OPS-01） | pythonlab | 按修复计划选定方案（推荐 `--network none`）实施，双浏览器真实点击与 smoke/soak 通过 |
-| A-1 | P2 【2.2.8 审查】智能体"测试连接"校验拼接前的相对路径，2.2.5 起恒失败（`aeae945`） | ai-agents | **2026-11-05 `2d239cf`（已提交本地 main、未推送），独立审查通过**；开发栈合成供应商桩下测试连接返回成功（API 与浏览器），随 2.2.9 发布后关闭 |
-| A-2 | P2 【2.2.8 审查】智能体出站客户端跟随重定向，绕过 SSRF 硬校验（含 Dify 流式与阻塞路径）；须与 A-1 同批 | ai-agents + 安全 | **2026-11-05 `2d239cf`（已提交本地 main、未推送），六条路径不跟随重定向的断言通过（含 Dify 双候选地址），独立审查通过** |
+| A-1 | P2 【2.2.8 审查】智能体"测试连接"校验拼接前的相对路径，2.2.5 起恒失败（`aeae945`） | ai-agents | **2026-11-05 `2d239cf`（已推送 origin/main），独立审查通过**；开发栈合成供应商桩下测试连接返回成功（API 与浏览器），随 2.2.9 发布后关闭 |
+| A-2 | P2 【2.2.8 审查】智能体出站客户端跟随重定向，绕过 SSRF 硬校验（含 Dify 流式与阻塞路径）；须与 A-1 同批 | ai-agents + 安全 | **2026-11-05 `2d239cf`（已推送 origin/main），六条路径不跟随重定向的断言通过（含 Dify 双候选地址），独立审查通过** |
 | SSRF-ANA-01 | P3 【2.2.8 审查 A 组发现，早于区间】管理员分析功能（热点问题、学生思维链、任务分析）经 `llm_agent_base.call_llm` 出站，不调用 `assert_agent_outbound_endpoint`，只受保存时软校验约束；与对话、测试连接的硬校验口径不一致。入口均为 `require_admin`，httpx 默认不跟随重定向，非 200 只记日志不回显 | ai-agents + 安全 | 老大决定是否在 `call_llm` 出站前补同一硬校验（成本小，会让指向未列白名单内网地址的分析智能体开始失败）；AI_AGENTS 已订正口径 |
-| FE-TEST-01 | 【2.2.8 审查】前端把智能体测试连接失败显示为"成功"（判定外层信封而非 `data.success`），早于区间 | frontend | **2026-11-05 `2d239cf`（已提交本地 main、未推送），单测通过，独立审查通过**；开发栈真实浏览器验证通过（列表页与编辑弹窗），随 2.2.9 发布后关闭 |
+| FE-TEST-01 | 【2.2.8 审查】前端把智能体测试连接失败显示为"成功"（判定外层信封而非 `data.success`），早于区间 | frontend | **2026-11-05 `2d239cf`（已推送 origin/main），单测通过，独立审查通过**；开发栈真实浏览器验证通过（列表页与编辑弹窗），随 2.2.9 发布后关闭 |
 | C-R1 | P2 【2.2.8 审查】多课时对比图用全局最早时间做原点，跨天对比曲线挤到两端（`b9cbd53`） | frontend + ai-agents | 按老大选定口径修复，文档同步 |
-| D3 | 【2.2.8 审查】发版前风险：`a129e14` 给仓库 compose 加 `name: wangsh`，服务器发布目录里的 `stop-dev.sh --all`/裸 `compose down` 可能作用于生产；任何从 main 发版的前置条件。**2026-11-05 老大拍板回退，`199c5e9`（已提交本地 main、未推送）**。同日生产只读核对：发布目录无 `.env`、项目名由 `-p wangsh` 显式传入；2.2.8 compose 有 4 处 `:?` 必填守卫，发布目录里缺变量时 compose 先报错退出，D3 的实际增量风险小于原推断 | release-ops | 回退随 2.2.9 发布后关闭；旧目录残余风险见 OPS-07 |
+| D3 | 【2.2.8 审查】发版前风险：`a129e14` 给仓库 compose 加 `name: wangsh`，服务器发布目录里的 `stop-dev.sh --all`/裸 `compose down` 可能作用于生产；任何从 main 发版的前置条件。**2026-11-05 老大拍板回退，`199c5e9`（已推送 origin/main）**。同日生产只读核对：发布目录无 `.env`、项目名由 `-p wangsh` 显式传入；2.2.8 compose 有 4 处 `:?` 必填守卫，发布目录里缺变量时 compose 先报错退出，D3 的实际增量风险小于原推断 | release-ops | 回退随 2.2.9 发布后关闭；旧目录残余风险见 OPS-07 |
 | OPS-07 | 【2.2.8 审查】服务器旧目录 `/home/shuhao/wangsh` 目录名即 `wangsh`、有 `.env`、有 `stop-dev.sh`：在该目录误跑 `stop-dev.sh --all` 会以项目名 `wangsh`（生产项目）执行开发与生产两套 compose 的 `down --remove-orphans`，与 D3 无关、早于区间。2026-11-05 只读核对：该 `.env` 未设 `COMPOSE_PROJECT_NAME`；`--all` 的停止逻辑不做目标确认 | release-ops | 老大决定：给 `stop-dev.sh --all` 加目标确认（拒绝作用于运行中生产项目），或在服务器旧目录移除/改名该脚本；未决前在 DEPLOY 标注"服务器上禁跑 stop-dev.sh" |
 | SEC-TPL-01 | 【2.2.8 审查】生产密钥是否沿用 `.env.example` 历史模板值。**2026-11-05 只读核对（读生产 backend 容器实际环境，与 Git 历史全部模板值比对，未输出任何值）**：`SECRET_KEY`、`POSTGRES_PASSWORD`、`AGENT_API_KEY_ENCRYPTION_KEY` 未命中，加密密钥为合法 Fernet；**`SUPER_ADMIN_PASSWORD` 命中模板值，仓库为 PUBLIC**。`init_super_admin` 只在账号不存在时创建、不改写既有密码，实际登录密码取决于数据库哈希，未核验 | ops + 安全 | 老大决定：是否授权只读核验超管哈希是否等于该模板值；命中则经后台审计流程改密，并把服务器环境变量换成非模板值 |
 | ENV-DEV-01 | 【2.2.8 审查】开发栈运行中的 worker 沙箱镜像为 `2.2.4`（两天前启动时的值），该 tag 在 Docker Hub 不存在，开发栈调试起不来。**订正**：`.env.dev` 文件此前已改为 `2.2.6`，只是开发栈未重建。2026-11-05 按老大授权改为 `2.2.8`（只改这一行） | 本机开发环境 | **2026-11-05 已完成**：重建后 worker/backend 沙箱镜像 2.2.8、生效连接 `postgres:5432` 与启动前核对一致，调试到断点由 PYLAB-02 开发栈验收覆盖；可移入已关闭 |
@@ -64,7 +64,7 @@
 | C-2 | P3 【2.2.8 审查】隐私面板缺撤回与保存失败测试 | frontend | 补两条用例 |
 | D-1 | P3 仅记录 【2.2.8 审查】游戏上传在鉴权前放宽到 502MiB；带宽×30s 约束下不改 | gateway + backend | 仅记录，出现实际资源问题再处理 |
 | D-R1 | 条件 P2 【2.2.8 审查】本地进程模式逐键回落读取根目录生产 `.env`，违反规则 7.0（全容器开发栈不受影响） | backend + 开发环境 | 本地进程模式不再读根 `.env` |
-| D-R2 | P3 【2.2.8 审查】发布 workflow promote 不拒绝已存在的正式 tag；须先于任何发布 workflow 合入 | release-ops | **2026-11-05 `0fa64ca`（已提交本地 main、未推送）**：构建前检查，已存在或无法确认即失败；执行式合同测试 + 6 种变异验证；针对性复核通过 |
+| D-R2 | P3 【2.2.8 审查】发布 workflow promote 不拒绝已存在的正式 tag；须先于任何发布 workflow 合入 | release-ops | **2026-11-05 `0fa64ca`（已推送 origin/main）**：构建前检查，已存在或无法确认即失败；执行式合同测试 + 6 种变异验证；针对性复核通过 |
 | D-R3 | P3 【2.2.8 审查】`restore-db` 执行前不显示目标容器 | release-ops | 执行前打印目标容器与 `config_files` 标签 |
 | CI-CADDY-01 | P3 【2.2.8 审查】Caddy `adapt --validate` 从未进 CI，发布门禁也不校验 | ci + gateway | 进 CI 且 `workflow_call` 下照常执行 |
 
@@ -131,6 +131,8 @@ A 类本轮无待改代码项；DIFY-02 已核验为非缺陷并关闭；D 类�
 
 ## 变更日志
 
+- 2026-11-05：`50bb866` 修复首次推送的 ci-quality 治理失败（A-2 引入的复杂度回归，行为不变、未调整基线）并推送。重跑 CI：**通过**（run 42039152655：python governance 两次 errors=0；干净 PostgreSQL 上 pytest 3809 passed / 123 skipped；repo-config、frontend-quality 通过）。
+- 2026-11-05：2.2.8 审查修复 6 个提交已推送（`a129e14..759e49a` 快进）；未打 tag、未部署。推送后 markdown-quality 通过；ci-quality（run 42034193780）**失败**：python governance 报 `dify_test.py::run_dify_test` 复杂度 22 超过历史上限 21（`2d239cf` A-2 新增 3xx 分支引入，提交前漏跑治理检查），pytest 步骤因此未执行，repo-config 与 frontend-quality 通过。`50bb866` 修复并推送：`run_dify_test` 两处相同的成功响应抽为 `_dify_success_response`（22→18）；补跑 `--base-ref a129e14` 又发现 `run_agent_chat_blocking`、`stream_agent_chat` 同因 3xx 分支 18→19，3xx 判断分别并入非 200 处理（`_provider_failure`、既有 `_provider_error_frame`），恢复到 14 与 18；行为不变（阻塞路径另用 400+ 组合与拆分前逐例比对一致），未调整基线。重跑 CI：**通过**（run 42039152655：python governance 两次 errors=0；干净 PostgreSQL 上 pytest 3809 passed / 123 skipped；repo-config、frontend-quality 通过）。
 - 2026-11-05：**2.2.8 审查已修条目按计划切分提交**（老大授权，只提交）：`d6375a3` SSRF-FLOW-01、`199c5e9` D3、`2d239cf` A-1/A-2/FE-TEST-01、`0fa64ca` D-R2、`98f1c46` PYLAB-02，加本文档提交；均未推送、未打 tag、未部署。联网核对 `origin/main` 为 `a129e14`。
 - 2026-11-05：**2.2.8 审查修复开始执行**（老大按推荐拍板 8 项决策）。SSRF-FLOW-01 本地已修且独立审查通过；D3 已回退；D-R2 按审查意见改为执行式合同测试；A-1/A-2/FE-TEST-01 本地已修、审查进行中；SEC-TPL-01、D3 前提完成生产只读核对；全部未提交。详见[修复计划](2026-11-05-release-228-review-fixes.md)。
 - 2026-11-05：**2.2.2→2.2.8 发布增量审查落账**。四组审查 + 独立复查 + 主 Agent 核证确认：区间内 P2 3 条（A-1、A-2、C-R1）、P3 8 条；范围外 P1 1 条（SSRF-FLOW-01）及 PYLAB-02、PYLAB-NET-01、D3 等。新增 21 条未结事项，详细方案入 active 计划 [2.2.2→2.2.8 审查问题修复计划](2026-11-05-release-228-review-fixes.md)（经一次独立审查与两次针对性复核）。PYLAB-02 本地已修（未提交）：宿主端口改由 Docker 分配 + debugpy 只听回环，pytest 472/60 skipped，provider 层双用户复验通过。
