@@ -74,6 +74,32 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: refuse to overwrite existing release tags
+        run: |
+          images=(
+            wangsh-backend
+            wangsh-typst-worker
+            wangsh-pythonlab-worker
+            pythonlab-sandbox
+            wangsh-frontend
+            wangsh-gateway
+          )
+          # 已发布的正式 tag 不可覆盖（覆盖后从 registry 回滚到该版本会拉到新镜像）。
+          # 放在构建前：版本号用错时尽早失败，不白跑六个镜像构建。
+          # 只有 registry 明确回答 not found 才继续；网络或鉴权失败同样中止，避免检查失效时照常覆盖。
+          for image in "${images[@]}"; do
+            ref="docker.io/shuhao07/${image}:${RELEASE_TAG}"
+            if output="$(docker buildx imagetools inspect "$ref" 2>&1)"; then
+              echo "Release tag already exists, refusing to overwrite: $ref"
+              exit 1
+            fi
+            if ! grep -qi "not found" <<<"$output"; then
+              echo "Cannot confirm $ref is absent: $output"
+              exit 1
+            fi
+            echo "Release tag absent, continuing: $ref"
+          done
+
       - name: build backend
         uses: docker/build-push-action@v6
         with:

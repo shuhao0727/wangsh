@@ -575,6 +575,92 @@ test("docker publish is serialized and only promotes the current main commit", (
   assert.match(workflow, /quality-gate:[\s\S]*needs:\s*source-guard/);
 });
 
+function runReleaseTagGuard({ existingRefs = [], registryError = "" } = {}) {
+  const lines = read(".github/workflows/dockerhub-amd64.yml").split("\n");
+  const stepIndex = lines.findIndex((line) =>
+    line.includes("- name: refuse to overwrite existing release tags"),
+  );
+  assert.ok(stepIndex > 0, "release tag overwrite guard step is missing");
+  assert.equal(lines[stepIndex + 1].trim(), "run: |");
+  const body = [];
+  for (const line of lines.slice(stepIndex + 2)) {
+    if (line.trim() !== "" && !line.startsWith("          ")) break;
+    body.push(line.slice(10));
+  }
+
+  const directory = mkdtempSync(join(tmpdir(), "wangsh-release-tag-guard-"));
+  const inspectLog = join(directory, "inspect.log");
+  // 模拟 registry：existingRefs 中的 ref 视为已发布，其余按真实 buildx 的报错格式回答 not found；
+  // registryError 非空时模拟网络或鉴权失败。
+  writeFileSync(
+    join(directory, "docker"),
+    `#!/usr/bin/env bash
+ref="\${!#}"
+printf '%s\\n' "$ref" >> '${inspectLog}'
+if [[ -n "$MOCK_REGISTRY_ERROR" ]]; then
+  echo "ERROR: $MOCK_REGISTRY_ERROR" >&2
+  exit 1
+fi
+if grep -qxF "$ref" <<<"$MOCK_EXISTING_REFS"; then
+  printf 'Name: %s\\n' "$ref"
+  exit 0
+fi
+echo "ERROR: $ref: not found" >&2
+exit 1
+`,
+  );
+  chmodSync(join(directory, "docker"), 0o755);
+
+  const result = spawnSync("bash", ["-e", "-c", body.join("\n")], {
+    env: {
+      ...process.env,
+      PATH: `${directory}:${process.env.PATH}`,
+      RELEASE_TAG: sourceVersion,
+      MOCK_EXISTING_REFS: existingRefs.join("\n"),
+      MOCK_REGISTRY_ERROR: registryError,
+    },
+    encoding: "utf8",
+  });
+  const inspected = readFileSync(inspectLog, { encoding: "utf8", flag: "a+" })
+    .split("\n")
+    .filter(Boolean);
+  rmSync(directory, { recursive: true, force: true });
+  return { ...result, inspected };
+}
+
+test("docker publish refuses to overwrite an existing release tag before building", () => {
+  const workflow = read(".github/workflows/dockerhub-amd64.yml");
+  const guard = workflow.indexOf("- name: refuse to overwrite existing release tags");
+  const login = workflow.indexOf("uses: docker/login-action");
+  assert.ok(login >= 0 && login < guard, "guard needs registry login");
+  assert.ok(guard < workflow.indexOf("- name: build backend"), "guard must run before builds");
+  assert.ok(
+    guard < workflow.indexOf("- name: promote version tags after all builds"),
+    "guard must run before promote",
+  );
+
+  const releaseRefs = requiredReleaseImages.map(
+    (image) => `docker.io/shuhao07/${image}:${sourceVersion}`,
+  );
+
+  const absent = runReleaseTagGuard();
+  assert.equal(absent.status, 0, absent.stdout + absent.stderr);
+  assert.deepEqual(absent.inspected, releaseRefs);
+
+  // promote 半途失败后重跑：只要有一个正式 tag 已存在就拒绝
+  const lastExists = runReleaseTagGuard({ existingRefs: [releaseRefs.at(-1)] });
+  assert.equal(lastExists.status, 1);
+  assert.match(lastExists.stdout, /refusing to overwrite/);
+  assert.doesNotMatch(lastExists.stdout, /Cannot confirm/);
+  assert.deepEqual(lastExists.inspected, releaseRefs);
+
+  // 无法确认不存在（网络或鉴权失败）时同样中止，不当作“不存在”照常覆盖
+  const unconfirmed = runReleaseTagGuard({ registryError: "unauthorized: authentication required" });
+  assert.equal(unconfirmed.status, 1);
+  assert.match(unconfirmed.stdout, /Cannot confirm .* is absent/);
+  assert.deepEqual(unconfirmed.inspected, releaseRefs.slice(0, 1));
+});
+
 test("formal deploy and pull-up consume release-set before compose pull/up", () => {
   const deploy = read("scripts/deploy.sh");
   const upNoBuildBody =

@@ -2,7 +2,7 @@
 
 > 状态：active
 > Owner：release-ops
-> 最近复核：2026-11-02
+> 最近复核：2026-11-05
 
 本文维护 GitHub Actions 的触发、门禁、凭据与镜像发布合同；操作步骤由
 [DEPLOY.md](DEPLOY.md) 维护，执行结果见 [TEST_STATUS.md](../testing/TEST_STATUS.md)。
@@ -11,7 +11,7 @@
 ## 一、概览
 
 代码 PR / main push 运行适用的质量检查；镜像发布须另行手动触发。
-发布 workflow 核对 main → 质量门禁 → 构建六镜像 → 推广版本标签 → 生成 release-set。
+发布 workflow 核对 main → 质量门禁 → 确认版本 tag 未发布 → 构建六镜像 → 推广版本标签 → 生成 release-set。
 服务器再按部署授权校验清单、拉取、核对 digest、启动及验收；推送镜像不等于已部署。
 
 ## 二、GitHub Actions 工作流
@@ -29,6 +29,10 @@
 
 发布与 PythonLab PR 构建通过 build args 使用 Docker Hub 官方基础镜像；本地 Dockerfile
 默认源仍可配置。输入经环境变量传给 shell，不直接拼接执行。
+
+六镜像构建前先确认版本 tag 在 registry 上不存在：任一已存在，或 registry 未明确回答
+not found（网络、鉴权失败），即失败退出，已发布 tag 不被覆盖。promote 半途失败后重跑
+同样会被拦，须提升版本号再发。
 
 六镜像先推 `${image_tag}-build-${run_id}`；全部 staging manifest 可读后才推广版本 tag，
 逐镜像核对 registry digest，上传 `release-set-${run_id}` artifact。
