@@ -1,5 +1,3 @@
-name: wangsh
-
 x-common-env: &common-env
   DEPLOYMENT_ENV: "production"
   REACT_APP_ENV: "production"
