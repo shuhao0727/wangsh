@@ -142,6 +142,8 @@ CSV 使用 UTF-8 BOM，包含全部名单（含未交）、提交状态、当前
 
 ## AI伙伴临时共享榜单（未发布）
 
+标题保留历史名称以兼容链接。状态（2026-11-05 只读核验）：相关代码已随 2.2.5–2.2.8 发布；生产 backend 已配置评分智能体（`AI_PARTNER_SCORING_AGENT_ID` 非空），该功能在生产启用；真实模型评分行为未单独验收。
+
 实现入口为
 `backend/app/api/endpoints/ai_partner.py`、`backend/app/schemas/ai_partner.py` 与
 `backend/app/services/ai_partner_evaluation.py`、`ai_partner_leaderboard.py`。

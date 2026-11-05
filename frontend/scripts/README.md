@@ -72,7 +72,7 @@ npm test -- src/layouts/AdminLayout.mobile.test.tsx src/pages/Admin/Dashboard/in
 
 ## AI伙伴独立源码入口（未发布）
 
-此标题保留已有引用；实际发布状态以 [发布记录](../../docs/operations/RELEASE_NOTES.md) 为准。
+标题保留历史名称以兼容链接。状态（2026-11-05 只读核验）：相关代码已随 2.2.5–2.2.8 发布；生产 backend 已配置评分智能体（`AI_PARTNER_SCORING_AGENT_ID` 非空），该功能在生产启用；真实模型评分行为未单独验收。
 
 | 命令 | 职责 |
 |---|---|

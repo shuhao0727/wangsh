@@ -44,7 +44,7 @@ COMPOSE_PROJECT_NAME=wangsh ENV_FILE=.env COMPOSE_FILE=docker-compose.production
 
 - 现场适配 Compose 保留既有四个 external named volumes、网络和绝对 PythonLab workspace；不得用仓库默认 bind 目录替换。旧 `/home/shuhao/wangsh` 配置保留，使用前核对是否仍是启动来源。
 - **双 Compose 事实与 up/down 禁令（2026-11-05 现场核验）**：生产 `wangsh` 项目混用两份配置——postgres/redis 的 compose label 指向 `2.2.0/source/docker-compose.yml`，其余六容器指向 `2.2.8/source/docker-compose.production.json`。**已核实生产 `docker-compose.production.json` 的服务集包含 `postgres` 与 `redis`**（共 8 服务：backend/frontend/gateway/postgres/pythonlab-sandbox/pythonlab-worker/redis/typst-worker），其中 pg/redis 的 bind 恰好指向 `2.2.0/source/data/{postgres,redis}`（与运行实例一致，当前正确，但依赖该文件保持不含仓库默认相对路径）。该文件不在仓库中、内容只在服务器。**禁止以任一历史 compose 文件作 `-f`/override 执行 `docker compose up/down/restart`**，排障只用固定 image ID 的 rollback compose 或只读 `ps`/`exec`/健康检查。
-- **发布命令作用域**：`scripts/deploy.sh` 的 `pull-up`/`up-no-build` 自 2026-11-05 起只对 `release_services`（backend、typst-worker、pythonlab-worker、pythonlab-sandbox、frontend、gateway）执行 `compose up -d --no-build --pull never --no-deps`，不再影响 pg/redis。发布前仍须核对 `COMPOSE_FILE` 指向（若 `COMPOSE_FILE` 为仓库默认 `docker-compose.yml`，其 pg/redis 为相对 bind `./data/postgres`、`./data/redis`，相对路径会按 compose 文件所在目录解析）。
+- **发布命令作用域（仓库 main 已含，生产发布目录尚未更新）**：`scripts/deploy.sh` 的 `pull-up`/`up-no-build` 在仓库主分支上已改为只对 `release_services`（backend、typst-worker、pythonlab-worker、pythonlab-sandbox、frontend、gateway）执行 `compose up -d --no-build --pull never --no-deps`，不再影响 pg/redis。**该修改尚未进入任何已发布版本**——生产 `/home/shuhao/wangsh-releases/2.2.8/source/scripts/deploy.sh` 仍是旧脚本（裸 `compose up`，对 `COMPOSE_FILE` 全部服务生效）。在包含此修复的版本发布并部署前，对生产执行发布仍须先核对 `COMPOSE_FILE` 服务集含 pg/redis，并按既有禁令避免 `compose up/down` 触及基础设施。发布前核对 `COMPOSE_FILE` 指向：若为仓库默认 `docker-compose.yml`，其 pg/redis 为相对 bind（`./data/postgres`、`./data/redis`），相对路径按 compose 文件所在目录解析。
 - 更新应用前通过镜像与迁移准入；保留基础设施，按服务使用 `up -d --no-deps --no-build --pull never`，再等待后端、worker 和网关健康。`restart` 不会换镜像。
 - backend 与 PythonLab worker 保持一致的运行身份（既有部署为 `1000:1000`）及 socket 补充组。调整旧 root 属主工作区前停写、配对备份、逐对象盘点；不递归改整个 data、删锁或重写 journal。
 - registry 与本地 digest 必须逐一匹配；当前脚本没有 `REGISTRY_INSPECT_PREFIX` 代理查询入口，也不因镜像已缓存而跳过核验。
@@ -433,7 +433,7 @@ JSON 由运行中的 backend 容器解析，不依赖宿主 Python。健康通�
 
 ### AI伙伴临时共享榜单配置（未发布）
 
-标题保留原链接；本节只维护配置合同，发布状态见 TEST_STATUS。
+标题保留原链接。状态（2026-11-05 只读核验）：相关代码已随 2.2.5–2.2.8 发布；生产 backend 已配置评分智能体（`AI_PARTNER_SCORING_AGENT_ID` 非空），该功能在生产启用；真实模型评分行为未单独验收。本节只维护配置合同。
 
 | 后端配置 | 默认值 | 说明 |
 |---|---|---|
@@ -495,7 +495,9 @@ Dify 若被攻破，攻击面可达 backend 的该网络接口。当前不改变
 `PYTHONLAB_WORKSPACE_ROOT` 是 backend/worker 看到的目录。容器部署中需要显式帮助
 DockerProvider 定位宿主机目录时，`HOST_WORKSPACE_ROOT` 应填写同一份工作区的宿主机绝对路径。
 
-`.env.example` 是机器可读基线，其中 `/absolute/path/to/...` 必须按目标机器替换。
+`.env.example` 是机器可读基线；`PYTHONLAB_HOST_WORKSPACE_ROOT` / `HOST_WORKSPACE_ROOT`
+默认留空，Compose 回落到 `./data/pythonlab/workspaces`。容器部署需要显式宿主机路径时，
+必须按目标机器填写实际绝对路径；留空与错误的显式映射都有实际影响。
 DockerProvider 先尝试 `HOST_WORKSPACE_ROOT` 显式映射，再尝试容器 bind mount 和 mountinfo，
 最终沿用原路径；显式值与 `PYTHONLAB_WORKSPACE_ROOT` 相同时会忽略该映射并继续解析。
 宿主目录与容器内路径不可互换，错误的显式映射可能优先覆盖正确的自动解析。

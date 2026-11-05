@@ -30,15 +30,31 @@ def _answer(id=1, session_id=10, knowledge_point="循环", **changes):
     return SimpleNamespace(**values)
 
 
-def test_first_attempt_is_stable_within_each_session_without_mutating_input():
+def test_fixed_questions_with_same_kp_are_all_kept_within_each_session():
     retry = _answer(4, attempt_seq=2, is_adaptive=True)
     later_id = _answer(3)
     first = _answer(2)
     other_session = _answer(1, session_id=20)
     answers = [retry, other_session, later_id, first]
 
-    assert _scoring._first_attempt_per_kp(answers) == [first, other_session]
+    assert _scoring._first_attempt_per_kp(answers) == [first, later_id, other_session]
     assert answers == [retry, other_session, later_id, first]
+
+
+def test_documented_example_two_fixed_questions_one_right_one_wrong_scores_half():
+    right = _answer(1, ai_score=10, max_score=10)
+    wrong = _answer(2, ai_score=0, max_score=10)
+    retained = _scoring._first_attempt_per_kp([wrong, right])
+    assert retained == [right, wrong]
+    assert _scoring._aggregate_knowledge_rates(retained) == {"循环": 50.0}
+
+
+def test_fixed_question_does_not_consume_adaptive_first_round_slot():
+    fixed = _answer(1)
+    adaptive_first = _answer(2, is_adaptive=True)
+    adaptive_retry = _answer(3, attempt_seq=2, is_adaptive=True)
+    retained = _scoring._first_attempt_per_kp([adaptive_retry, adaptive_first, fixed])
+    assert retained == [fixed, adaptive_first]
 
 
 def test_adaptive_practice_without_first_attempt_is_not_counted():
@@ -67,6 +83,7 @@ def test_missing_legacy_attributes_use_original_defaults():
     assert _scoring._first_attempt_per_kp([one, two, no_knowledge_point]) == [
         no_knowledge_point,
         one,
+        two,
     ]
 
 

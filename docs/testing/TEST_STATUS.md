@@ -2,13 +2,13 @@
 
 > 状态：active
 > Owner：testing
-> 最近更新：2026-11-04
+> 最近更新：2026-11-05
 
 本页只维护最近验证；早期整理批次见[归档](../archive/README.md)，未结事项见[唯一台账](../plans/project-consolidation.md)。
 
 ## 基线与边界
 
-- 当前源码：本地 HEAD = origin/main = 含 2.2.8 构建源 `2d9dda0` 的历史（2.2.8 构建源另见[发布记录](../operations/RELEASE_NOTES.md)）。**2.2.8已于2026-11-04部署生产**，六镜像按digest核验、配对备份与隔离恢复通过、专用合成账号部署后双浏览器验收后按精确ID清理。
+- 当前源码：本地 `main` 含 2.2.8 构建源 `2d9dda0` 的历史，并领先 `origin/main` 2 个未推送提交（发布白名单与文档整理）；2.2.8 构建源与已部署身份见[发布记录](../operations/RELEASE_NOTES.md)。**2.2.8已于2026-11-04部署生产**，六镜像按digest核验、配对备份与隔离恢复通过、专用合成账号部署后双浏览器验收后按精确ID清理。
 - 2.2.6的[发布workflow41661803455](https://github.com/shuhao0727/wangsh/actions/runs/41661803455)已成功，六镜像/release-set已发布；2026-11-04联网复核workflow与远端标签。此前“尚未构建”是文档未跟进，现据实际证据订正，不能因此重复发布。
 - 生产访问：局域网已停用。本轮经既有 SSH 主机核验，实际外部入口为 `wangsh.cn:6608`（网关 80 映射）；本机 DNS 被代理劫持到 198.18.0.7，按真实地址 153.34.245.40 复测。**6607 为 SSH 端口**（`DEPLOY.md` 与 `~/.ssh/config` 一致；2026-11-05 服务器本机 http/https 探测均无响应，此前"另一套 Next.js 应用"的观察是本机 DNS 劫持期的误判，待 `--resolve` 复测确认）。实际 PG/Redis 为旧发布目录 bind，备用 production 配置命名卷不适用。
 - 2.2.8 停流前五项准入均由现场重新核验：release-set 身份、六镜像官方 registry/本地 RepoDigest、纯正式镜像浏览器行为、真实数据目标、回滚配置。服务器直连 Docker Hub 仍超时，按用户本次授权使用发布范围临时 SSH 通道完成官方核验，未改系统 DNS/代理或跳过校验。
@@ -65,7 +65,9 @@
 | 迁移守卫 | `python3 -I -B backend/scripts/check_migration_guard.py` | 50文件通过，未运行迁移 |
 | 版本一致性 | `node scripts/check-version-consistency.mjs` | 发布准备2.2.6通过；lock根版本同步，is-docker元数据恢复为已装包/同integrity tarball实际2.2.1，其他依赖不升级 |
 | 2.2.6干净安装尝试 | 合成目录、Node20.20.2/npm10.8.2普通npm ci，未触碰项目node_modules | 两次分别ECONNRESET与registry.npmjs.org元数据EIDLETIMEOUT；属下载失败，未记通过。后续必须由发布workflow的质量门禁验证，不关闭TLS/不放宽安装参数 |
-| 文档门禁 | `node scripts/check-markdown-contracts.mjs`、Markdown合同、`git diff --check` | 2026-11-05台账重审后 115 files / 731 links / 0 missing；历史2026-11-03为109/702，2.2.6批次110/709、部署前110/713、2.2.8部署后111/720、四方对齐后112/724、清理后113/725。新增后门事件记录后更新当前派生计数，不覆盖历史 |
+| 审计决策批次（D1/D3/D6/D9/D12/D13/D14/A-01/A-07） | 定向 pytest、node 合同、compose 渲染、文档门禁 | 计分修正后 `tests/assessment` 等 **249 passed / 20 skipped**；治理 errors=0/41 warnings；根合同 **91/91**；`docker compose --env-file .env.example` 生产/dev 渲染均 exit 0（空值回归已修，见下）；版本一致 2.2.8；烟测 404 判定测试 4/4。**门禁顺序**：运行 pytest 会生成 `backend/.pytest_cache/README.md`，须先删除该目录再跑 `check-markdown-contracts`，否则误报（见独立审查 R-05） |
+| 真实 prod-smoke（2.2.8 正式镜像合成栈） | `wangsh_sim` 隔离栈、回环 16608、容器 loopback:11434 合成供应商桩、`ANALYSIS_AGENT_ID` 指定桩智能体 | 两轮：①无桩首跑 **11 PASS/2 WARN/1 FAIL**，唯一 FAIL 为 group-discussion（活动智能体未配置 API 端点，503，属环境夹具缺失），FAIL 时 `test-results/prod-smoke/failures.md` 写入 1239B；②补桩后重跑 **12 PASS/2 WARN/0 FAIL、exit 0**，`failures.md` 不生成——**D13 FAIL/非 FAIL 双分支均经真实运行确认**。2 WARN 为两个只读端点 401 与内容/书籍夹具缺失（与历史一致）。用毕 8 容器/4 卷/网络/工作区精确清理，开发栈 7 容器未变。既有缺口：`deploy.sh simulate` 的 `run_sim_deploy`/`run_sim_compose` 未传 `REDIS_HOST`（模拟项目 redis 容器名为 `wangsh_sim-redis-1`），本轮以环境变量覆盖，登记为 OPS-06 |
+| 文档门禁 | `node scripts/check-markdown-contracts.mjs`、Markdown合同、`git diff --check` | 2026-11-05台账重审后 115 files / 730 links / 0 missing；历史2026-11-03为109/702，2.2.6批次110/709、部署前110/713、2.2.8部署后111/720、四方对齐后112/724、清理后113/725。新增后门事件记录后更新当前派生计数，不覆盖历史 |
 | 脚本语法 / 差异 | 已改 shell 的 `bash -n`、Node `--check`、`git diff --check` | 通过 |
 
 根合同首轮为133/134：仅文档派生链接数过期；更新当前统计后全量复验通过。后续增加容器CLI等合同后为151项，未删除失败断言刷绿。

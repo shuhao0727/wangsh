@@ -90,15 +90,17 @@ def test_fernet_key_format_rejects_wrong_length():
     assert f.decrypt(f.encrypt(b"x")) == b"x"
 
 
-def test_env_example_has_valid_fernet_key():
-    """仓库里的 .env.example 必须是可直接使用的合法 Fernet 密钥。
+def test_env_example_agent_key_is_placeholder_rejected_by_production():
+    """生产模板里的 AGENT_API_KEY_ENCRYPTION_KEY 必须是被启动校验拒绝的占位值。
 
-    否则新环境照抄示例，要到「保存智能体」那一步才会炸。
+    历史：为了让新环境照抄示例后能直接保存智能体，此处曾要求模板内含合法 Fernet key
+    （3d05b08）。2026-11-05 安全审计（G1-01）确认：照抄模板未改会让生产以公开可查的
+    密钥启动、静默加密用户 API Key。现契约改为 change_me 占位——生产启动即失败，
+    复制模板后必须替换为 `openssl rand -base64 32` 生成的真实密钥。
     """
-    import base64
     from pathlib import Path
 
-    from cryptography.fernet import Fernet
+    from app.core.config import Settings
 
     root = Path(__file__).resolve().parents[3]
     text = (root / ".env.example").read_text(encoding="utf-8")
@@ -107,6 +109,13 @@ def test_env_example_has_valid_fernet_key():
         if line.startswith("AGENT_API_KEY_ENCRYPTION_KEY="):
             value = line.split("=", 1)[1].strip()
             break
-    assert value, "示例里缺少 AGENT_API_KEY_ENCRYPTION_KEY"
-    assert len(base64.urlsafe_b64decode(value)) == 32, f"示例密钥解码后应为 32 字节，实际 {value}"
-    Fernet(value.encode())  # 不抛错即合法
+    assert value == "change_me", "示例必须使用会被生产校验拒绝的占位值"
+
+    with pytest.raises(ValueError):
+        Settings(
+            DEBUG=False,
+            SECRET_KEY="x" * 32,
+            POSTGRES_PASSWORD="postgres",
+            SUPER_ADMIN_PASSWORD="admin-password",
+            AGENT_API_KEY_ENCRYPTION_KEY=value,
+        )

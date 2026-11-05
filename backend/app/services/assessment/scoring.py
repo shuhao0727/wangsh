@@ -2,8 +2,9 @@
 
 
 def _first_attempt_per_kp(answers) -> list:
-    """自适应计分：同一知识点只保留首次尝试（attempt_seq==1 或 is_adaptive==False），
-    后续自适应题仅作练习不计入总分。无知识点的题目直接保留。"""
+    """计分口径：固定题逐题计分，同一知识点下多道固定题都保留；
+    仅自适应答案按 (session_id, knowledge_point) 保留首轮，自适应补题
+    （attempt_seq > 1）只作练习反馈、不计入总分。无知识点的题目直接保留。"""
     sorted_answers = sorted(
         answers,
         key=lambda a: (
@@ -13,20 +14,24 @@ def _first_attempt_per_kp(answers) -> list:
             getattr(a, "id", 0) or 0,
         ),
     )
-    seen_kp: set[tuple[int, str]] = set()
+    seen_adaptive_kp: set[tuple[int, str]] = set()
     result = []
     for a in sorted_answers:
         kp = getattr(a, "knowledge_point", None)
         if not kp:
             result.append(a)
             continue
-        # 自适应追加题（attempt_seq > 1）跳过，不计分
-        if getattr(a, "is_adaptive", False) and getattr(a, "attempt_seq", 1) > 1:
+        if not getattr(a, "is_adaptive", False):
+            # 固定题逐题计分，不按知识点折叠。
+            result.append(a)
+            continue
+        # 自适应补题（attempt_seq > 1）跳过，不计分
+        if getattr(a, "attempt_seq", 1) > 1:
             continue
         skey = (getattr(a, "session_id", 0) or 0, kp)
-        if skey in seen_kp:
+        if skey in seen_adaptive_kp:
             continue
-        seen_kp.add(skey)
+        seen_adaptive_kp.add(skey)
         result.append(a)
     return result
 

@@ -1,10 +1,15 @@
-export async function isNotFoundPage(page) {
-  const [codeCount, messageCount] = await Promise.all([
-    page.getByText("404", { exact: true }).count(),
-    page.getByText("抱歉，您访问的页面不存在。", { exact: true }).count(),
-  ]);
+// 判定文案须与 frontend/src/pages/NotFound/index.tsx 保持一致；
+// 防漂移合同测试见 prod-smoke-ui-lib.test.mjs。
+export const NOT_FOUND_MARKERS = ["404", "页面不存在"];
 
-  return codeCount > 0 && messageCount > 0;
+export async function isNotFoundPage(page) {
+  const counts = await Promise.all(
+    NOT_FOUND_MARKERS.map((marker) =>
+      page.getByText(marker, { exact: true }).count(),
+    ),
+  );
+
+  return counts.every((count) => count > 0);
 }
 
 export function classifySmokeAction(action) {

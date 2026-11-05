@@ -25,7 +25,7 @@ class PythonLabSettingsMixin:
     PYTHONLAB_IDLE_TIMEOUT_SECONDS: int = Field(default=1800)
 
     # Phase 3: Sandbox Upgrade
-    PYTHONLAB_SANDBOX_PROVIDER: str = Field(default="docker")  # docker, k8s, nomad
+    PYTHONLAB_SANDBOX_PROVIDER: str = Field(default="docker")  # 目前仅支持 docker
     PYTHONLAB_DOCKER_RUNTIME: str = Field(default="runc")  # runc, runsc (gVisor), kata-runtime
     PYTHONLAB_CONTAINER_NAMESPACE: str = Field(default="pythonlab")
 

@@ -52,11 +52,12 @@ AI Prompt 和验证入口；历史阶段计划不再作为当前行为依据。
 - 整卷结果仅对归属本人且处于 `submitted` / `graded` 的会话开放；`in_progress`（包括全部已答）及其他非结果状态返回 422，不提前提供标准答案或解析。单题已提交后的合法即时反馈不受此限制。
 - 新会话自适应首题使用逐题保存点：保存点内的生成或 SQL 写入失败只回滚当前题，再建立原合同中的无快照占位答案，保留外层新会话及此前固定/成功答案。边界是保存点已经建立；若建立前自动 flush 固定答案或前一题占位答案失败，则请求整体失败，由会话关闭回滚，不能声称仍可占位成功；隔离 SQLite/PG 用新 Session 验证无会话/答案部分提交。占位题后续评分与供应商故障体验仍需专项验收，不把该恢复机制当作首次起测严格并发幂等。AI JSON 解析集中在 `backend/app/services/assessment/ai_response_parsing.py`，`session_service` 保留兼容导出。
 
-### 计分口径与本地修正（2026-10-31）
+### 计分口径（2026-11-05 合入）
 
-以下修正已在 `.claude/worktrees/lucid-sanderson-a1b1bf` 本地实现，尚未合入 main 或发布；
-不能据此认定其他运行环境已生效。计分统一由 `backend/app/services/assessment/scoring.py`
-筛选计分答案，供交卷总分、初级画像和管理端知识点统计复用。
+原 2026-10-31 的本地修正已按本节契约合入 main（`scoring.py::_first_attempt_per_kp`），
+对应回归测试覆盖同知识点两道固定题 `10/20` 与自适应补题不计分。计分统一由
+`backend/app/services/assessment/scoring.py` 筛选计分答案，供交卷总分、初级画像和
+管理端知识点统计复用。
 
 - 固定题逐题计分；同一知识点下多道固定题的分母与得分都保留，不按知识点折叠。
 - 只有 `is_adaptive=true` 的答案按 `(session_id, knowledge_point)` 保留首轮；

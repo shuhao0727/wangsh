@@ -1088,12 +1088,14 @@ def main() -> int:
         ],
     }
 
-    failures_md = build_failures_md(steps, service_logs)
-
     write_json(SUMMARY_PATH, summary)
     write_json(API_RESULTS_PATH, api_results)
     write_json(SKIPS_PATH, {"items": all_skips})
-    write_text_private(FAILURES_MD_PATH, failures_md)
+    # failures.md 仅在最终 FAIL 时写入：PASS/WARN 也写会让工作区残留
+    # test-results/prod-smoke/failures.md，触发 markdown-contracts 的“不应留在工作区”检查。
+    # ensure_dirs(clean=True) 已在启动时清空输出目录，无需额外删除逻辑。
+    if overall_status == "FAIL":
+        write_text_private(FAILURES_MD_PATH, build_failures_md(steps, service_logs))
 
     harden_output_permissions()
     print(json.dumps(summary["counts"], ensure_ascii=False))
