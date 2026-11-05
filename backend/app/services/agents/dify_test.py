@@ -5,6 +5,13 @@ from typing import Optional
 from app.schemas.agents import AgentTestResponse
 from app.services.agents.agent_testing import redirect_rejected_message
 
+
+def _dify_success_response(path: str, model_name: Optional[str], test_message: str) -> AgentTestResponse:
+    display_model = (model_name or "").replace("-", " ").replace("_", " ").title()
+    msg = f"✅ Dify智能体连接测试成功\n\n📡 API路径: {path}\n🧠 聊天测试: ✅ 成功{f' (使用模型: {display_model})' if model_name else ''}\n💬 测试消息: {test_message[:50]}"
+    return AgentTestResponse(success=True, message=msg, response_time=None, timestamp=datetime.now())
+
+
 async def run_dify_test(api_endpoint: str, headers: dict, test_message: str, model_name: Optional[str]) -> AgentTestResponse:
     base_url = api_endpoint.rstrip("/")
     base_lower = base_url.lower()
@@ -32,9 +39,7 @@ async def run_dify_test(api_endpoint: str, headers: dict, test_message: str, mod
                         break
                     ct = resp.headers.get("content-type", "").lower()
                     if resp.status_code == 200 and "text/event-stream" in ct:
-                        display_model = (model_name or "").replace("-", " ").replace("_", " ").title()
-                        msg = f"✅ Dify智能体连接测试成功\n\n📡 API路径: {path}\n🧠 聊天测试: ✅ 成功{f' (使用模型: {display_model})' if model_name else ''}\n💬 测试消息: {test_message[:50]}"
-                        return AgentTestResponse(success=True, message=msg, response_time=None, timestamp=datetime.now())
+                        return _dify_success_response(path, model_name, test_message)
                     body = await resp.aread()
                     text = body.decode("utf-8", errors="ignore")
                     if resp.status_code in (401, 403):
@@ -44,9 +49,7 @@ async def run_dify_test(api_endpoint: str, headers: dict, test_message: str, mod
                         try:
                             data = json.loads(text)
                             if isinstance(data, dict) and ("answer" in data or "message" in data or "choices" in data):
-                                display_model = (model_name or "").replace("-", " ").replace("_", " ").title()
-                                msg = f"✅ Dify智能体连接测试成功\n\n📡 API路径: {path}\n🧠 聊天测试: ✅ 成功{f' (使用模型: {display_model})' if model_name else ''}\n💬 测试消息: {test_message[:50]}"
-                                return AgentTestResponse(success=True, message=msg, response_time=None, timestamp=datetime.now())
+                                return _dify_success_response(path, model_name, test_message)
                         except Exception:
                             pass
                     last_error = f"{resp.status_code}:{text[:80]}"

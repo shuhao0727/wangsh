@@ -10,7 +10,6 @@ from loguru import logger
 
 from app.core.config import settings
 from app.core.http_client import get_http_client
-from app.services.agents.agent_testing import redirect_rejected_message
 from app.services.agents.chat_common import prepare_chat_context
 from app.services.agents.endpoint_security import (
     EndpointNotAllowedError,
@@ -170,19 +169,9 @@ async def stream_agent_chat(
             async with client.stream(
                 "POST", chat_url, headers=headers, json=payload, follow_redirects=False
             ) as resp:
-                if 300 <= resp.status_code < 400:
-                    breaker.record_failure(circuit_key)
-                    yield _sse_error({
-                        "error": f"provider_status_{resp.status_code}",
-                        "message": redirect_rejected_message(resp.status_code),
-                        "provider_status": resp.status_code,
-                    })
-                    return
                 if resp.status_code != 200:
-                    body_bytes = await resp.aread()
-                    body_text = body_bytes.decode("utf-8", errors="ignore")
-                    error_frame = _provider_error_frame(
-                        circuit_key, resp.status_code, body_text, idx, candidate_model, candidate_models
+                    error_frame = await _provider_error_frame(
+                        circuit_key, resp, idx, candidate_model, candidate_models
                     )
                     if error_frame is not None:
                         yield error_frame

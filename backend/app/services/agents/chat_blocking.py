@@ -38,6 +38,29 @@ async def _post_with_retry(
     return resp
 
 
+def _provider_failure(resp, idx: int, candidate_model: str, candidate_models: list) -> Optional[str]:
+    """非 200 响应的处理：返回 None 表示换下一个候选模型重试，否则返回最终错误文案。"""
+    status_code = int(resp.status_code) if resp else 0
+    if 300 <= status_code < 400:
+        # 不跟随、不读取重定向响应体：硬校验只覆盖首个 URL（A-2）。
+        return f"provider_status_{status_code}: {redirect_rejected_message(status_code)}"
+    msg = provider_error_message(status_code)
+    detail = extract_provider_detail(resp.text if resp else "")
+    can_fallback = (
+        idx < len(candidate_models) - 1
+        and should_retry_openrouter_fallback(
+            status_code,
+            detail,
+            candidate_model,
+            candidate_models[idx + 1],
+        )
+    )
+    if can_fallback:
+        return None
+    suffix = f" - {detail}" if detail else ""
+    return f"provider_status_{status_code}: {msg}{suffix}"
+
+
 async def run_agent_chat_blocking(
     db,
     *,
@@ -90,26 +113,9 @@ async def run_agent_chat_blocking(
                 breaker.record_success(ctx.circuit_key)
                 return ctx.provider.parse_blocking_response(resp.json())
 
-            status_code = int(resp.status_code) if resp else 0
-            if 300 <= status_code < 400:
-                last_error = f"provider_status_{status_code}: {redirect_rejected_message(status_code)}"
-                break
-            msg = provider_error_message(status_code)
-            detail = extract_provider_detail(resp.text if resp else "")
-            can_fallback = (
-                idx < len(candidate_models) - 1
-                and should_retry_openrouter_fallback(
-                    status_code,
-                    detail,
-                    candidate_model,
-                    candidate_models[idx + 1],
-                )
-            )
-            if can_fallback:
+            last_error = _provider_failure(resp, idx, candidate_model, candidate_models)
+            if last_error is None:
                 continue
-
-            suffix = f" - {detail}" if detail else ""
-            last_error = f"provider_status_{status_code}: {msg}{suffix}"
             break
 
         breaker.record_failure(ctx.circuit_key)

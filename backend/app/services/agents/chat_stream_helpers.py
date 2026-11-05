@@ -8,6 +8,7 @@
 import json
 from typing import AsyncGenerator, Optional, Dict, Any
 
+from app.services.agents.agent_testing import redirect_rejected_message
 from app.services.agents.providers import (
     provider_error_message,
     extract_provider_detail,
@@ -76,8 +77,17 @@ async def _iter_stream_events(provider, resp):
             return
 
 
-def _provider_error_frame(circuit_key, resp_status, body_text, idx, candidate_model, candidate_models) -> Optional[bytes]:
-    status_code = int(resp_status)
+async def _provider_error_frame(circuit_key, resp, idx, candidate_model, candidate_models) -> Optional[bytes]:
+    status_code = int(resp.status_code)
+    if 300 <= status_code < 400:
+        # 不跟随、不读取重定向响应体：硬校验只覆盖首个 URL（A-2）。
+        breaker.record_failure(circuit_key)
+        return _sse_error({
+            "error": f"provider_status_{status_code}",
+            "message": redirect_rejected_message(status_code),
+            "provider_status": status_code,
+        })
+    body_text = (await resp.aread()).decode("utf-8", errors="ignore")
     detail = extract_provider_detail(body_text)
     can_fallback = (
         idx < len(candidate_models) - 1
