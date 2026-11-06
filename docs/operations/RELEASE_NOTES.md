@@ -40,13 +40,23 @@
 
 ---
 
-## 未发布：2.2.10 PythonLab 调试容器断网（PYLAB-NET-01，`a8fcb44`，已合入本地 main、未推送）
+## 未发布：2.2.10
+
+### PythonLab 调试容器断网（PYLAB-NET-01，`a8fcb44`，已推送 origin/main，推送后 ci-quality run 42149242348 通过）
 
 - 问题：debug 容器在默认 bridge 上、可出站，学生代码的联网限制只靠工作区里可改写的 `sitecustomize`（PythonLab 文档 OPS-01）。学生代码可以访问外网与 bridge 上可达的服务。
 - 修复：`backend/app/core/sandbox/docker.py` 让 debug 也 `--network none`，不再发布宿主端口；启动以容器内就绪检查（`/proc/net/tcp`）为准。复用要求两种模式都无网络。`dap_ws` 对 Docker 会话不再要求宿主端口（DAP 本就经 `docker exec` 在容器内连接），旧 TCP 会话保留端口校验。
 - 验证（本地开发栈）：PythonLab/sandbox pytest 488 passed / 60 skipped；容器内绕过 `sitecustomize` 的 TCP/UDP 出站均 `Network is unreachable`、DNS 失败；两名合成学生同时调试各 6/6；Chrome channel 与 WebKit 真实点击各 4/4；独立审查通过。未覆盖：生产验证。
 - 切换与回滚（按代码推断，未实测）：backend 与 pythonlab-worker 同版本切换；部署前已在运行的调试容器在其会话结束前不受隔离；回滚到 2.2.9 后，2.2.10 建的调试会话以 4410 关闭，学生重新开始调试即可。部署后核对带 `wangsh.pythonlab.runtime-mode=debug` 标签的容器 `NetworkMode` 均为 `none`。
 - 详情见[审查问题修复计划](../plans/2026-11-05-release-228-review-fixes.md)。
+
+### worker 在启动中途丢失后，会话恢复必定失败（PYLAB-03，`900a8ab`）
+
+- 问题：worker 在会话 `STARTING` 中途丢失、启动任务再次执行时，恢复路径本应接管已建好的那一代容器，但期望挂载值是没有 `await` 的协程对象，复用检查必报"运行环境工作区不兼容"，会话进 `FAILED`，学生需重新启动。失败是关闭方向，不越权、不删资源。
+- 范围：`d972f5d`（2026-09-12 治理复杂度拆分）引入；2.1.6 至 2.2.9 均受影响，包括生产 2.2.9。
+- 修复：`backend/app/tasks/pythonlab.py` 的 `_recovery_expected_config` 改回 `await`。
+- 验证（本地）：新增走真实 Celery 任务的恢复测试（plain/debug × 重试/重投递）与三种拒绝用例，修复前恢复用例均失败；独立审查通过；开发栈真实 Docker 两种模式都接管同一容器与同一 generation，修复前写法在同一环境复现该错误。未覆盖：真实 worker SIGKILL 加 broker 重投的端到端。
+- 切换：无额外步骤；已因本缺陷进入 `FAILED` 的会话不会自动恢复。
 
 ---
 

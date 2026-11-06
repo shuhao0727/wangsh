@@ -7,7 +7,7 @@
 
 ## 当前状态
 
-- 更新：2026-11-06；**2.2.9 已部署生产**（构建源 `50f8c9f`，`current -> /home/shuhao/wangsh-releases/2.2.9/source`，[批次记录](../archive/testing/2026-11-06-release-229.md)）；外部入口 `wangsh.cn:6608` 经老大手机流量访问确认可用（网关同时段 47 个外部请求）；2.2.9 git tag 待授权。2.2.10（PYLAB-NET-01）已修并按老大授权合入本地 main（`a8fcb44`），未推送、未发布，见下表。
+- 更新：2026-11-06；**2.2.9 已部署生产**（构建源 `50f8c9f`，`current -> /home/shuhao/wangsh-releases/2.2.9/source`，[批次记录](../archive/testing/2026-11-06-release-229.md)）；外部入口 `wangsh.cn:6608` 经老大手机流量访问确认可用（网关同时段 47 个外部请求）；2.2.9 git tag 待授权。2.2.10：PYLAB-NET-01 已推送 origin/main（`a8fcb44`，CI 通过），PYLAB-03 已提交（`900a8ab`）；均未发布，见下表。
 - 现行计划：2026-11-04 四方对齐记录已完成处置，转入归档（见[计划索引](README.md)）；**2026-11-05 新增 active 专项计划**：[2.2.2→2.2.8 审查问题修复计划](2026-11-05-release-228-review-fixes.md)（2026-11-05 老大已按推荐拍板，执行中；已修条目已推送 origin/main，见计划当前状态）。未结事项仍以本台账为准。
 - 安全：服务器后门事件六项持久化已清除；**用户 2026-11-05 明确接受遗留风险**（不轮换密码、SSH 密码认证保持开启、不做主机重装），SEC-03 记录该决定；应用数据保密性未验证。
 - 边界：不绕过门禁、不覆盖已发 tag/镜像、不改业务数据或默认挂载、不清理回滚资源。
@@ -45,8 +45,8 @@
 | SOCKET-01 | backend 与 PythonLab worker 均挂载 `/var/run/docker.sock`（`docker-compose.yml:219/:328`，dev `:134/:252`）；socket 等于宿主 root 等价能力，是非 root 化后仍存在的架构风险 | ops + backend | 按[工程治理](../development/ENGINEERING_GOVERNANCE.md) 周期性审计表（每半年 Docker socket 复查）评估；若引入 socket 代理等缓解方案，先核实宿主兼容与授权 |
 | OPS-06 | `deploy.sh simulate` 的 `run_sim_deploy`/`run_sim_compose` 未传 `REDIS_HOST`：模拟项目 redis 容器名为 `wangsh_sim-redis-1`，compose 默认 `wangsh-redis-1` 连不上，后端 unhealthy；2026-11-05 实测复现，以环境变量覆盖绕过 | release-ops | 在 sim 函数中传入 `REDIS_HOST="${sim_project}-redis-1"`（或在 DEPLOY.md 标注必须手工覆盖），并复跑 `simulate` 验证 |
 | SSRF-FLOW-01 | **P1** 【2.2.8 审查】`/api/v2/pythonlab/flow/test_agent_connection` 只要求登录（`require_user`），请求体 `api_url` 不做出站校验、跟随重定向并回显上游响应体前 600 字；任何登录用户（含学生）可让服务器请求局域网/本机服务并读回。早于 2.2.2，生产 2.2.8 受影响 | backend + 安全 | **2026-11-05 老大选热修 + A+B；`d6375a3`，独立审查通过，已推送 origin/main**。开发栈 API 与浏览器验收通过。2026-11-05 生产只读核对：生效 flag 地址校验通过、不重定向。**2026-11-06 随 2.2.9 部署**，生产未登录调用返回 401 |
-| PYLAB-NET-01 | P2 【2.2.8 审查】debug 容器在默认 bridge 且可出站，学生代码联网限制只靠工作区内可改写的 `sitecustomize`（PythonLab 文档 OPS-01） | pythonlab | 方案 C（`--network none`）已定，**2026-11-05 改为进 2.2.10**。**2026-11-06 已修（`a8fcb44`，按老大授权合入本地 main，未推送、未发布）**：debug 也 `--network none`、不发布宿主端口，DAP 端口门槛只对旧 TCP 会话保留；开发栈验收与独立审查通过（见[修复计划](2026-11-05-release-228-review-fixes.md)）。随 2.2.10 部署并在生产核对 debug 容器 `NetworkMode=none` 后关闭。仅记录：debug 仍 `--cap-add NET_BIND_SERVICE`，5678 大于 1024 用不到，下次改调试启动参数时一并去掉并做双浏览器回归 |
-| PYLAB-03 | P2 【2.2.10 审查发现，早于区间，`d972f5d` 引入】启动恢复路径 `_recovery_expected_config`（`backend/app/tasks/pythonlab.py:261`）调用异步 `_resolve_host_mount_path` 未 `await`，期望挂载是协程对象而非路径，复用检查必报"运行环境工作区不兼容"。2026-11-06 最小复现确认（期望值为 `<coroutine …>`，并有 never awaited 警告）。影响：worker 在 STARTING 中途丢失、任务重投时，恢复必定失败，会话进 FAILED（该错误不在可重试集合内），学生需重新启动；失败是关闭方向，不涉及越权。容器回收时机未核。`_recover_interrupted_start` 当前没有测试覆盖 | pythonlab | 改为 `await` 后补一条走 `_recover_interrupted_start` 的恢复测试（修复前必须失败）；是否进 2.2.10 待老大决定 |
+| PYLAB-NET-01 | P2 【2.2.8 审查】debug 容器在默认 bridge 且可出站，学生代码联网限制只靠工作区内可改写的 `sitecustomize`（PythonLab 文档 OPS-01） | pythonlab | 方案 C（`--network none`）已定，**2026-11-05 改为进 2.2.10**。**2026-11-06 已修（`a8fcb44`，已推送 origin/main，推送后 CI 通过，未发布）**：debug 也 `--network none`、不发布宿主端口，DAP 端口门槛只对旧 TCP 会话保留；开发栈验收与独立审查通过（见[修复计划](2026-11-05-release-228-review-fixes.md)）。随 2.2.10 部署并在生产核对 debug 容器 `NetworkMode=none` 后关闭。仅记录：debug 仍 `--cap-add NET_BIND_SERVICE`，5678 大于 1024 用不到，下次改调试启动参数时一并去掉并做双浏览器回归 |
+| PYLAB-03 | P2 【2.2.10 审查发现，早于区间，`d972f5d` 引入】启动恢复路径 `_recovery_expected_config`（`backend/app/tasks/pythonlab.py:261`）调用异步 `_resolve_host_mount_path` 未 `await`，期望挂载是协程对象而非路径，复用检查必报"运行环境工作区不兼容"。2026-11-06 最小复现确认（期望值为 `<coroutine …>`，并有 never awaited 警告）。影响：worker 在 STARTING 中途丢失、任务重投时，恢复必定失败，会话进 FAILED（该错误不在可重试集合内），学生需重新启动；失败是关闭方向，不涉及越权。容器回收时机未核。`_recover_interrupted_start` 当前没有测试覆盖 | pythonlab | **2026-11-06 老大决定进 2.2.10，已修（`900a8ab`），未发布**（验证见[修复计划](2026-11-05-release-228-review-fixes.md)）。根因：`d972f5d`（2026-09-12 治理复杂度拆分）把原本带 `await` 的内联表达式抽成同步 helper 时丢了 `await`；真实 prefork SIGKILL/Redis 恢复证据是 2026-09-11（`abb8bec`）记录的，早于该提交一天，之后没有重测。同类排查：静态扫描 `backend/app` 内私有协程未 await 的调用，只有此处（其余 9 处交给调度包装，不是缺陷；公开同名方法未覆盖）。关闭条件：改为 `await`，补一条走真实 Celery 任务与 `_recover_interrupted_start` 的恢复测试（修复前必须失败），开发栈真实 Docker 恢复一次，随 2.2.10 发布 |
 | A-1 | P2 【2.2.8 审查】智能体"测试连接"校验拼接前的相对路径，2.2.5 起恒失败（`aeae945`） | ai-agents | **2026-11-05 `2d239cf`（已推送 origin/main），独立审查通过**；开发栈合成供应商桩下测试连接返回成功（API 与浏览器），**2026-11-06 已随 2.2.9 部署**，可关闭 |
 | A-2 | P2 【2.2.8 审查】智能体出站客户端跟随重定向，绕过 SSRF 硬校验（含 Dify 流式与阻塞路径）；须与 A-1 同批 | ai-agents + 安全 | **2026-11-05 `2d239cf`（已推送 origin/main），六条路径不跟随重定向的断言通过（含 Dify 双候选地址），独立审查通过** |
 | SSRF-ANA-01 | P3 【2.2.8 审查 A 组发现，早于区间】管理员分析功能（热点问题、学生思维链、任务分析）经 `llm_agent_base.call_llm` 出站，不调用 `assert_agent_outbound_endpoint`，只受保存时软校验约束；与对话、测试连接的硬校验口径不一致。入口均为 `require_admin`，httpx 默认不跟随重定向，非 200 只记日志不回显 | ai-agents + 安全 | 老大决定是否在 `call_llm` 出站前补同一硬校验（成本小，会让指向未列白名单内网地址的分析智能体开始失败）；AI_AGENTS 已订正口径 |
@@ -132,6 +132,9 @@ A 类本轮无待改代码项；DIFY-02 已核验为非缺陷并关闭；D 类�
 
 ## 变更日志
 
+- 2026-11-06：PYLAB-03 按老大授权提交为 `900a8ab`（代码与测试），随本文档提交一起推送 main；推送后 CI 结果在下次文档更新回填。未打 tag、未部署。
+- 2026-11-06：老大决定 PYLAB-03 进 2.2.10 并在本会话修复：`_recovery_expected_config` 改回 `await`（`d972f5d` 拆分时丢失）；新增走真实 Celery 任务的恢复测试（plain/debug × 重试/重投递）与三种拒绝用例，修复前恢复用例均 FAILED，四种变异均被拦下；独立审查通过，三条 P3 测试意见已补；开发栈真实 Docker 恢复两种模式均接管同一容器与同一 generation，修复前写法在同一环境复现"工作区不兼容"。本地已修，未提交。
+- 2026-11-06：按老大授权推送 main（`eed0e21..060bd13`，快进、未强推）；推送后 ci-quality run 42149242348 通过（python governance 两次 errors=0；干净 PostgreSQL 上 pytest 3812 passed / 123 skipped；frontend 120 文件 / 879 例；repo-config 通过），markdown-quality 通过。未打 tag、未部署。
 - 2026-11-06：2026-11-06 07:48 老大用手机流量（不经操作机代理）打开 `https://wangsh.cn:6608` 正常；同一时段网关记录 47 个外部来源请求（200×45、401×1、429×1），确认外部入口经 2.2.9 网关可用。
 - 2026-11-06：PYLAB-NET-01 提交为 `a8fcb44`，按老大授权快进合入本地 main（未推送、未打 tag、未部署）；提交前迁移守卫通过，治理检查当前与 `--base-ref 50f8c9f`（上次 CI 全绿）均 errors=0。
 - 2026-11-06：PYLAB-NET-01（2.2.10）本地修复完成，开发栈验收与独立审查通过，未提交；审查中新登记 PYLAB-03（启动恢复路径漏 `await`，早于区间）。

@@ -12,7 +12,7 @@
   - 已修复且独立审查通过：SSRF-FLOW-01（A+B）、D3（回退）、D-R2、A-1、A-2、FE-TEST-01、PYLAB-02（本地部分；开发栈两名合成学生同时调试与三项 PythonLab smoke 通过）。
   - 已完成只读核对：SEC-TPL-01（`SUPER_ADMIN_PASSWORD` 命中模板值，处置待老大决定）；D3 前提（生产项目名由 `-p wangsh` 显式传入，发布目录无 `.env`）。
   - ENV-DEV-01：已完成（开发栈沙箱镜像 2.2.8，重建后生效连接与启动前核对一致）。
-- 下一步：**2.2.9 已于 2026-11-06 部署生产**（[批次记录](../archive/testing/2026-11-06-release-229.md)）；**2.2.10（PYLAB-NET-01 方案 C）已修，开发栈验收与独立审查通过，`a8fcb44` 已合入本地 main，未推送、未发布**。待老大：是否推送 main、PYLAB-03 是否同进 2.2.10、打 2.2.9 tag、是否批准生产合成账号做登录态验收；随后阶段 2–3。
+- 下一步：**2.2.9 已于 2026-11-06 部署生产**（[批次记录](../archive/testing/2026-11-06-release-229.md)）；**2.2.10：PYLAB-NET-01（方案 C）`a8fcb44` 已推送 origin/main、CI 通过；PYLAB-03（启动恢复漏 `await`）`900a8ab` 已提交；均未发布**。待老大：2.2.10 何时发版、打 2.2.9 tag、是否批准生产合成账号做登录态验收；随后阶段 2–3。
 - 阻断与待老大决定：
   - ①SEC-TPL-01：超管密码命中公开模板值，建议先在后台改密，再把服务器环境变量换成非模板值。
   - ②OPS-07：建议 2.2.9 前给 `stop-dev.sh --all` 加目标确认（会改变 D1 的既有行为）。
@@ -23,6 +23,9 @@
 
 ## 变更日志
 
+- 2026-11-06：PYLAB-03 按老大授权提交为 `900a8ab`（代码与测试），随本文档提交一起推送 main；推送后 CI 结果在下次文档更新回填。未打 tag、未部署。
+- 2026-11-06：老大决定 PYLAB-03 进 2.2.10 并在本会话修复：`_recovery_expected_config` 改回 `await`（`d972f5d` 拆分时丢失）；新增走真实 Celery 任务的恢复测试（plain/debug × 重试/重投递）与三种拒绝用例，修复前恢复用例均 FAILED，四种变异均被拦下；独立审查通过，三条 P3 测试意见已补；开发栈真实 Docker 恢复两种模式均接管同一容器与同一 generation，修复前写法在同一环境复现"工作区不兼容"。本地已修，未提交。
+- 2026-11-06：按老大授权推送 main（`eed0e21..060bd13`，快进、未强推）；推送后 ci-quality run 42149242348 通过（python governance 两次 errors=0；干净 PostgreSQL 上 pytest 3812 passed / 123 skipped；frontend 120 文件 / 879 例；repo-config 通过），markdown-quality 通过。未打 tag、未部署。
 - 2026-11-06：PYLAB-NET-01 提交为 `a8fcb44`，按老大授权快进合入本地 main（未推送、未打 tag、未部署）；提交前迁移守卫通过，治理检查当前与 `--base-ref 50f8c9f` 均 errors=0。
 - 2026-11-06：PYLAB-NET-01 按方案 C 本地修复（分支 `claude/pylab-net-01`，未提交）：debug 与 plain 都 `--network none`、不发布宿主端口，启动以容器内就绪检查为准，`dap_ws` 只对旧 TCP 会话要求端口。开发栈验收、smoke/soak、Chrome/WebKit 真实点击与独立审查通过；按审查意见修文档两处与一处注释、补 token 分支测试。审查发现范围外 P2，登记台账 PYLAB-03。
 - 2026-11-06：2026-11-06 07:48 老大用手机流量（不经操作机代理）打开 `https://wangsh.cn:6608` 正常；同一时段网关记录 47 个外部来源请求（200×45、401×1、429×1），确认外部入口经 2.2.9 网关可用。
@@ -202,13 +205,24 @@
   - 跑 PythonLab smoke/soak。
 - **风险与回退**：改动调试启动契约，这是 PythonLab 历史上最易回归的部分（TTY 附着竞态、DAP 传输都在这里出过问题）。回滚为还原网络参数与端口门槛。
 - **依赖**：PYLAB-02 合入后进行；ENV-DEV-01（开发栈验证）。
-- **进度（2026-11-06，`a8fcb44`，已合入本地 main，未推送、未发布）**：
+- **进度（2026-11-06，`a8fcb44`，已推送 origin/main，推送后 CI 通过，未发布）**：
   - 改动：`docker.py` 两种模式都 `--network none`，不再 `-p`，删去端口读回与"调试端口分配超时"，新建与复用都以 `_wait_for_readiness`（容器内 `/proc/net/tcp`）为准，返回的 `dap_host`/`dap_port` 为空；`docker_runtime.py` 复用要求两种模式都是 `NetworkMode=none`，旧版本接在 bridge 上的调试容器不被接管；`dap_ws` 对带 `docker_container_id` 或 `sandbox_owner_token` 的会话不再要求端口大于 0（判断放在 `ws/validation.py`，为守住治理复杂度上限），旧 TCP 会话保留 4410。`sessions.py` 无需改动（API 返回 `dap_port` 为空，前端不依赖）。
   - 验证：`pytest -k 'pythonlab or sandbox'` 488 passed / 60 skipped，新增/改动的测试在修复前源码上失败，token 分支另经变异确认；治理检查当前与 `--base-ref 50f8c9f` 均 errors=0。开发栈（2.2.8 沙箱镜像，合成学生）：debug 容器 `NetworkMode=none`、`PortBindings={}`、`docker port` 为空；容器内 `python3 -I`（不加载 sitecustomize）TCP 连接与 UDP `sendto` 到 TEST-NET-1 地址 192.0.2.1 均 `Network is unreachable`，DNS 解析失败，debugpy 仍在 `127.0.0.1:5678` 监听。两名合成学生同时 DAP soak 各 6/6；owner 并发与 print 可见性 smoke 通过；Chrome channel 与 WebKit 真实点击各 4/4；无残留容器。
   - 独立审查（只读）：**通过**，改动范围内无 P1/P2；P3 文档两处与一处过时注释已改，并补 `sandbox_owner_token` 分支的 ws 测试。范围外 P2 登记为台账 PYLAB-03。
   - 未覆盖：两个 debug 容器之间的互探未单独测（`--network none` 下只有回环，由单容器探针推断）；生产验证。
   - 切换与回滚（按代码推断，未实测）：backend 与 pythonlab-worker 必须同版本切换；部署时仍在运行、接在 bridge 上的旧调试容器在其会话结束前不受隔离，之后同名复用会报"运行环境网络不兼容"；回滚到 2.2.9 时，2.2.10 建的调试会话没有宿主端口，`dap_ws` 会以 4410 关闭，需学生重新开始调试。部署后核对 `docker ps --filter label=wangsh.pythonlab.runtime-mode=debug` 的容器 `NetworkMode` 均为 `none`。
 - **需要老大决策**：**是**——选 A / B / C，以及排期。推荐 C；只改后端代码、不需要服务器网络对象，可以进 2.2.9，但前提是开发栈端到端与双浏览器真实点击、smoke/soak 全部通过，否则 2.2.9 之后单独发版。
+
+### PYLAB-03（P2，2.2.10 审查发现，早于区间）worker 在启动中途丢失后恢复必定失败
+
+- **问题**：`backend/app/tasks/pythonlab.py` 的 `_recovery_expected_config` 调用异步 `_resolve_host_mount_path` 未 `await`，期望挂载成了协程对象的字符串，`check_reuse` 必报"运行环境工作区不兼容"。worker 在 `STARTING` 中途丢失、任务再次执行时，本应接管已建好的那一代容器，结果会话进 `FAILED`（该错误不可重试），学生需重新启动；失败是关闭方向，不越权、不删资源。
+- **根因与范围**：`d972f5d`（2026-09-12 治理复杂度拆分）把原本带 `await` 的内联表达式抽成同步 helper 时丢失。2.1.6 起各 tag 与 2.2.9 构建源 `50f8c9f` 都包含该提交，生产 2.2.9 受影响。真实 prefork SIGKILL/Redis 恢复证据记录于 2026-09-11（`abb8bec`），早于该提交，之后没有重测。同类排查：静态扫描 `backend/app` 内私有协程未 await 的调用，只有此处（另 9 处交给调度包装，不是缺陷；公开同名方法与 dict 方法同名，未覆盖）。
+- **修复**：helper 改为 `async def` 并 `await`，调用处 `await`；不新增抽象。
+- **进度（2026-11-06，`900a8ab`，未发布）**：
+  - 测试：新增 `test_worker_loss_during_start_recovers_running_generation`（plain/debug × 重试/重投递），走注册的真实 Celery 任务、真实 `DockerProvider` 与工作区 journal，修复前均 `FAILED`（`SANDBOX_START_FAILED`，"工作区不兼容"），修复后在 `STARTING` 下等就绪、再发布 READY，接管同一容器与 token，不新建/不删除/不改写工作区。eager 模式的 `delivery_info` 不带 `redelivered`，重投递用例经 `task_prerun` 注入 `redelivered=True`（retries=0）。另加 `test_worker_loss_recovery_rejects_untrusted_target`（旧 generation token、容器已退出、缺恢复协议号）：均 `FAILED`，journal 与工作区不变，不删资源。内存变异核对：去掉就绪等待、归属校验、running/名称检查、协议号检查，分别被对应用例拦下；去掉重投递注入，重投递用例失败。`pytest -k 'pythonlab or sandbox'` 495 passed / 60 skipped；迁移守卫通过；治理检查当前与 `--base-ref 060bd13`（上次 CI 全绿）均 errors=0。
+  - 独立审查（只读）：**通过**，无 P1/P2；三条 P3 测试意见（就绪等待未断言、恢复独有拒绝分支无任务级负例、未走真实 `redelivered` 解析）已按上条补齐。审查另指出既有行为（主 Agent 已核代码，回收时长未实测）：恢复以永久错误结束时容器仍在运行、journal 仍为 live，但 FAILED 元数据没有 token，`stop_session` 不会删它（按设计保留未证实归属的资源），同一用户的新会话在其被清理任务回收前会被拒绝。修复后只剩真正不可信或失败的恢复会走到这里。
+  - 开发栈真实 Docker（worker 容器内独立进程，读当前源码；合成用户 990003，不在业务库）：两种模式都先真实建容器、journal 记 live、Redis 保持 `STARTING`，再跑恢复。修复前写法复现"工作区不兼容"且容器不变；修复后接管同一容器 ID 与同一 generation token，`NetworkMode=none`，`dap_port` 为空。结束后容器、合成 Redis 键与工作区均无残留。
+  - 未覆盖：真实 worker SIGKILL 加 broker 重投的端到端（上次是 2026-09-11）；已因本缺陷进入 `FAILED` 的会话不会自动恢复。
 
 ### SEC-TPL-01（来自 A-4/D-2，生产人工核对）生产 `.env` 是否沿用了模板值
 
