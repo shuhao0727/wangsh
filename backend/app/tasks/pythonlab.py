@@ -253,12 +253,12 @@ def _validate_start_recovery_owner(record, session_id, task_id, meta, name):
             raise RuntimeError("Startup recovery generation changed; refusing takeover")
 
 
-def _recovery_expected_config(provider, workspace, current, limits, runtime, memory):
+async def _recovery_expected_config(provider, workspace, current, limits, runtime, memory):
     """Build the expected host configuration for the interrupted container."""
     return {
         "mode": str(current.get("runtime_mode") or "debug").lower(),
         "image": provider.image,
-        "mount": str(provider._resolve_host_mount_path(workspace)),
+        "mount": str(await provider._resolve_host_mount_path(workspace)),
         "host": {"Memory": memory * 1024**2, "MemorySwap": memory * 1024**2,
                  "CpuPeriod": 100000, "CpuQuota": int(limits.get("cpu_quota") or settings.PYTHONLAB_DEFAULT_CPU_QUOTA),
                  "PidsLimit": settings.PYTHONLAB_CONTAINER_PIDS_LIMIT, "Runtime": runtime},
@@ -306,7 +306,7 @@ async def _recover_interrupted_start(provider, session_id, task_id, code, meta):
         runtime = provider.runtime or "runc"
         if runtime != "runc" and runtime not in await provider._get_available_runtimes():
             runtime = "runc"
-        expected = _recovery_expected_config(provider, workspace, current, limits, runtime, memory)
+        expected = await _recovery_expected_config(provider, workspace, current, limits, runtime, memory)
         result = await provider._reuse_running_container(
             session_id, code, current, existing=existing, expected=expected,
             ws_path=workspace, ownership=ownership, record=record,

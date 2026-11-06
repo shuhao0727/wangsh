@@ -621,6 +621,81 @@ def test_cancelled_start_releases_reused_container_only_after_claim(task_env, do
     assert not ws.exists()
 
 
+def _interrupted_start(task_env, docker_env, monkeypatch, mode):
+    # worker 在 STARTING 中途丢失：容器已建、journal 已记 live，READY 还没发布。
+    store, _, _ = task_env
+    provider, meta, ws, state, calls = docker_env
+    meta['runtime_mode'] = mode
+    state['info']['Config']['Labels']['wangsh.pythonlab.runtime-mode'] = mode
+    state['info']['Name'] = '/' + provider._container_name(meta)
+    store.update(meta, status='STARTING', startup_task_id='synthetic-task', startup_recovery_protocol=1)
+    record = seed_live_owner(provider, dict(meta, startup_task_id='synthetic-task'), ws, state['info']['Id'])
+    # 恢复路径从 docker_runtime 取锁；沿用 fixture 的无 Redis 锁替身。
+    monkeypatch.setattr(docker_runtime, 'RedisDistributedLock', docker_api.RedisDistributedLock)
+    monkeypatch.setattr(tasks, 'get_sandbox_provider', lambda: provider)
+    return store, provider, ws, state, calls, record
+
+
+def _apply_recovery(trigger):
+    # eager apply 的 delivery_info 不带 redelivered；真实重投递是 retries=0 + redelivered=True。
+    if trigger == 'retry':
+        return apply_start(retries=1)
+    from celery.signals import task_prerun
+
+    def mark(task=None, **_):
+        task.request.delivery_info['redelivered'] = True
+    task_prerun.connect(mark)
+    try:
+        return apply_start()
+    finally:
+        task_prerun.disconnect(mark)
+
+
+def _owner_record(ws):
+    async def read():
+        async with docker_runtime.WorkspaceOwnership(ws.parent, ws) as owner:
+            return owner.read()
+    return asyncio.run(read())
+
+
+@pytest.mark.parametrize('trigger', ['retry', 'redelivered'])
+@pytest.mark.parametrize('mode', ['plain', 'debug'])
+def test_worker_loss_during_start_recovers_running_generation(task_env, docker_env, monkeypatch, mode, trigger):
+    # 同一任务再次执行时应接管这一代容器，等就绪后发布 READY；不新建、不删除、不改写工作区（PYLAB-03）。
+    store, provider, ws, _, calls, record = _interrupted_start(task_env, docker_env, monkeypatch, mode)
+    readiness = []
+    async def ready(*args):
+        readiness.append((args, store['status']))
+    monkeypatch.setattr(provider, '_wait_for_readiness', ready)
+    result = _apply_recovery(trigger)
+    assert result.state == 'SUCCESS'
+    assert readiness == [(('a' * 64, 0, mode), 'STARTING')]
+    assert store['status'] == 'READY'
+    assert store['docker_container_id'] == 'a' * 64
+    assert store['sandbox_owner_token'] == record['token']
+    assert (ws/'main.py').read_text() == 'original active code'
+    assert not any(c[1] in ('run', 'rm', 'exec') for c in calls)
+
+
+@pytest.mark.parametrize('case', ['stale-generation', 'exited', 'legacy-protocol'])
+def test_worker_loss_recovery_rejects_untrusted_target(task_env, docker_env, monkeypatch, case):
+    # 恢复路径独有的拒绝分支：只接管同一代、仍在运行的容器；失败只写状态，不删资源、不改 journal。
+    store, provider, ws, state, calls, record = _interrupted_start(task_env, docker_env, monkeypatch, 'debug')
+    if case == 'stale-generation':
+        store['sandbox_owner_token'] = 'previous-generation'
+    elif case == 'exited':
+        state['info']['State']['Status'] = 'exited'
+    else:
+        del store['startup_recovery_protocol']
+    result = _apply_recovery('retry')
+    assert result.state == 'FAILURE'
+    assert store['status'] == 'FAILED'
+    assert store.get('docker_container_id') is None
+    assert _owner_record(ws) == record
+    assert (ws/'main.py').read_text() == 'original active code'
+    assert not any(c[1] in ('run', 'rm', 'exec') for c in calls)
+
+
 @pytest.mark.parametrize('code', [None, '', '   '])
 def test_missing_code_fails_without_start_or_retry(task_env, monkeypatch, code):
     store, _, provider = task_env
