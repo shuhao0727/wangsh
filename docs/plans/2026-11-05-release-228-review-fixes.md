@@ -2,7 +2,7 @@
 
 > 状态：active
 > Owner：project-governance
-> 最近复核：2026-11-05
+> 最近复核：2026-11-06
 > 归档条件：全部条目已修复并验收、转回[台账](project-consolidation.md)或经老大决定不修；未结项先承接到台账再归档。
 
 ## 当前状态
@@ -12,7 +12,7 @@
   - 已修复且独立审查通过：SSRF-FLOW-01（A+B）、D3（回退）、D-R2、A-1、A-2、FE-TEST-01、PYLAB-02（本地部分；开发栈两名合成学生同时调试与三项 PythonLab smoke 通过）。
   - 已完成只读核对：SEC-TPL-01（`SUPER_ADMIN_PASSWORD` 命中模板值，处置待老大决定）；D3 前提（生产项目名由 `-p wangsh` 显式传入，发布目录无 `.env`）。
   - ENV-DEV-01：已完成（开发栈沙箱镜像 2.2.8，重建后生效连接与启动前核对一致）。
-- 下一步：**2.2.9 已于 2026-11-06 部署生产**（[批次记录](../archive/testing/2026-11-06-release-229.md)）；待老大：打 2.2.9 tag、是否批准生产合成账号做登录态验收；随后开始 2.2.10（PYLAB-NET-01 方案 C）与阶段 2–3。
+- 下一步：**2.2.9 已于 2026-11-06 部署生产**（[批次记录](../archive/testing/2026-11-06-release-229.md)）；**2.2.10（PYLAB-NET-01 方案 C）已修，开发栈验收与独立审查通过，`a8fcb44` 已合入本地 main，未推送、未发布**。待老大：是否推送 main、PYLAB-03 是否同进 2.2.10、打 2.2.9 tag、是否批准生产合成账号做登录态验收；随后阶段 2–3。
 - 阻断与待老大决定：
   - ①SEC-TPL-01：超管密码命中公开模板值，建议先在后台改密，再把服务器环境变量换成非模板值。
   - ②OPS-07：建议 2.2.9 前给 `stop-dev.sh --all` 加目标确认（会改变 D1 的既有行为）。
@@ -23,6 +23,8 @@
 
 ## 变更日志
 
+- 2026-11-06：PYLAB-NET-01 提交为 `a8fcb44`，按老大授权快进合入本地 main（未推送、未打 tag、未部署）；提交前迁移守卫通过，治理检查当前与 `--base-ref 50f8c9f` 均 errors=0。
+- 2026-11-06：PYLAB-NET-01 按方案 C 本地修复（分支 `claude/pylab-net-01`，未提交）：debug 与 plain 都 `--network none`、不发布宿主端口，启动以容器内就绪检查为准，`dap_ws` 只对旧 TCP 会话要求端口。开发栈验收、smoke/soak、Chrome/WebKit 真实点击与独立审查通过；按审查意见修文档两处与一处注释、补 token 分支测试。审查发现范围外 P2，登记台账 PYLAB-03。
 - 2026-11-06：2026-11-06 07:48 老大用手机流量（不经操作机代理）打开 `https://wangsh.cn:6608` 正常；同一时段网关记录 47 个外部来源请求（200×45、401×1、429×1），确认外部入口经 2.2.9 网关可用。
 - 2026-11-06：2.2.9 部署生产（构建源 `50f8c9f`，run 42050650608）。部署工具沿用 2.2.8 并经独立审查与针对性复核；合成栈 Chrome/WebKit 各 4/4、双人调试 6/6；配对快照与隔离恢复通过；按服务切换，停流约 4.5 分钟；部署后不登录检查通过。外部入口与登录态验收未覆盖。
 - 2026-11-05：版本切分改为热修切分：2.2.9 用当前 main 内容尽快发，PYLAB-NET-01 进 2.2.10（2.2.9 部署后在 main 上开发）。理由：SSRF-FLOW-01 是任何登录账号可利用的 P1，PYLAB-NET-01 改调试启动契约、需双浏览器真实点击与 smoke/soak，赶不上 2.2.9。
@@ -200,6 +202,12 @@
   - 跑 PythonLab smoke/soak。
 - **风险与回退**：改动调试启动契约，这是 PythonLab 历史上最易回归的部分（TTY 附着竞态、DAP 传输都在这里出过问题）。回滚为还原网络参数与端口门槛。
 - **依赖**：PYLAB-02 合入后进行；ENV-DEV-01（开发栈验证）。
+- **进度（2026-11-06，`a8fcb44`，已合入本地 main，未推送、未发布）**：
+  - 改动：`docker.py` 两种模式都 `--network none`，不再 `-p`，删去端口读回与"调试端口分配超时"，新建与复用都以 `_wait_for_readiness`（容器内 `/proc/net/tcp`）为准，返回的 `dap_host`/`dap_port` 为空；`docker_runtime.py` 复用要求两种模式都是 `NetworkMode=none`，旧版本接在 bridge 上的调试容器不被接管；`dap_ws` 对带 `docker_container_id` 或 `sandbox_owner_token` 的会话不再要求端口大于 0（判断放在 `ws/validation.py`，为守住治理复杂度上限），旧 TCP 会话保留 4410。`sessions.py` 无需改动（API 返回 `dap_port` 为空，前端不依赖）。
+  - 验证：`pytest -k 'pythonlab or sandbox'` 488 passed / 60 skipped，新增/改动的测试在修复前源码上失败，token 分支另经变异确认；治理检查当前与 `--base-ref 50f8c9f` 均 errors=0。开发栈（2.2.8 沙箱镜像，合成学生）：debug 容器 `NetworkMode=none`、`PortBindings={}`、`docker port` 为空；容器内 `python3 -I`（不加载 sitecustomize）TCP 连接与 UDP `sendto` 到 TEST-NET-1 地址 192.0.2.1 均 `Network is unreachable`，DNS 解析失败，debugpy 仍在 `127.0.0.1:5678` 监听。两名合成学生同时 DAP soak 各 6/6；owner 并发与 print 可见性 smoke 通过；Chrome channel 与 WebKit 真实点击各 4/4；无残留容器。
+  - 独立审查（只读）：**通过**，改动范围内无 P1/P2；P3 文档两处与一处过时注释已改，并补 `sandbox_owner_token` 分支的 ws 测试。范围外 P2 登记为台账 PYLAB-03。
+  - 未覆盖：两个 debug 容器之间的互探未单独测（`--network none` 下只有回环，由单容器探针推断）；生产验证。
+  - 切换与回滚（按代码推断，未实测）：backend 与 pythonlab-worker 必须同版本切换；部署时仍在运行、接在 bridge 上的旧调试容器在其会话结束前不受隔离，之后同名复用会报"运行环境网络不兼容"；回滚到 2.2.9 时，2.2.10 建的调试会话没有宿主端口，`dap_ws` 会以 4410 关闭，需学生重新开始调试。部署后核对 `docker ps --filter label=wangsh.pythonlab.runtime-mode=debug` 的容器 `NetworkMode` 均为 `none`。
 - **需要老大决策**：**是**——选 A / B / C，以及排期。推荐 C；只改后端代码、不需要服务器网络对象，可以进 2.2.9，但前提是开发栈端到端与双浏览器真实点击、smoke/soak 全部通过，否则 2.2.9 之后单独发版。
 
 ### SEC-TPL-01（来自 A-4/D-2，生产人工核对）生产 `.env` 是否沿用了模板值

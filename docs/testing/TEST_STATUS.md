@@ -2,7 +2,7 @@
 
 > 状态：active
 > Owner：testing
-> 最近更新：2026-11-05
+> 最近更新：2026-11-06
 
 本页只维护最近验证；早期整理批次见[归档](../archive/README.md)，未结事项见[唯一台账](../plans/project-consolidation.md)。
 
@@ -68,8 +68,9 @@
 | 审计决策批次（D1/D3/D6/D9/D12/D13/D14/A-01/A-07） | 定向 pytest、node 合同、compose 渲染、文档门禁 | 计分修正后 `tests/assessment` 等 **249 passed / 20 skipped**；治理 errors=0/41 warnings；根合同 **91/91**；`docker compose --env-file .env.example` 生产/dev 渲染均 exit 0（空值回归已修，见下）；版本一致 2.2.8；烟测 404 判定测试 4/4。**门禁顺序**：运行 pytest 会生成 `backend/.pytest_cache/README.md`，须先删除该目录再跑 `check-markdown-contracts`，否则误报（见独立审查 R-05） |
 | 真实 prod-smoke（2.2.8 正式镜像合成栈） | `wangsh_sim` 隔离栈、回环 16608、容器 loopback:11434 合成供应商桩、`ANALYSIS_AGENT_ID` 指定桩智能体 | 两轮：①无桩首跑 **11 PASS/2 WARN/1 FAIL**，唯一 FAIL 为 group-discussion（活动智能体未配置 API 端点，503，属环境夹具缺失），FAIL 时 `test-results/prod-smoke/failures.md` 写入 1239B；②补桩后重跑 **12 PASS/2 WARN/0 FAIL、exit 0**，`failures.md` 不生成——**D13 FAIL/非 FAIL 双分支均经真实运行确认**。2 WARN 为两个只读端点 401 与内容/书籍夹具缺失（与历史一致）。用毕 8 容器/4 卷/网络/工作区精确清理，开发栈 7 容器未变。既有缺口：`deploy.sh simulate` 的 `run_sim_deploy`/`run_sim_compose` 未传 `REDIS_HOST`（模拟项目 redis 容器名为 `wangsh_sim-redis-1`），本轮以环境变量覆盖，登记为 OPS-06 |
 | PYLAB-02 多人同时调试（`98f1c46`，已推送） | 开发容器 worker 内 provider 层真实 Docker，2.2.8 沙箱镜像，两名合成用户；`pytest -k 'pythonlab or sandbox'` | 修复前：u990001 成功、u990002 `port is already allocated`。修复后（宿主端口由 Docker 分配 + debugpy 只听 `127.0.0.1`）：两者同时启动，宿主端口 54831/54854，各自 DAP `initialize` success=True，容器内仅 `127.0.0.1:5678` 监听；pytest **472 passed / 60 skipped**。合成容器、工作区与归属记录已清理。开发栈端到端（2026-11-05，重建后沙箱镜像 2.2.8，两个合成学生账号）：两人同时跑 `smoke_pythonlab_dap_step_watch_soak.py` 各 **6/6**，最多同时 2 个 debug 容器、宿主端口不同且只绑 `127.0.0.1`；owner 并发 matrix（steal）与 print 可见性 smoke 均 exit 0，无残留容器。**未覆盖**：两个真实浏览器同时调试、生产验证 |
+| PYLAB-NET-01 调试容器断网（2.2.10，`a8fcb44`，已合入本地 main，未推送） | 开发栈（2.2.8 沙箱镜像，合成学生/管理员）；`pytest -k 'pythonlab or sandbox'`；治理检查当前与 `--base-ref 50f8c9f` | pytest **488 passed / 60 skipped**，新增/改动的测试在修复前源码上失败，token 分支另经变异确认；治理 errors=0。debug 容器 `NetworkMode=none`、`PortBindings={}`；容器内 `python3 -I` TCP/UDP 到 192.0.2.1 均 `Network is unreachable`、DNS 失败，debugpy 仍在 `127.0.0.1:5678` 监听。两名合成学生同时 DAP soak 各 **6/6**；owner 并发与 print 可见性 smoke 通过；Chrome channel / WebKit 真实点击各 **4/4**；无残留容器；独立审查通过。**未覆盖**：两容器互探未单独测、生产验证 |
 | 2.2.8 审查修复（`d6375a3`/`199c5e9`/`2d239cf`/`0fa64ca`，已推送） | `pytest tests -p no:cacheprovider -k 'ai_agents or pythonlab or sandbox'`（排除自含模块）；自含离线回归；前端 type-check、AIAgents vitest、eslint；`node --test scripts/*.test.mjs` | SSRF-FLOW-01 新增 13 条、A-1 新增 6 条、A-2 新增 7 条（含 Dify 双候选）全部通过；所选范围 **870 passed / 60 skipped**（跳过项为其他文件的隔离 bootstrap 要求）；自含 19 项 OK；前端 2 文件 4 例通过、lint 0 error；D-R2 合同测试实际执行 guard，6 种变异全部被拦。SSRF-FLOW-01、A 组（A-1/A-2/FE-TEST-01）、D-R2 独立审查均通过。开发栈（合成管理员 + 容器内 `127.0.0.1:11434` 合成供应商桩）API 层 **8/8**：测试连接成功、302 不跟随（桩只收 1 次请求、不回显响应体）、学生流式 200、flow 测试连接学生 403 且不出站；Playwright Chromium 两处管理员页失败/成功显示正确，只测不保存。生产只读核对：生效 flag 地址与 2 个公网智能体地址校验通过、不重定向；9 个智能体全部停用；7 个 Dify 内网地址未发请求。**未覆盖**：生产发布后验证 |
-| 文档门禁 | `node scripts/check-markdown-contracts.mjs`、Markdown合同、`git diff --check` | 2026-11-06 2.2.9 部署后 117 files / 746 links / 0 missing；历史2026-11-05 2.2.9发布准备116/741、2026-11-05审查修复执行中116/740、审查落账后116/738、台账重审后115/730，2026-11-03为109/702，2.2.6批次110/709、部署前110/713、2.2.8部署后111/720、四方对齐后112/724、清理后113/725。新增后门事件记录后更新当前派生计数，不覆盖历史 |
+| 文档门禁 | `node scripts/check-markdown-contracts.mjs`、Markdown合同、`git diff --check` | 2026-11-06 PYLAB-NET-01 本地修复后 117 files / 748 links / 0 missing；历史2026-11-06 2.2.9 部署后117/746、2026-11-05 2.2.9发布准备116/741、2026-11-05审查修复执行中116/740、审查落账后116/738、台账重审后115/730，2026-11-03为109/702，2.2.6批次110/709、部署前110/713、2.2.8部署后111/720、四方对齐后112/724、清理后113/725。新增后门事件记录后更新当前派生计数，不覆盖历史 |
 | 脚本语法 / 差异 | 已改 shell 的 `bash -n`、Node `--check`、`git diff --check` | 通过 |
 
 根合同首轮为133/134：仅文档派生链接数过期；更新当前统计后全量复验通过。后续增加容器CLI等合同后为151项，未删除失败断言刷绿。

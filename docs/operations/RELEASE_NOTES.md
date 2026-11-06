@@ -40,6 +40,16 @@
 
 ---
 
+## 未发布：2.2.10 PythonLab 调试容器断网（PYLAB-NET-01，`a8fcb44`，已合入本地 main、未推送）
+
+- 问题：debug 容器在默认 bridge 上、可出站，学生代码的联网限制只靠工作区里可改写的 `sitecustomize`（PythonLab 文档 OPS-01）。学生代码可以访问外网与 bridge 上可达的服务。
+- 修复：`backend/app/core/sandbox/docker.py` 让 debug 也 `--network none`，不再发布宿主端口；启动以容器内就绪检查（`/proc/net/tcp`）为准。复用要求两种模式都无网络。`dap_ws` 对 Docker 会话不再要求宿主端口（DAP 本就经 `docker exec` 在容器内连接），旧 TCP 会话保留端口校验。
+- 验证（本地开发栈）：PythonLab/sandbox pytest 488 passed / 60 skipped；容器内绕过 `sitecustomize` 的 TCP/UDP 出站均 `Network is unreachable`、DNS 失败；两名合成学生同时调试各 6/6；Chrome channel 与 WebKit 真实点击各 4/4；独立审查通过。未覆盖：生产验证。
+- 切换与回滚（按代码推断，未实测）：backend 与 pythonlab-worker 同版本切换；部署前已在运行的调试容器在其会话结束前不受隔离；回滚到 2.2.9 后，2.2.10 建的调试会话以 4410 关闭，学生重新开始调试即可。部署后核对带 `wangsh.pythonlab.runtime-mode=debug` 标签的容器 `NetworkMode` 均为 `none`。
+- 详情见[审查问题修复计划](../plans/2026-11-05-release-228-review-fixes.md)。
+
+---
+
 ## v2.2.9：2.2.8 审查修复（2026-11-06 已部署）
 
 - 构建提交 `50f8c9f`；发布 workflow run 42050650608 发布六镜像，release-set SHA256 `0471e46b166b3b65b59405289fdc1dd7c3e9e3c6229bee7f0413c26b45fc276e`。服务器访问不了 Docker Hub，六镜像经操作机按 digest 生成 OCI 归档传输，服务器逐 blob 校验后导入。
