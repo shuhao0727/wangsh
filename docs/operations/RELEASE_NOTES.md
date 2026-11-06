@@ -47,6 +47,7 @@
 - 部署后（不登录）：六镜像等于 release-set、详细健康全部 ok、未登录调用 flow 测试连接 401、日志无错误；操作机经域名入口 http 返回 2.2.10 healthy。未做：生产调试会话的网络核对（部署后尚无会话容器）、登录态浏览器验收、外部 https 入口确认。
 - 证据：[批次记录](../archive/testing/2026-11-06-release-2210.md)；服务器 `/home/shuhao/wangsh-releases/2.2.10/{backups,evidence}`。回滚目标 2.2.9，步骤见服务器 `2.2.10/ROLLBACK-2210.md`。
 - 两项都只改后端（5 个运行文件），无数据库迁移。
+- git tag：2026-11-06 附注 tag `2.2.10` 已创建并推送 `origin`，指向构建源 `154aae0`；远端附注对象、构建提交、发布 workflow 和 release-set SHA256 均已核验。
 
 ### PythonLab 调试容器断网（PYLAB-NET-01，`a8fcb44`，已推送 origin/main，推送后 ci-quality run 42149242348 通过）
 
@@ -72,6 +73,7 @@
 - 服务器隔离合成栈 Chrome/WebKit 各 4/4，两名合成学生同时调试各 6/6；2026-11-06 07:26 停流做配对快照，隔离恢复 54 表 / 49 序列 / 2225 Redis 键 / 3 份业务归档一致；按服务切换，PG/Redis 未重建，`current` 指向 2.2.9，停流约 4.5 分钟。
 - 部署后（不登录）：六镜像等于 release-set、详细健康全部 ok、未登录调用 flow 测试连接 401、日志无错误。外部入口：2026-11-06 07:48 老大用手机流量（不经操作机代理）打开 `https://wangsh.cn:6608` 正常；同一时段网关记录 47 个外部来源请求（200×45、401×1、429×1），确认外部入口经 2.2.9 网关可用。登录态浏览器验收未做。
 - 证据：[批次记录](../archive/testing/2026-11-06-release-229.md)；服务器 `/home/shuhao/wangsh-releases/2.2.9/{backups,evidence}`。
+- git tag：2026-11-06 附注 tag `2.2.9` 已创建并推送 `origin`，指向构建源 `50f8c9f`；与 `2.2.10` 一起原子推送，远端附注对象与构建身份核验一致。
 
 逐条方案、审查结论与剩余验收见[审查问题修复计划](../plans/2026-11-05-release-228-review-fixes.md)。提交：`d6375a3` SSRF-FLOW-01、`199c5e9` D3、`2d239cf` A-1/A-2/FE-TEST-01、`0fa64ca` D-R2、`98f1c46` PYLAB-02；`50bb866` 为 A-2 治理复杂度修复（行为不变）。
 
