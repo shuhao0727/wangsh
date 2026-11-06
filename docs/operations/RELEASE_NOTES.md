@@ -11,7 +11,7 @@
 2026-10-31 及更早的未发布批次记录已删除（lucid 工作树已删除、改动未合入 main）。
 2026-10-24 及更早的正式版本记录见 发布历史（正文已清理）。
 
-近期版本：[2.2.9](#v229228-审查修复2026-11-06-已部署)、[2.2.8](#v228linux-docker内dap通道2026-11-04-已部署)、
+近期版本：[2.2.10](#v2210pythonlab-调试容器断网与启动恢复2026-11-06-已部署)、[2.2.9](#v229228-审查修复2026-11-06-已部署)、[2.2.8](#v228linux-docker内dap通道2026-11-04-已部署)、
 [2.2.2](#v222ai-伙伴评分真正可用2026-10-29-0950-已部署)、
 [2.2.1](#v221dify-连续对话与评分修复s4-缺陷性能与前端体验2026-10-28-2339-已部署)、
 [2.2.0](#v220代码审查瘦身热点归类与使用记录详情2026-10-26-2052-部署)。
@@ -40,9 +40,12 @@
 
 ---
 
-## 未发布：2.2.10
+## v2.2.10：PythonLab 调试容器断网与启动恢复（2026-11-06 已部署）
 
-- 版本号 2.2.9 → 2.2.10 在本文档之后单独提交，作为构建源；构建身份与部署结果写入部署记录。部署步骤见[修复计划](../plans/2026-11-05-release-228-review-fixes.md#版本切分与执行顺序)。
+- 构建源 `154aae0`（ci-quality run 42161748042 通过）；发布 workflow run 42162473928 发布六镜像，release-set SHA256 `eeb55305dba1e95a6fb1f85c2473aa6abb602fed9acf0c5287008d5071c7d584`。服务器访问不了 Docker Hub，六镜像经 OCI 归档传输并逐 blob 校验后导入。
+- 服务器隔离合成栈 Chrome/WebKit 各 4/4，两名合成学生同时调试各 6/6，调试容器 `NetworkMode=none`、无端口、容器内出站 `Network is unreachable`；2026-11-06 14:13 停流做配对快照，隔离恢复 54 表 / 49 序列 / 2226 Redis 键 / 3 份业务归档一致；按服务切换，PG/Redis 未重建，`current` 指向 2.2.10，停流约 5 分 46 秒。
+- 部署后（不登录）：六镜像等于 release-set、详细健康全部 ok、未登录调用 flow 测试连接 401、日志无错误；操作机经域名入口 http 返回 2.2.10 healthy。未做：生产调试会话的网络核对（部署后尚无会话容器）、登录态浏览器验收、外部 https 入口确认。
+- 证据：[批次记录](../archive/testing/2026-11-06-release-2210.md)；服务器 `/home/shuhao/wangsh-releases/2.2.10/{backups,evidence}`。回滚目标 2.2.9，步骤见服务器 `2.2.10/ROLLBACK-2210.md`。
 - 两项都只改后端（5 个运行文件），无数据库迁移。
 
 ### PythonLab 调试容器断网（PYLAB-NET-01，`a8fcb44`，已推送 origin/main，推送后 ci-quality run 42149242348 通过）
@@ -50,7 +53,7 @@
 - 问题：debug 容器在默认 bridge 上、可出站，学生代码的联网限制只靠工作区里可改写的 `sitecustomize`（PythonLab 文档 OPS-01）。学生代码可以访问外网与 bridge 上可达的服务。
 - 修复：`backend/app/core/sandbox/docker.py` 让 debug 也 `--network none`，不再发布宿主端口；启动以容器内就绪检查（`/proc/net/tcp`）为准。复用要求两种模式都无网络。`dap_ws` 对 Docker 会话不再要求宿主端口（DAP 本就经 `docker exec` 在容器内连接），旧 TCP 会话保留端口校验。
 - 验证（本地开发栈）：PythonLab/sandbox pytest 488 passed / 60 skipped；容器内绕过 `sitecustomize` 的 TCP/UDP 出站均 `Network is unreachable`、DNS 失败；两名合成学生同时调试各 6/6；Chrome channel 与 WebKit 真实点击各 4/4；独立审查通过。未覆盖：生产验证。
-- 切换与回滚（按代码推断，未实测）：backend 与 pythonlab-worker 同版本切换；部署前已在运行的调试容器在其会话结束前不受隔离；回滚到 2.2.9 后，2.2.10 建的调试会话以 4410 关闭，2.2.10 建的调试容器没有宿主端口、不能被 2.2.9 复用（报"已有调试环境端口不可用"），等清理任务回收后学生重新开始调试即可。部署后核对带 `wangsh.pythonlab.runtime-mode=debug` 标签的容器 `NetworkMode` 均为 `none`。
+- 切换与回滚（按代码推断，未实测）：backend 与 pythonlab-worker 同版本切换；回滚到 2.2.9 后，2.2.10 建的调试会话以 4410 关闭，2.2.10 建的沙箱容器不能被 2.2.9 复用，等清理任务回收后学生重新开始调试即可。**订正（2026-11-06 部署前工具审查）**：部署流程的冻结步骤遇到任何 `pythonlab_*` 动态容器就拒绝停流（`freeze_and_backup.py`），旧版本的调试容器不会带进新版本；沙箱复用先比对镜像（`Config.Image` 带版本号），跨版本复用报的是"运行环境资源或镜像不兼容"，不是网络或端口错误。部署后核对带 `wangsh.pythonlab.runtime-mode=debug` 标签的容器 `NetworkMode` 均为 `none`。
 - 详情见[审查问题修复计划](../plans/2026-11-05-release-228-review-fixes.md)。
 
 ### worker 在启动中途丢失后，会话恢复必定失败（PYLAB-03，`900a8ab`，已推送，推送后 ci-quality run 42155133967 通过：pytest 3819 passed / 123 skipped）

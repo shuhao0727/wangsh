@@ -26,6 +26,7 @@
 |---|---|
 | [testing/2026-11-02-maintenance-batches.md](testing/2026-11-02-maintenance-batches.md) | 2026-11-02 仓库整理各批次的检查结果与未采纳判断 |
 | [testing/2026-11-04-release-226.md](testing/2026-11-04-release-226.md) | 2.2.6发布身份、接力候选验收、外网现场与部署准入阻断 |
+| [testing/2026-11-06-release-2210.md](testing/2026-11-06-release-2210.md) | 2.2.10正式镜像OCI传输、部署工具平移与独立审查、合成栈双浏览器与双人调试（含调试容器断网核对）、配对备份与隔离恢复、生产切换与部署后检查 |
 | [testing/2026-11-06-release-229.md](testing/2026-11-06-release-229.md) | 2.2.9正式镜像经OCI归档传输、合成栈双浏览器与双人调试、配对备份与隔离恢复、生产切换与部署后检查 |
 | [testing/2026-11-04-release-228.md](testing/2026-11-04-release-228.md) | 2.2.8正式镜像验收、配对备份与隔离恢复、生产切换与部署后行为验收 |
 | [operations/2026-11-04-backdoor-account-incident.md](operations/2026-11-04-backdoor-account-incident.md) | 服务器后门账号与挖矿程序事件的证据链、清除动作与复验结果 |

@@ -16,7 +16,7 @@
 - STARTING 认领和启动结果发布使用 Redis 原值比较的 Lua CAS；已提交的 TERMINATED 或其他任务认领不会被本启动 writer 覆盖。JSON 在 Python 合并，保留大整数、空对象及未知字段；按原规则续 session TTL。此保证不约束其他旧/API writer 在 CAS 之后盲写。
 - READY 写入抛异常或 CAS 拒绝后先核对 task、generation token 和 exact container ID。同世代 READY/ATTACHED/RUNNING/STOPPED 已发布则保留；确认仍属本启动且未发布时，先 CAS 成 FAILED 再按 generation 补偿。补偿完成后任务明确失败，不盲目重建。Redis 无法核对、持续竞争或补偿失败时保留可信 journal 并报错，不能承诺任意故障均零资源残留。
 - 已存在容器的复用和退役均要求可信 live journal 且 exact ID 一致；缺失或 removed journal 不再依据学生可写 meta 接管同名容器。拒绝发生在工作区改写、认领或删除前。旧无 token/未知归属容器保守保留，需受控盘点迁移，不能自动接管或按名称批量清除。
-- **OPS-01（debug 网络/DAP）**：2026-11-06 起 debug 容器也是 `--network none`、不发布宿主端口，DAP 只走容器内通道（PYLAB-NET-01，本地已修，待 2.2.10 发布）。区别于台账的 OPS-01（服务器清理）。已有真实 worker 崩溃与 Redis/Docker 恢复证据，不能重新归类为从未执行，也不能扩展为压力、任意断网恢复、混版本和发布网络策略均通过；浏览器调试与资源回收按对应源码/镜像批次单独绑定。不要在正常栈试改网络或清理未知资源。
+- **OPS-01（debug 网络/DAP）**：2026-11-06 起 debug 容器也是 `--network none`、不发布宿主端口，DAP 只走容器内通道（PYLAB-NET-01，2026-11-06 随 2.2.10 部署生产；服务器合成栈正式镜像已验证，生产调试会话的网络核对待第一个真实会话）。区别于台账的 OPS-01（服务器清理）。已有真实 worker 崩溃与 Redis/Docker 恢复证据，不能重新归类为从未执行，也不能扩展为压力、任意断网恢复、混版本和发布网络策略均通过；浏览器调试与资源回收按对应源码/镜像批次单独绑定。不要在正常栈试改网络或清理未知资源。
 - 原严格预期失败的归属调度反例已改为安全断言通过；仍存限制另有独立反例。测试结果与证据统一见 [TEST_STATUS](../testing/TEST_STATUS.md)，不得以测试零退出码关闭整个沙箱模块。
 
 ## 调试终端切页与输出归属
