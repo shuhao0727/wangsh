@@ -9,14 +9,14 @@
 
 ## 沙箱启动恢复与资源归属边界（2026-09-09）
 
-- 复用容器前检查 inspect 配置、模式、资源限制、镜像、用户与工作区；plain 必须 network none。不兼容则拒绝，不拆除正在运行的 debug 容器。同一 session 重投不写工作区；跨 plain session 仅在缓存明确前者 TERMINATED 后允许复用。
+- 复用容器前检查 inspect 配置、模式、资源限制、镜像、用户与工作区；plain 与 debug 都必须 network none（PYLAB-NET-01）。不兼容则拒绝，不拆除正在运行的 debug 容器。同一 session 重投不写工作区；跨 plain session 仅在缓存明确前者 TERMINATED 后允许复用。
 - 创建、复用、停止及终止使用同一 workspace 持久文件锁；可信 journal 位于工作区根外的 `.pythonlab-ownership/`，不进入学生挂载。每次 claim 使用新的 generation token，记录精确容器 ID；旧 stop/补偿必须同时匹配 session、token 与 ID，不能删除已被新 generation 接管的同一容器。不得删除 lock inode。
 - 互斥依赖**全部 writer 使用同一协议和同一支持 flock 的共享文件系统**；相同路径但不同 inode、旧版本或外部 Docker 操作不受保证。Redis lease 没有续租，不能把它单独视为持续互斥。部署及回滚前提见 [DEPLOY](../operations/DEPLOY.md)。
 - provider 成功后 marker 缺失、已终止或被其他任务接管，结果发布返回 false 时按 generation 条件补偿；补偿不确定不会伪装成功。CLI 超时/取消 kill 并回收子进程；创建失败只按本次返回/cidfile ID 清理，不按名称猜删。
 - STARTING 认领和启动结果发布使用 Redis 原值比较的 Lua CAS；已提交的 TERMINATED 或其他任务认领不会被本启动 writer 覆盖。JSON 在 Python 合并，保留大整数、空对象及未知字段；按原规则续 session TTL。此保证不约束其他旧/API writer 在 CAS 之后盲写。
 - READY 写入抛异常或 CAS 拒绝后先核对 task、generation token 和 exact container ID。同世代 READY/ATTACHED/RUNNING/STOPPED 已发布则保留；确认仍属本启动且未发布时，先 CAS 成 FAILED 再按 generation 补偿。补偿完成后任务明确失败，不盲目重建。Redis 无法核对、持续竞争或补偿失败时保留可信 journal 并报错，不能承诺任意故障均零资源残留。
 - 已存在容器的复用和退役均要求可信 live journal 且 exact ID 一致；缺失或 removed journal 不再依据学生可写 meta 接管同名容器。拒绝发生在工作区改写、认领或删除前。旧无 token/未知归属容器保守保留，需受控盘点迁移，不能自动接管或按名称批量清除。
-- **OPS-01（debug 网络/DAP）未关闭**：debug 网络与 DAP 暴露策略未改变（区别于台账的 OPS-01（服务器清理））。已有真实 worker 崩溃与 Redis/Docker 恢复证据，不能重新归类为从未执行，也不能扩展为压力、任意断网恢复、混版本和发布网络策略均通过；浏览器调试与资源回收按对应源码/镜像批次单独绑定。不要在正常栈试改网络或清理未知资源。
+- **OPS-01（debug 网络/DAP）**：2026-11-06 起 debug 容器也是 `--network none`、不发布宿主端口，DAP 只走容器内通道（PYLAB-NET-01，本地已修，待 2.2.10 发布）。区别于台账的 OPS-01（服务器清理）。已有真实 worker 崩溃与 Redis/Docker 恢复证据，不能重新归类为从未执行，也不能扩展为压力、任意断网恢复、混版本和发布网络策略均通过；浏览器调试与资源回收按对应源码/镜像批次单独绑定。不要在正常栈试改网络或清理未知资源。
 - 原严格预期失败的归属调度反例已改为安全断言通过；仍存限制另有独立反例。测试结果与证据统一见 [TEST_STATUS](../testing/TEST_STATUS.md)，不得以测试零退出码关闭整个沙箱模块。
 
 ## 调试终端切页与输出归属
@@ -117,7 +117,7 @@ Python 进程
 - `status` - 状态（`PENDING`/`READY`/`ATTACHED`/`RUNNING`/`STOPPED`/`TERMINATING`/`TERMINATED`/`FAILED`/`STARTING`，见 `backend/app/api/pythonlab/constants.py`）
 - `created_at`、`last_heartbeat_at` - 创建与最后心跳时间
 - `docker_container_id` - 容器 ID
-- `dap_host`、`dap_port` - DAP 连接信息
+- `dap_host`、`dap_port` - 旧 TCP 路径的 DAP 连接信息；Docker 会话两者均为空，DAP 经 `docker exec` 走容器内通道
 
 ---
 
@@ -157,8 +157,10 @@ bash start-dev.sh
 - 磁盘：`PYTHONLAB_WORKSPACE_DISK_QUOTA_MB` 默认 512MB；Docker provider 在创建前检查工作区大小，不能当作运行期硬配额。
 
 **网络**：
-- `plain` 模式使用 `--network none`；`debug` 使用默认 Docker 网络并发布 debugpy 端口。
-  配置入口为 `backend/app/core/sandbox/docker.py`，DAP 暴露策略仍受 OPS-01（debug 网络/DAP）约束。
+- `plain` 与 `debug` 都使用 `--network none`，不发布宿主端口（2026-11-06 起，PYLAB-NET-01）。学生代码不能出站，
+  调试容器之间也没有网络路由；复用已有容器时同样要求 `NetworkMode=none`，旧版本接在默认 bridge 上的调试容器不会被接管。
+  工作区里的 `sitecustomize.py` 联网拦截只作友好提示，不是安全边界（学生代码可改写它，也可绕开它）。
+  配置入口为 `backend/app/core/sandbox/docker.py`。
 
 > 注意：`docker-compose.yml` 中的 `pythonlab-sandbox` 服务只是镜像构建/预拉取占位容器；真实调试会话的 CPU / 内存限制由 backend 创建 sandbox 时按 `PYTHONLAB_DEFAULT_MEMORY_MB` 和请求 limits 动态下发。
 
@@ -195,8 +197,8 @@ python -Xfrozen_modules=off -m debugpy \
 ```
 
 debugpy 只监听容器内回环（2026-11-05，PYLAB-02）：后端经 `docker exec` 在容器内转接 DAP，
-不需要容器外直连；监听 `0.0.0.0` 会让同一 bridge 上其他学生的调试容器连到本调试器。
-宿主侧 `-p 127.0.0.1::5678` 由 Docker 分配端口，仅作为启动契约读回。
+不需要容器外直连。调试容器不发布宿主端口，启动就绪以容器内 `/proc/net/tcp` 上 debugpy 端口进入监听为准；
+WebSocket 接入时只有没有容器归属的旧 TCP 会话才要求 `dap_port`（2026-11-06，PYLAB-NET-01）。
 
 ---
 
@@ -504,7 +506,7 @@ PythonLab 右侧调试控制按钮是高频连续点击控件，点击可靠性�
 
 1. 检查 pythonlab-worker 服务是否运行
 2. 检查容器内存是否足够（部署基线 128MB）
-3. 检查 debugpy 端口是否可访问
+3. 在容器内核对 debugpy 端口已进入监听（`/proc/net/tcp`）；Docker 会话不发布宿主端口
 4. 查看容器日志
 
 ### WebSocket 连接失败

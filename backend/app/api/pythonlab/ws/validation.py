@@ -66,6 +66,11 @@ def _build_dap_host_candidates(host: Any, *, in_docker: bool) -> list[str]:
     return host_candidates
 
 
+def _legacy_dap_port_missing(meta: Dict[str, Any], port: int) -> bool:
+    """旧 TCP 会话缺少宿主端口。Docker 会话的 DAP 走容器内通道，不需要宿主端口（PYLAB-NET-01）。"""
+    return port <= 0 and not (meta.get("docker_container_id") or meta.get("sandbox_owner_token"))
+
+
 def _parse_last_seq(websocket: WebSocket) -> Optional[int]:
     """解析最后序列号"""
     raw = str(websocket.query_params.get("last_seq") or "").strip()

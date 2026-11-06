@@ -4,6 +4,8 @@ import sys
 from copy import deepcopy
 from types import SimpleNamespace
 
+import pytest
+
 import app.api.pythonlab.ws as ws_api
 
 
@@ -424,6 +426,33 @@ def test_dap_ws_closes_when_dap_port_invalid(monkeypatch):
     asyncio.run(ws_api.dap_ws(websocket, session_id, db=None))
 
     assert websocket.closed == [(4410, None)]
+
+
+@pytest.mark.parametrize("identity", [
+    {"docker_container_id": "a" * 64},
+    {"sandbox_owner_token": "synthetic-token"},
+])
+def test_dap_ws_docker_session_without_host_port_passes_port_gate(monkeypatch, identity):
+    # Docker 会话不发布宿主端口（PYLAB-NET-01），dap_port 为空也不能被当成端口无效关闭；
+    # 这里用 deny 模式让连接停在下一道（并发 owner）检查，证明已越过端口检查。
+    fake_cache = FakeCache()
+    fake_cache.client = FakeRedisClient()
+    session_id = "dbg_docker_no_port"
+    fake_cache.store[f"{ws_api.CACHE_KEY_SESSION_PREFIX}:{session_id}"] = {
+        "session_id": session_id,
+        "owner_user_id": 7,
+        "status": ws_api.SESSION_STATUS_READY,
+        **identity,
+        "dap_port": None,
+    }
+    fake_cache.client.values[f"debug:session:{session_id}:ws_owner"] = "other-user:conn"
+    _patch_ws_auth_and_cache(monkeypatch, fake_cache=fake_cache, user={"id": 7})
+    monkeypatch.setattr(ws_api.settings, "PYTHONLAB_DEBUG_WS_OWNER_MODE", "deny", raising=False)
+    websocket = FakeWebSocket(query_params={"token": "valid-token"})
+
+    asyncio.run(ws_api.dap_ws(websocket, session_id, db=None))
+
+    assert websocket.closed == [(4429, "deny_in_use")]
 
 
 def test_dap_ws_denies_concurrent_owner_when_mode_is_deny(monkeypatch):

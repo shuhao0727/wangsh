@@ -32,7 +32,7 @@ from app.api.pythonlab.constants import (
     SESSION_STATUS_TERMINATED,
 )
 from app.api.pythonlab.utils import now_iso
-from app.api.pythonlab.ws.validation import _normalize_client_conn_id, _parse_last_seq, _build_dap_host_candidates
+from app.api.pythonlab.ws.validation import _normalize_client_conn_id, _parse_last_seq, _build_dap_host_candidates, _legacy_dap_port_missing
 from app.api.pythonlab.ws.bridge import _get_or_create_dap_bridge
 
 
@@ -346,7 +346,7 @@ async def dap_ws(websocket: WebSocket, session_id: str, db: AsyncSession = Depen
     host = str(meta.get("dap_host") or DAP_HOST_DEFAULT)
     host_candidates = _build_dap_host_candidates(host, in_docker=os.path.exists("/.dockerenv"))
     port = int(meta.get("dap_port") or 0)
-    if port <= 0:
+    if _legacy_dap_port_missing(meta, port):
         _ws_log("ws_dap_port_invalid", dap_port=port)
         await websocket.close(code=4410)
         return

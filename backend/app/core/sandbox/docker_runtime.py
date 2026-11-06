@@ -140,7 +140,8 @@ def _check_mount_and_network(info, expected) -> None:
     mounts = info.get('Mounts') or []
     if not any(m.get('Destination') == '/workspace' and m.get('Source') == expected['mount'] and m.get('RW') for m in mounts):
         raise RuntimeError('运行环境工作区不兼容，请先停止旧会话。')
-    if expected['mode'] == 'plain' and (info.get('HostConfig') or {}).get('NetworkMode') != 'none':
+    # 两种模式都必须无网络（PYLAB-NET-01）：旧版本创建、接在默认 bridge 上的调试容器不能被复用。
+    if (info.get('HostConfig') or {}).get('NetworkMode') != 'none':
         raise RuntimeError('运行环境网络不兼容，请先停止旧会话。')
 
 

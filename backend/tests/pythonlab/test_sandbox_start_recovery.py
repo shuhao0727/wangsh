@@ -196,8 +196,6 @@ def docker_env(monkeypatch, tmp_path):
             return 0, 'b' * 64, ''
         if cmd[:2] == ['docker', 'rm']:
             return (1, '', 'cleanup denied') if state['cleanup_failure'] else (0, '', '')
-        if cmd[:2] == ['docker', 'port']:
-            return 0, '0.0.0.0:45678', ''
         if cmd[:2] == ['docker', 'logs']:
             return 0, 'synthetic logs', ''
         raise AssertionError(f'unexpected Docker command: {cmd}')
@@ -292,7 +290,7 @@ def test_same_session_redelivery_does_not_rewrite_running_workspace(docker_env, 
     _, meta, ws, state, calls = docker_env
     meta['runtime_mode'] = mode
     state['info']['Config']['Labels']['wangsh.pythonlab.runtime-mode'] = mode
-    state['info']['HostConfig']['NetworkMode'] = 'bridge' if mode == 'debug' else 'none'
+    state['info']['HostConfig']['NetworkMode'] = 'none'
     (ws/'meta.json').write_text(json.dumps(meta))
     seed_live_owner(docker_env[0], meta, ws, state['info']['Id'])
     start_docker(docker_env)
@@ -300,26 +298,37 @@ def test_same_session_redelivery_does_not_rewrite_running_workspace(docker_env, 
     assert not any(cmd[1] in ('rm', 'run', 'exec') for cmd in calls)
 
 
+def test_debug_container_on_bridge_network_is_not_reused(docker_env):
+    # 旧版本创建、接在默认 bridge 上的调试容器可以出站，同会话重投递也不能复用（PYLAB-NET-01）。
+    import json
+    _, meta, ws, state, calls = docker_env
+    meta['runtime_mode'] = 'debug'
+    state['info']['Config']['Labels']['wangsh.pythonlab.runtime-mode'] = 'debug'
+    state['info']['HostConfig']['NetworkMode'] = 'bridge'
+    (ws/'meta.json').write_text(json.dumps(meta))
+    seed_live_owner(docker_env[0], meta, ws, state['info']['Id'])
+    with pytest.raises(RuntimeError, match='网络不兼容'):
+        start_docker(docker_env)
+    assert (ws/'main.py').read_text() == 'original active code'
+    assert not any(cmd[1] in ('rm', 'run', 'exec') for cmd in calls)
+
+
 @pytest.mark.parametrize('mode', ['plain', 'debug'])
-def test_new_container_keeps_existing_network_and_dap_contract(docker_env, mode):
+def test_new_container_has_no_network_and_no_published_port(docker_env, mode):
     _, meta, _, state, calls = docker_env
     meta['runtime_mode'] = mode
     state['info'] = None
     result = start_docker(docker_env)
     cmd = next(c for c in calls if c[1] == 'run')
     assert f'wangsh.pythonlab.runtime-mode={mode}' in cmd
+    # 两种模式都不接网络、不发布宿主端口（PYLAB-NET-01）；DAP 走 docker exec 容器内通道。
+    assert cmd[cmd.index('--network')+1] == 'none'
+    assert '-p' not in cmd
+    assert result['dap_port'] is None and result['dap_host'] is None
+    assert not any(c[:2] == ['docker', 'port'] for c in calls)
     if mode == 'debug':
-        assert '--network' not in cmd
-        # 调试端口只绑定回环地址，避免暴露到全部网卡被未授权直连；
-        # 宿主端口留空由 Docker 分配，固定端口会让同机第二个学生调试失败（PYLAB-02）。
-        assert cmd[cmd.index('-p')+1] == '127.0.0.1::5678'
-        assert result['dap_port'] == 45678
-        # debugpy 只监听容器内回环，避免同一 bridge 上其他调试容器直连（PYLAB-02 复查）。
+        # debugpy 只监听容器内回环（PYLAB-02 复查）。
         assert '--listen 127.0.0.1:5678' in cmd[-1]
-    else:
-        assert cmd[cmd.index('--network')+1] == 'none'
-        assert '-p' not in cmd
-        assert result['dap_port'] is None
 
 
 @pytest.mark.parametrize('failure', ['start-timeout', 'readiness-timeout', 'readiness-exit'])

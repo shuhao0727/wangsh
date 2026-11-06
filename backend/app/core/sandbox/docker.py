@@ -221,7 +221,7 @@ class DockerProvider(DockerMountMixin, SandboxProvider):
                     f"sleep 0.25; "
                     f"env PYDEVD_DISABLE_FILE_VALIDATION=1 PYDEVD_CONNECT_TIMEOUT=15 "
                     # 只监听容器内回环：DAP 经 docker exec 在容器内连接（docker_dap.py），
-                    # 监听 0.0.0.0 会让同一 bridge 上其他学生的调试容器直连本调试器。
+                    # 容器本身已无网络（PYLAB-NET-01），只听回环作纵深防御。
                     f"python -Xfrozen_modules=off -m debugpy --listen 127.0.0.1:{self.debugpy_port} --wait-for-client /workspace/main.py; "
                     f"rc=$?; "
                     f"echo \"debugpy exited rc=$rc (iter=$i)\" 1>&2; "
@@ -262,14 +262,10 @@ class DockerProvider(DockerMountMixin, SandboxProvider):
             if runtime_mode == "debug":
                 # NET_BIND_SERVICE needed for debugpy to bind to its port
                 cmd.extend(["--cap-add", "NET_BIND_SERVICE"])
-                # 只绑定回环地址：暴露到全部网卡时，任何能访问服务器端口的人都能直连
-                # DAP 调试端口执行代码、读取学生源码，且不经过登录校验。
-                # 宿主端口留空由 Docker 分配：固定端口会让同机第二个调试容器
-                # 启动失败（port is already allocated），实际端口由 _get_dynamic_port 读回。
-                cmd.extend(["-p", f"127.0.0.1::{self.debugpy_port}"])
-            else:
-                # Plain mode: fully isolate network to prevent student code from accessing external services
-                cmd.extend(["--network", "none"])
+            # 两种模式都不接网络（PYLAB-NET-01）：学生代码不能出站，调试容器之间也不互通。
+            # 调试时 DAP 经 docker exec 在容器内连 127.0.0.1（docker_dap.py），不需要宿主端口；
+            # debugpy 是否就绪由 _wait_for_readiness 在容器内读 /proc/net/tcp 判断。
+            cmd.extend(["--network", "none"])
             
             if self.runtime and self.runtime != "runc":
                 available = await self._get_available_runtimes()
@@ -294,21 +290,17 @@ class DockerProvider(DockerMountMixin, SandboxProvider):
         ownership: WorkspaceOwnership, record: Optional[Dict[str, Any]],
     ) -> Dict[str, Any]:
         """Validate and transfer a running generation while holding its fence."""
-        runtime_mode = expected["mode"]
         name = self._container_name(meta)
         live_owner = self._live_owner_record(record, existing['Id'])
         same_session = await check_reuse(_run_async, existing, expected, ws_path, session_id, live_owner)
         if same_session and live_owner and record.get('startup_task_id') != meta.get('startup_task_id'):
             raise RuntimeError('同会话的另一个启动任务仍拥有运行环境。')
         container_id = existing["Id"]
-        host_port = await self._get_dynamic_port(container_id) if runtime_mode == "debug" else 0
-        if runtime_mode == "debug" and host_port <= 0:
-            raise RuntimeError("已有调试环境端口不可用，请先停止旧会话。")
         if not (same_session and live_owner):
             record = ownership.claim(session_id, meta, name, container_id)
         if not same_session:
             self._prepare_workspace_files(ws_path, code, {**meta, 'session_id': session_id})
-        return {**self._start_result(container_id, ws_path, host_port), 'sandbox_owner_token': record['token']}
+        return {**self._start_result(container_id, ws_path), 'sandbox_owner_token': record['token']}
 
     async def _retire_existing_container(
         self, session_id: str, meta: Dict[str, Any], name: str,
@@ -327,11 +319,12 @@ class DockerProvider(DockerMountMixin, SandboxProvider):
         record['phase'] = 'removed'
         ownership.write(record)
 
-    def _start_result(self, container_id: str, ws_path: Path, host_port: int) -> Dict[str, Any]:
+    def _start_result(self, container_id: str, ws_path: Path) -> Dict[str, Any]:
+        # Docker 会话不发布宿主端口，DAP 走容器内通道；dap_host/dap_port 只属于旧 TCP 路径。
         return {
             "docker_container_id": container_id,
-            "dap_host": getattr(settings, "DAP_HOST_IP", "host.docker.internal") if host_port else None,
-            "dap_port": host_port or None,
+            "dap_host": None,
+            "dap_port": None,
             "workspace_path": str(ws_path),
         }
 
@@ -353,17 +346,8 @@ class DockerProvider(DockerMountMixin, SandboxProvider):
                     raise RuntimeError("运行环境创建未返回资源标识。")
                 record.update(container_id=container_id, phase='live')
                 ownership.write(record)
-                host_port = 0
-                if runtime_mode == "debug":
-                    for _ in range(5):
-                        host_port = await self._get_dynamic_port(container_id)
-                        if host_port > 0:
-                            break
-                        await asyncio.sleep(0.5)
-                    if host_port <= 0:
-                        raise TimeoutError("调试端口分配超时，请重试运行。")
-                await self._wait_for_readiness(container_id, host_port, runtime_mode)
-                return {**self._start_result(container_id, ws_path, host_port), 'sandbox_owner_token': record['token']}
+                await self._wait_for_readiness(container_id, 0, runtime_mode)
+                return {**self._start_result(container_id, ws_path), 'sandbox_owner_token': record['token']}
             except BaseException:
                 owned_id = container_id or (cidfile.read_text().strip() if cidfile.exists() else "")
                 if owned_id:
@@ -564,29 +548,6 @@ class DockerProvider(DockerMountMixin, SandboxProvider):
             (ws_path / ".pythonlab_plain_run.sh").chmod(0o755)
         except Exception:
             pass
-
-    async def _get_dynamic_port(self, container_id: str) -> int:
-        try:
-            cmd = ["docker", "port", container_id, f"{self.debugpy_port}/tcp"]
-            rc, out, _ = await _run_async(cmd, timeout_s=10)
-            if rc != 0:
-                return 0
-            out = (out or "").strip()
-            if out:
-                lines = out.splitlines()
-                for line in lines:
-                    parts = line.strip().split(":")
-                    if len(parts) >= 2:
-                        try:
-                            port = int(parts[-1])
-                            if port > 0:
-                                return port
-                        except ValueError:
-                            continue
-        except Exception as e:
-            logger.error(f"Error getting dynamic port: {e}")
-            pass
-        return 0
 
     async def _docker_is_running(self, container_id: str) -> bool:
         try:
