@@ -23,6 +23,12 @@ from app.utils.cache import cache, ArticleCacheKeys, clear_article_cache
 from app.core.pubsub import publish
 from app.utils.errors import safe_error_detail
 from .markdown_styles import router as markdown_styles_router
+from .presenters import (
+    article_author_dict,
+    article_base_dict,
+    article_category_dict,
+    article_style_dict,
+)
 
 router = APIRouter()
 router.include_router(markdown_styles_router)
@@ -74,74 +80,18 @@ async def list_articles(
     # 将SQLAlchemy对象转换为字典（匹配Pydantic模型）
     articles_list = []
     for article in result["articles"]:
-        # 构建文章字典
-        article_dict = {
-            "id": article.id,
-            "title": article.title or "",
-            "slug": article.slug,
-            "content": article.content or "",
-            "summary": article.summary or "",
-            "custom_css": getattr(article, "custom_css", None),
-            "style_key": getattr(article, "style_key", None),
-            "published": article.published,
-            "author_id": article.author_id,  # Article模型有author_id字段
-            "category_id": article.category_id,
-            "created_at": article.created_at.isoformat(),
-            "updated_at": article.updated_at.isoformat(),
-        }
-
-        # 如果包含关联信息，添加作者和分类
+        article_dict = article_base_dict(article)
         if include_relations:
-            # 添加作者信息
-            if article.author:
-                article_dict["author"] = {
-                    "id": article.author.id,
-                    "username": article.author.username,
-                    "email": getattr(article.author, "email", None),
-                    "full_name": article.author.full_name if hasattr(article.author, 'full_name') else None
-                }
-            else:
-                article_dict["author"] = None
-
-            # 添加分类信息
-            if article.category:
-                # 分类slug处理
-                category_slug = None
-                if hasattr(article.category, 'slug') and article.category.slug:
-                    category_slug = article.category.slug
-                else:
-                    category_slug = f"category-{article.category.id}"
-
-                article_dict["category"] = {
-                    "id": article.category.id,
-                    "name": article.category.name,
-                    "slug": category_slug,
-                    "description": article.category.description if hasattr(article.category, 'description') else None
-                }
-            else:
-                article_dict["category"] = None
-
-            if getattr(article, "style", None):
-                article_dict["style"] = {
-                    "key": article.style.key,
-                    "title": article.style.title or "",
-                    "sort_order": article.style.sort_order or 0,
-                    "content": article.style.content or "",
-                    "created_at": article.style.created_at.isoformat(),
-                    "updated_at": article.style.updated_at.isoformat(),
-                }
-            else:
-                article_dict["style"] = None
-
-            # 标签功能已移除，不再返回标签信息
-            article_dict["tags"] = []
+            article_dict["author"] = article_author_dict(article)
+            article_dict["category"] = article_category_dict(
+                article, include_description=True, name_or_empty=False, slug_fallback=True
+            )
+            article_dict["style"] = article_style_dict(article)
         else:
-            # 如果不包含关联信息，设置为None
             article_dict["author"] = None
             article_dict["category"] = None
             article_dict["style"] = None
-            article_dict["tags"] = []
-
+        article_dict["tags"] = []
         articles_list.append(article_dict)
 
     response_data = {
@@ -269,51 +219,13 @@ async def get_article(
         )
 
     # 手动构建响应，确保正确处理空值和编码
-    response_dict = {
-        "id": article.id,
-        "title": article.title or "",  # 处理可能的空值
-        "slug": article.slug,
-        "content": article.content or "",  # 处理可能的空值
-        "summary": article.summary or "",  # 处理可能的空值
-        "custom_css": getattr(article, "custom_css", None),
-        "style_key": getattr(article, "style_key", None),
-        "published": article.published,
-        "author_id": article.author_id,
-        "category_id": article.category_id,
-        "created_at": article.created_at.isoformat(),
-        "updated_at": article.updated_at.isoformat(),
-    }
-
+    response_dict = article_base_dict(article)
     if include_relations:
-        if article.author:
-            response_dict["author"] = {
-                "id": article.author.id,
-                "username": article.author.username,
-                "email": getattr(article.author, "email", None),
-                "full_name": article.author.full_name if hasattr(article.author, 'full_name') else None
-            }
-        else:
-            response_dict["author"] = None
-
-        if article.category:
-            response_dict["category"] = {
-                "id": article.category.id,
-                "name": article.category.name or "",
-                "slug": article.category.slug if hasattr(article.category, 'slug') else f"category-{article.category.id}"
-            }
-        else:
-            response_dict["category"] = None
-        if getattr(article, "style", None):
-            response_dict["style"] = {
-                "key": article.style.key,
-                "title": article.style.title or "",
-                "sort_order": article.style.sort_order or 0,
-                "content": article.style.content or "",
-                "created_at": article.style.created_at.isoformat(),
-                "updated_at": article.style.updated_at.isoformat(),
-            }
-        else:
-            response_dict["style"] = None
+        response_dict["author"] = article_author_dict(article)
+        response_dict["category"] = article_category_dict(
+            article, include_description=False, name_or_empty=True, slug_fallback=False
+        )
+        response_dict["style"] = article_style_dict(article)
     else:
         response_dict["style"] = None
 
@@ -356,51 +268,13 @@ async def get_article_by_slug(
         )
 
     # 手动构建响应，确保正确处理空值和编码
-    response_dict = {
-        "id": article.id,
-        "title": article.title or "",  # 处理可能的空值
-        "slug": article.slug,
-        "content": article.content or "",  # 处理可能的空值
-        "summary": article.summary or "",  # 处理可能的空值
-        "custom_css": getattr(article, "custom_css", None),
-        "style_key": getattr(article, "style_key", None),
-        "published": article.published,
-        "author_id": article.author_id,
-        "category_id": article.category_id,
-        "created_at": article.created_at.isoformat(),
-        "updated_at": article.updated_at.isoformat(),
-    }
-
+    response_dict = article_base_dict(article)
     if include_relations:
-        if article.author:
-            response_dict["author"] = {
-                "id": article.author.id,
-                "username": article.author.username,
-                "email": getattr(article.author, "email", None),
-                "full_name": article.author.full_name if hasattr(article.author, 'full_name') else None
-            }
-        else:
-            response_dict["author"] = None
-
-        if article.category:
-            response_dict["category"] = {
-                "id": article.category.id,
-                "name": article.category.name or "",
-                "slug": article.category.slug if hasattr(article.category, 'slug') else f"category-{article.category.id}"
-            }
-        else:
-            response_dict["category"] = None
-        if getattr(article, "style", None):
-            response_dict["style"] = {
-                "key": article.style.key,
-                "title": article.style.title or "",
-                "sort_order": article.style.sort_order or 0,
-                "content": article.style.content or "",
-                "created_at": article.style.created_at.isoformat(),
-                "updated_at": article.style.updated_at.isoformat(),
-            }
-        else:
-            response_dict["style"] = None
+        response_dict["author"] = article_author_dict(article)
+        response_dict["category"] = article_category_dict(
+            article, include_description=False, name_or_empty=True, slug_fallback=False
+        )
+        response_dict["style"] = article_style_dict(article)
     else:
         response_dict["style"] = None
 
@@ -605,70 +479,19 @@ async def list_public_articles(
         search=q,
     )
 
-        # 将SQLAlchemy对象转换为字典（匹配Pydantic模型）
+    # 将SQLAlchemy对象转换为字典（匹配Pydantic模型）
     articles_list = []
     for article in result["articles"]:
-        # 构建文章字典
-        article_dict = {
-            "id": article.id,
-            "title": article.title or "",
-            "slug": article.slug,
-            "content": article.content or "",
-            "summary": article.summary or "",
-            "custom_css": getattr(article, "custom_css", None),
-            "style_key": getattr(article, "style_key", None),
-            "published": article.published,
-            "author_id": article.author_id,  # Article模型有author_id字段
-            "created_at": article.created_at.isoformat(),
-            "updated_at": article.updated_at.isoformat(),
-        }
-
-        # 添加作者信息
-        if article.author:
-            article_dict["author"] = {
-                "id": article.author.id,
-                "username": article.author.username,
-                "email": getattr(article.author, "email", None),
-                "full_name": article.author.full_name if hasattr(article.author, 'full_name') else None
-            }
-        else:
-            article_dict["author"] = None
-
-        # 添加分类信息
-        if article.category:
-            article_dict["category_id"] = article.category_id
-            # 分类slug处理
-            category_slug = None
-            if hasattr(article.category, 'slug') and article.category.slug:
-                category_slug = article.category.slug
-            else:
-                category_slug = f"category-{article.category.id}"
-
-            article_dict["category"] = {
-                "id": article.category.id,
-                "name": article.category.name,
-                "slug": category_slug,
-                "description": article.category.description if hasattr(article.category, 'description') else None
-            }
-        else:
+        article_dict = article_base_dict(article)
+        article_dict["author"] = article_author_dict(article)
+        category = article_category_dict(
+            article, include_description=True, name_or_empty=False, slug_fallback=True
+        )
+        if category is None:
             article_dict["category_id"] = None
-            article_dict["category"] = None
-
-        if getattr(article, "style", None):
-            article_dict["style"] = {
-                "key": article.style.key,
-                "title": article.style.title or "",
-                "sort_order": article.style.sort_order or 0,
-                "content": article.style.content or "",
-                "created_at": article.style.created_at.isoformat(),
-                "updated_at": article.style.updated_at.isoformat(),
-            }
-        else:
-            article_dict["style"] = None
-
-        # 标签功能已移除，不再返回标签信息
+        article_dict["category"] = category
+        article_dict["style"] = article_style_dict(article)
         article_dict["tags"] = []
-
         articles_list.append(article_dict)
 
     response_data = {
@@ -724,41 +547,15 @@ async def get_public_article_by_slug(
         )
 
     # 手动构建响应，确保正确处理空值和编码
-    article_dict = {
-        "id": article.id,
-        "title": article.title or "",  # 处理可能的空值
-        "slug": article.slug,
-        "content": article.content or "",  # 处理可能的空值
-        "summary": article.summary or "",  # 处理可能的空值
-        "custom_css": getattr(article, "custom_css", None),
-        "style_key": getattr(article, "style_key", None),
-        "published": article.published,
-        "author_id": article.author_id,
-        "category_id": article.category_id,
-        "created_at": article.created_at.isoformat(),
-        "updated_at": article.updated_at.isoformat(),
-        "author": {
-            "id": article.author.id,
-            "username": article.author.username,
-            "email": getattr(article.author, "email", None),
-            "full_name": article.author.full_name if hasattr(article.author, 'full_name') else None
-        } if article.author else None,
-        "category": {
-            "id": article.category.id,
-            "name": article.category.name or "",
-            "slug": article.category.slug if hasattr(article.category, 'slug') else f"category-{article.category.id}",
-            "description": article.category.description if hasattr(article.category, 'description') else None
-        } if article.category else None,
-        "style": {
-            "key": article.style.key,
-            "title": article.style.title or "",
-            "sort_order": article.style.sort_order or 0,
-            "content": article.style.content or "",
-            "created_at": article.style.created_at.isoformat(),
-            "updated_at": article.style.updated_at.isoformat(),
-        } if getattr(article, "style", None) else None,
-        "tags": []
-    }
+    article_dict = article_base_dict(article)
+    article_dict.update({
+        "author": article_author_dict(article),
+        "category": article_category_dict(
+            article, include_description=True, name_or_empty=True, slug_fallback=False
+        ),
+        "style": article_style_dict(article),
+        "tags": [],
+    })
 
     # 缓存结果，过期时间使用配置值
     await cache.set(cache_key, article_dict, expire_seconds=settings.ARTICLE_CACHE_PUBLIC_DETAIL_TTL)

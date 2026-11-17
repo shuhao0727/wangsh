@@ -14,6 +14,7 @@ from app.core.deps import get_db, require_admin
 from app.schemas.agents import ConversationExportRequest
 from app.services.agents import analyze_hot_questions, analyze_student_chains
 from app.services.agents.assistant_answer_sanitizer import sanitize_assistant_answer
+from app.utils.excel_safety import force_text_workbook
 
 router = APIRouter()
 
@@ -223,6 +224,7 @@ async def export_selected_conversations_excel(
                     cell.alignment = qa_alignment
 
         buffer = io.BytesIO()
+        force_text_workbook(wb)
         wb.save(buffer)
         return buffer.getvalue()
 
@@ -339,6 +341,7 @@ async def export_hot_questions_excel(
                     cell.alignment = center_alignment
 
         buffer = io.BytesIO()
+        force_text_workbook(wb)
         wb.save(buffer)
         return buffer.getvalue()
 
@@ -450,6 +453,7 @@ async def export_student_chains_excel(
                     cell.alignment = center_alignment
 
         buffer = io.BytesIO()
+        force_text_workbook(wb)
         wb.save(buffer)
         return buffer.getvalue()
 

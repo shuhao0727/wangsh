@@ -35,6 +35,12 @@ WS_MAX_STDOUT_KB: Final[int] = 256
 WS_MAX_DAP_MSG_BYTES: Final[int] = 1024 * 1024
 WS_RATE_LIMIT_PER_SEC: Final[int] = 50
 WS_HEARTBEAT_INTERVAL: Final[float] = 2.0
+WS_MAX_DAP_BUFFER_BYTES: Final[int] = 8 * 1024 * 1024
+WS_MAX_DAP_BUFFER_MESSAGES: Final[int] = 2000
+
+# AI Payload Limits
+MAX_AI_MESSAGES: Final[int] = 50
+MAX_AI_PAYLOAD_BYTES: Final[int] = 256 * 1024
 
 # DAP / Debugger
 DAP_HOST_DEFAULT: Final[str] = "127.0.0.1"

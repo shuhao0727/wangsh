@@ -25,6 +25,7 @@ from app.api.pythonlab.constants import (
     SESSION_STATUS_STOPPED,
     SESSION_STATUS_TERMINATED,
 )
+from app.api.pythonlab.ws.client_buffer import DapClientBufferMixin
 from app.api.pythonlab.utils import now_iso
 from app.api.pythonlab.ws.connection import _read_dap_message, _write_dap_message
 from app.api.pythonlab.ws.dap_transport import connect_dap
@@ -66,7 +67,7 @@ _DAP_BRIDGES: Dict[str, "DapSessionBridge"] = {}
 _DAP_BRIDGES_LOCK = asyncio.Lock()
 
 
-class DapSessionBridge:
+class DapSessionBridge(DapClientBufferMixin):
     """DAP 会话桥接器，管理客户端 WebSocket 与 DAP 后端 TCP 连接之间的通信"""
 
     def __init__(
@@ -126,7 +127,7 @@ class DapSessionBridge:
         self.client_send_lock = asyncio.Lock()
         self.buffer_active = True
         self.buffer: list[Dict[str, Any]] = []
-        self.buffer_sent_idx = 0
+        self.buffer_bytes = self.buffer_sent_idx = 0
         self.buffer_event = asyncio.Event()
         self.first_inbound_event = asyncio.Event()
         self.client_websocket: Optional[WebSocket] = None
@@ -541,7 +542,8 @@ class DapSessionBridge:
 
     async def handle_client_text(self, data: str) -> None:
         """处理客户端文本消息"""
-        if len(data.encode("utf-8", errors="ignore")) > self.max_dap_msg_bytes:
+        msg_bytes = len(data.encode("utf-8", errors="ignore"))
+        if msg_bytes > self.max_dap_msg_bytes:
             await self._send_output("DAP 消息过大，连接已断开\n")
             await self._close_known_websocket(code=1009, reason="dap_message_too_large")
             raise RuntimeError("dap message too large")
@@ -572,9 +574,7 @@ class DapSessionBridge:
             if await self._maybe_handle_reconnect_bootstrap(msg):
                 return
         if self.buffer_active:
-            self.buffer.append(msg)
-            self.ws_log("ws_buffer_append", buffer_size=len(self.buffer), command=str(msg.get("command") or ""))
-            self.buffer_event.set()
+            await self._buffer_client_message(msg, msg_bytes)
             return
         await self._ensure_conn()
         assert self.writer is not None
@@ -636,7 +636,7 @@ class DapSessionBridge:
             if msg.get("type") == "response" and not self.first_inbound_event.is_set():
                 self.first_inbound_event.set()
                 self.buffer_active = False
-                self.buffer = []
+                self.buffer, self.buffer_bytes = [], 0
                 self.buffer_sent_idx = 0
             if msg.get("type") == "response" and str(msg.get("command") or "") == "initialize":
                 body = msg.get("body") if isinstance(msg.get("body"), dict) else {}

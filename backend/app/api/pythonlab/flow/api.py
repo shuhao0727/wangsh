@@ -4,6 +4,7 @@ Flow API 路由模块
 包含所有 API 端点定义。
 """
 
+import json
 from typing import Any, Dict
 
 from fastapi import APIRouter, Depends
@@ -11,7 +12,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import require_user, require_admin
 from app.db.database import get_db
-from app.api.pythonlab.constants import MAX_CODE_SIZE_BYTES
+from app.api.pythonlab.constants import (
+    MAX_AI_MESSAGES,
+    MAX_AI_PAYLOAD_BYTES,
+    MAX_CODE_SIZE_BYTES,
+)
 
 from .builder import parse_flow_internal
 from .constants import (
@@ -67,9 +72,13 @@ async def apply_optimization(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Mark optimization as applied
+    Mark optimization as applied (owner only)
     """
-    return await apply_optimization_internal(log_id, db)
+    return await apply_optimization_internal(
+        log_id,
+        int(current_user.get("id") or 0),
+        db,
+    )
 
 
 @router.get("/optimize/rollback/{log_id}")
@@ -79,9 +88,13 @@ async def rollback_optimization(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Get original content for rollback
+    Get original content for rollback (owner only)
     """
-    return await rollback_optimization_internal(log_id, db)
+    return await rollback_optimization_internal(
+        log_id,
+        int(current_user.get("id") or 0),
+        db,
+    )
 
 
 @router.get("/flow/prompt_template")
@@ -129,6 +142,14 @@ async def ai_chat(
     messages = payload.get("messages")
     if not isinstance(messages, list):
         raise ValidationError("messages must be a list", field="messages")
+    if len(messages) > MAX_AI_MESSAGES:
+        raise SizeLimitError(f"messages 数量超过 {MAX_AI_MESSAGES}", limit=MAX_AI_MESSAGES)
+    try:
+        payload_bytes = len(json.dumps(messages, ensure_ascii=False).encode("utf-8"))
+    except (TypeError, ValueError):
+        raise ValidationError("messages 必须可序列化为 JSON", field="messages")
+    if payload_bytes > MAX_AI_PAYLOAD_BYTES:
+        raise SizeLimitError("messages 过大", limit=MAX_AI_PAYLOAD_BYTES)
 
     return await ai_chat_internal(messages, db)
 
@@ -145,6 +166,12 @@ async def generate_code_from_flow(
     flow_json = payload.get("flow")
     if not isinstance(flow_json, dict):
         raise ValidationError("flow 必须为 JSON 对象", field="flow")
+    try:
+        flow_bytes = len(json.dumps(flow_json, ensure_ascii=False).encode("utf-8"))
+    except (TypeError, ValueError):
+        raise ValidationError("flow 必须可序列化为 JSON", field="flow")
+    if flow_bytes > MAX_AI_PAYLOAD_BYTES:
+        raise SizeLimitError("flow 过大", limit=MAX_AI_PAYLOAD_BYTES)
 
     return await generate_code_from_flow_internal(flow_json, db)
 

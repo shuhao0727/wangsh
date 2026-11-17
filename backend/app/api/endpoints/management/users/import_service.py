@@ -17,6 +17,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import User
 from app.utils.errors import safe_error_detail
+from app.services.xbk.course_selection_workbook import (
+    WorkbookArchiveError,
+    validate_xlsx_archive_budget,
+)
 from app.services.user_governance import (
     assert_last_active_super_admin,
     lock_import_account_governance,
@@ -91,6 +95,16 @@ def parse_csv_rows(content: bytes) -> Tuple[List[str], Iterator[Dict[str, str]]]
 
 def parse_xlsx_rows(content: bytes) -> Tuple[List[str], Iterator[Dict[str, str]]]:
     try:
+        validate_xlsx_archive_budget(content)
+    except WorkbookArchiveError as exc:
+        if exc.status_code == 413:
+            raise HTTPException(status_code=413, detail=exc.message) from exc
+        raise HTTPException(
+            status_code=400,
+            detail="Excel文件已损坏或不是有效的 xlsx 文件，请重新导出后上传",
+        ) from exc
+
+    try:
         workbook = load_workbook(
             filename=io.BytesIO(content), data_only=True, read_only=True
         )
@@ -150,7 +164,7 @@ def _limit_import_rows(
         count += 1
         if count > max_rows:
             raise HTTPException(
-                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
                 detail=f"单次导入不能超过 {max_rows} 行",
             )
         yield row
@@ -417,7 +431,7 @@ async def import_users(
         content = await file.read(MAX_USER_IMPORT_BYTES + 1)
         if len(content) > MAX_USER_IMPORT_BYTES:
             raise HTTPException(
-                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
                 detail=f"导入文件不能超过 {MAX_USER_IMPORT_BYTES // (1024 * 1024)} MB",
             )
         fieldnames, raw_reader = parse_import_rows(file.filename, content)

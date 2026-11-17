@@ -39,6 +39,7 @@ class FakeOptimizeDb:
         self.execute_value = execute_value
         self.commit_count = 0
         self.refresh_count = 0
+        self.last_query = None
 
     def add(self, value):
         self.added.append(value)
@@ -53,7 +54,16 @@ class FakeOptimizeDb:
         if not getattr(value, "rollback_id", None):
             value.rollback_id = str(uuid4())
 
-    async def execute(self, _query):
+    async def execute(self, query):
+        self.last_query = query
+        if self.execute_value is not None:
+            params = query.compile().params
+            owner_id = next(
+                (value for key, value in params.items() if key.startswith("user_id")),
+                None,
+            )
+            if owner_id is not None and getattr(self.execute_value, "user_id", None) != owner_id:
+                return FakeDbResult(None)
         return FakeDbResult(self.execute_value)
 
 
@@ -184,7 +194,7 @@ def test_optimize_code_returns_normalized_code_and_log_info(monkeypatch, tmp_pat
 
 
 def test_apply_optimization_marks_log_as_applied():
-    log_entry = SimpleNamespace(id=5, status="pending")
+    log_entry = SimpleNamespace(id=5, user_id=2, status="pending")
     db = FakeOptimizeDb(execute_value=log_entry)
 
     result = asyncio.run(flow_api.apply_optimization(5, current_user={"id": 2}, db=db))
@@ -192,11 +202,28 @@ def test_apply_optimization_marks_log_as_applied():
     assert result == {"success": True}
     assert log_entry.status == "applied"
     assert db.commit_count == 1
+    params = db.last_query.compile().params
+    assert {value for key, value in params.items() if key.startswith("user_id")} == {2}
+
+
+def test_apply_optimization_rejects_other_users_log():
+    log_entry = SimpleNamespace(id=5, user_id=7, status="pending")
+    db = FakeOptimizeDb(execute_value=log_entry)
+
+    try:
+        asyncio.run(flow_api.apply_optimization(5, current_user={"id": 2}, db=db))
+        raise AssertionError("expected NotFoundError")
+    except NotFoundError as exc:
+        assert exc.status_code == 404
+
+    assert log_entry.status == "pending"
+    assert db.commit_count == 0
 
 
 def test_rollback_optimization_returns_json_for_flow_logs():
     log_entry = SimpleNamespace(
         id=9,
+        user_id=2,
         type="flow",
         original_content=json.dumps({"nodes": [{"id": "n1"}], "edges": []}),
     )
@@ -205,6 +232,24 @@ def test_rollback_optimization_returns_json_for_flow_logs():
     result = asyncio.run(flow_api.rollback_optimization(9, current_user={"id": 2}, db=db))
 
     assert result == {"original_content": {"nodes": [{"id": "n1"}], "edges": []}, "type": "flow"}
+    params = db.last_query.compile().params
+    assert {value for key, value in params.items() if key.startswith("user_id")} == {2}
+
+
+def test_rollback_optimization_rejects_other_users_log():
+    log_entry = SimpleNamespace(
+        id=9,
+        user_id=7,
+        type="code",
+        original_content="print('secret')\n",
+    )
+    db = FakeOptimizeDb(execute_value=log_entry)
+
+    try:
+        asyncio.run(flow_api.rollback_optimization(9, current_user={"id": 2}, db=db))
+        raise AssertionError("expected NotFoundError")
+    except NotFoundError as exc:
+        assert exc.status_code == 404
 
 
 def test_rollback_optimization_returns_404_when_log_missing():

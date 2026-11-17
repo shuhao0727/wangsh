@@ -18,10 +18,14 @@ from .exceptions import NotFoundError
 
 async def apply_optimization_internal(
     log_id: int,
+    user_id: int,
     db: AsyncSession
 ) -> Dict[str, Any]:
-    """内部应用优化函数"""
-    query = select(OptimizeLog).where(OptimizeLog.id == log_id)
+    """内部应用优化函数（仅允许记录所有者）"""
+    query = select(OptimizeLog).where(
+        OptimizeLog.id == log_id,
+        OptimizeLog.user_id == user_id,
+    )
     result = await db.execute(query)
     log_entry = result.scalar_one_or_none()
 
@@ -35,10 +39,14 @@ async def apply_optimization_internal(
 
 async def rollback_optimization_internal(
     log_id: int,
+    user_id: int,
     db: AsyncSession
 ) -> Dict[str, Any]:
-    """内部回滚优化函数"""
-    query = select(OptimizeLog).where(OptimizeLog.id == log_id)
+    """内部回滚优化函数（仅允许记录所有者）"""
+    query = select(OptimizeLog).where(
+        OptimizeLog.id == log_id,
+        OptimizeLog.user_id == user_id,
+    )
     result = await db.execute(query)
     log_entry = result.scalar_one_or_none()
 

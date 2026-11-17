@@ -553,13 +553,21 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
   }, [clearDiscussionSessionState, fetchGroups]);
 
   // --- 消息加载与轮询 ---
-  const loadMessages = useCallback(async (sid: number) => {
+  const loadMessages = useCallback(async (sid: number): Promise<"ok" | "forbidden" | "error"> => {
     const res = await groupDiscussionApi.listMessages({
       sessionId: sid,
       afterId: afterIdRef.current,
       limit: 50
     });
-    if (res.success && res.data.items.length > 0) {
+    if (!res.success) {
+      if (res.forbidden) {
+        showMessage.warning("你已不在该讨论组");
+        handleExit();
+        return "forbidden";
+      }
+      return "error";
+    }
+    if (res.data.items.length > 0) {
       setMessages(prev => {
         const ids = new Set(prev.map(m => m.id));
         const newItems = res.data.items.filter(m => !ids.has(m.id)).map(m => ({ ...m, is_mine: userId ? m.user_id === userId : false }));
@@ -568,7 +576,8 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
       afterIdRef.current = res.data.next_after_id;
       scrollToBottom();
     }
-  }, [userId]);
+    return "ok";
+  }, [userId, handleExit]);
 
   useEffect(() => {
     if (isAuthenticated) return;
@@ -638,8 +647,33 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
     let eventSource: EventSource | null = null;
     let fallbackActive = false;
 
+    const startFallbackPolling = () => {
+      if (fallbackActive) return;
+      fallbackActive = true;
+      const poll = async () => {
+        if (!fallbackActive) return;
+        const result = await loadMessages(sessionId);
+        if (result === "forbidden") {
+          fallbackActive = false;
+          return;
+        }
+        if (fallbackActive) setTimeout(poll, 3000);
+      };
+      void poll();
+    };
+
     try {
       eventSource = new EventSource(sseUrl, { withCredentials: true });
+
+      eventSource.addEventListener("access_revoked", () => {
+        showMessage.warning("你已被移出讨论组");
+        fallbackActive = false;
+        if (eventSource) {
+          eventSource.close();
+          eventSource = null;
+        }
+        handleExit();
+      });
 
       eventSource.onmessage = (event) => {
         try {
@@ -667,25 +701,11 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
           eventSource.close();
           eventSource = null;
         }
-        if (!fallbackActive) {
-          fallbackActive = true;
-          const poll = async () => {
-            if (!fallbackActive) return;
-            await loadMessages(sessionId);
-            if (fallbackActive) setTimeout(poll, 3000);
-          };
-          void poll();
-        }
+        startFallbackPolling();
       };
     } catch {
       // EventSource 不可用，直接轮询
-      fallbackActive = true;
-      const poll = async () => {
-        if (!fallbackActive) return;
-        await loadMessages(sessionId);
-        if (fallbackActive) setTimeout(poll, 3000);
-      };
-      void poll();
+      startFallbackPolling();
     }
 
     return () => {
@@ -695,7 +715,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
         eventSource = null;
       }
     };
-  }, [isAuthenticated, view, sessionId, userId, loadMessages]);
+  }, [isAuthenticated, view, sessionId, userId, loadMessages, handleExit]);
 
   const scrollToBottom = () => {
     setTimeout(() => {

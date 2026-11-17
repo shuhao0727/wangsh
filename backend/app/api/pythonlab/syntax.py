@@ -1,11 +1,14 @@
 
 import ast
+import asyncio
 import time
 from typing import List, Optional
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel
 
+from app.api.pythonlab.constants import MAX_CODE_SIZE_BYTES
+from app.api.pythonlab.cpu_limits import run_cpu
 from app.core.session_guard import extract_client_ip
 from app.utils.rate_limit import rate_limiter
 
@@ -58,20 +61,18 @@ if HAS_PYFLAKES:
                 source="lint"
             ))
 
-@router.post("/syntax/check", response_model=SyntaxCheckResponse)
-async def check_syntax(payload: SyntaxCheckRequest, request: Request = None):
-    # 公开端点的 CPU 密集检查：按 IP 限流，防止被当作免费计算/DoS 面。
-    # request 为 None 表示进程内直接调用（单元测试），跳过限流。
-    if request is not None:
-        client_ip = extract_client_ip(request)
-        await rate_limiter.check(f"pythonlab-syntax:{client_ip}", interval_seconds=1)
-
-    code = payload.code
+def _check_syntax_sync(code: str) -> List[SyntaxErrorDetail]:
     errors: List[SyntaxErrorDetail] = []
 
-    # 1. Built-in Syntax Check (AST)
     try:
         ast.parse(code)
+    except RecursionError:
+        errors.append(SyntaxErrorDetail(
+            line=1,
+            col=1,
+            message="代码嵌套过深，无法解析",
+            source="syntax",
+        ))
     except SyntaxError as e:
         lineno = int(e.lineno or 1)
         offset = int(e.offset or 1)
@@ -85,17 +86,33 @@ async def check_syntax(payload: SyntaxCheckRequest, request: Request = None):
             endCol=end_offset,
             source="syntax"
         ))
-    
-    # 2. Pyflakes Check (Linting)
+
     if HAS_PYFLAKES and not errors:
         reporter = ListReporter()
         try:
-            # check(codeString, filename, reporter)
             pyflakes_api.check(code, "input.py", reporter)
             errors.extend(reporter.errors)
         except Exception:
             pass
+    return errors
 
+
+@router.post("/syntax/check", response_model=SyntaxCheckResponse)
+async def check_syntax(payload: SyntaxCheckRequest, request: Request = None):
+    # 公开端点的 CPU 密集检查：按 IP 限流，防止被当作免费计算/DoS 面。
+    # request 为 None 表示进程内直接调用（单元测试），跳过限流。
+    if request is not None:
+        client_ip = extract_client_ip(request)
+        await rate_limiter.check(f"pythonlab-syntax:{client_ip}", interval_seconds=1)
+
+    code = payload.code
+    if len(code.encode("utf-8")) > MAX_CODE_SIZE_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail=f"代码超过 {MAX_CODE_SIZE_BYTES} 字节",
+        )
+
+    errors = await asyncio.to_thread(run_cpu, _check_syntax_sync, code)
     return {
         "ok": len(errors) == 0,
         "errors": errors,

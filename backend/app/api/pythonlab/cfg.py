@@ -1,13 +1,19 @@
 import ast
+import asyncio
 from typing import Any, Dict, List, Optional, Tuple
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from app.core.deps import require_user
 from app.api.pythonlab.constants import (
+    DEFAULT_MAX_EDGES,
+    DEFAULT_MAX_NODES,
+    MAX_CODE_SIZE_BYTES,
     VERSION_CFG,
     WORKSPACE_MAIN_PY,
 )
+from app.api.pythonlab.cpu_limits import run_cpu
+from app.utils.rate_limit import rate_limiter
 from app.api.pythonlab.utils import (
     is_elif_if,
     make_edge,
@@ -90,6 +96,8 @@ def _build_block(
     entry: Optional[str] = None
     exits: List[str] = []
     for s in stmts or []:
+        if len(nodes) >= DEFAULT_MAX_NODES:
+            raise ValueError("CFG 节点过多")
         sid, s_exits = _build_stmt(code, s, parent_id, nodes, edges)
         if entry is None:
             entry = sid
@@ -155,10 +163,33 @@ def _generate_cfg_data(code: str) -> Dict[str, Any]:
 
 @router.post("/cfg/parse")
 async def parse_cfg(
-    payload: Dict[str, Any], current_user: Dict[str, Any] = Depends(require_user)
+    payload: Dict[str, Any],
+    request: Request = None,
+    current_user: Dict[str, Any] = Depends(require_user),
 ):
     code = payload.get("code")
     if not isinstance(code, str):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="code 必须为字符串")
+    if len(code.encode("utf-8")) > MAX_CODE_SIZE_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail=f"代码超过 {MAX_CODE_SIZE_BYTES} 字节",
+        )
 
-    return _generate_cfg_data(code)
+    if request is not None:
+        user_id = int(current_user.get("id") or 0)
+        await rate_limiter.check(f"pythonlab-cfg:{user_id}", interval_seconds=1)
+
+    try:
+        result = await asyncio.to_thread(run_cpu, _generate_cfg_data, code)
+    except (ValueError, RecursionError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail=str(exc) if isinstance(exc, ValueError) else "代码嵌套过深",
+        )
+    if len(result["edges"]) > DEFAULT_MAX_EDGES:
+        raise HTTPException(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail="CFG 边过多",
+        )
+    return result

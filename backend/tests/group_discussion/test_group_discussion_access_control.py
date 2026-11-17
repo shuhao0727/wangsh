@@ -1,5 +1,6 @@
 import asyncio
 from datetime import date, datetime
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -310,3 +311,142 @@ def test_cross_system_analysis_rejects_when_no_members():
 
     assert exc.value.status_code == 422
     assert "暂无成员" in str(exc.value.detail)
+
+
+class _RenameDB(_FakeDB):
+    def __init__(self, session):
+        super().__init__([session])
+        self.committed = False
+        self.refreshed = False
+
+    async def commit(self):
+        self.committed = True
+
+    async def refresh(self, _obj):
+        self.refreshed = True
+
+
+def test_set_group_name_returns_refreshed_session():
+    session = SimpleNamespace(id=1, created_by_user_id=7, group_name="old")
+    db = _RenameDB(session)
+
+    result = asyncio.run(gd.set_group_name(db, session_id=1, user={"id": 7}, group_name="new"))
+
+    assert result is session
+    assert session.group_name == "new"
+    assert db.committed is True
+    assert db.refreshed is True
+
+
+def test_set_group_name_rejects_non_creator():
+    session = SimpleNamespace(id=1, created_by_user_id=7, group_name="old")
+    db = _RenameDB(session)
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(gd.set_group_name(db, session_id=1, user={"id": 8}, group_name="new"))
+
+    assert exc.value.status_code == 403
+    assert db.committed is False
+
+
+class _FakePubSub:
+    async def subscribe(self, channel):
+        return None
+
+    async def get_message(self, **kwargs):
+        return {"type": "message"}
+
+    async def unsubscribe(self, channel):
+        return None
+
+    async def close(self):
+        return None
+
+
+class _FakeClient:
+    def pubsub(self):
+        return _FakePubSub()
+
+
+class _FakeSessionContext:
+    async def __aenter__(self):
+        return object()
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+
+def test_group_discussion_stream_breaks_when_membership_revoked(monkeypatch):
+    async def fake_get_client():
+        return _FakeClient()
+
+    async def reject_access(*args, **kwargs):
+        raise HTTPException(status_code=403, detail="not a member")
+
+    async def fail_list(*args, **kwargs):
+        raise AssertionError("list_messages must not run after revocation")
+
+    monkeypatch.setattr(gd_api.settings, "GROUP_DISCUSSION_REDIS_ENABLED", True)
+    monkeypatch.setattr(gd_api, "cache", SimpleNamespace(get_client=fake_get_client))
+    monkeypatch.setattr(gd_api, "AsyncSessionLocal", lambda: _FakeSessionContext())
+    monkeypatch.setattr(gd_api, "ensure_session_view_access", reject_access)
+    monkeypatch.setattr(gd_api, "list_messages", fail_list)
+
+    async def consume():
+        return [
+            item
+            async for item in gd_api._stream_group_discussion_messages(
+                1, 0, {"id": 7, "role_code": "student"}
+            )
+        ]
+
+    items = asyncio.run(consume())
+
+    assert items
+    assert items[0].startswith("event: access_revoked")
+
+
+class _IdlePubSub(_FakePubSub):
+    async def get_message(self, **kwargs):
+        return None
+
+
+class _IdleClient:
+    def pubsub(self):
+        return _IdlePubSub()
+
+
+def test_group_discussion_stream_rechecks_access_when_idle(monkeypatch):
+    async def fake_get_client():
+        return _IdleClient()
+
+    async def reject_access(*args, **kwargs):
+        raise HTTPException(status_code=403, detail="not a member")
+
+    async def fail_list(*args, **kwargs):
+        raise AssertionError("list_messages must not run after revocation")
+
+    monkeypatch.setattr(gd_api.settings, "GROUP_DISCUSSION_REDIS_ENABLED", True)
+    monkeypatch.setattr(gd_api, "cache", SimpleNamespace(get_client=fake_get_client))
+    monkeypatch.setattr(gd_api, "AsyncSessionLocal", lambda: _FakeSessionContext())
+    monkeypatch.setattr(gd_api, "ensure_session_view_access", reject_access)
+    monkeypatch.setattr(gd_api, "list_messages", fail_list)
+
+    async def consume():
+        return [
+            item
+            async for item in gd_api._stream_group_discussion_messages(
+                1, 0, {"id": 7, "role_code": "student"}
+            )
+        ]
+
+    items = asyncio.run(consume())
+
+    assert items
+    assert items[0].startswith("event: access_revoked")
+
+
+def test_group_discussion_stream_uses_scoped_db_and_closes_request_db():
+    source = Path(gd_api.__file__).read_text(encoding="utf-8")
+    assert "await db.close()" in source
+    assert "async with AsyncSessionLocal() as poll_db:" in source

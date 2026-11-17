@@ -280,7 +280,7 @@ export const groupDiscussionApi = {
     sessionId: number;
     afterId?: number;
     limit?: number;
-  }): Promise<BaseResponse<GroupDiscussionMessageListResponse>> => {
+  }): Promise<BaseResponse<GroupDiscussionMessageListResponse> & { forbidden?: boolean }> => {
     try {
       const response = await api.get(`${BASE_PATH}/messages`, {
         params: {
@@ -297,6 +297,7 @@ export const groupDiscussionApi = {
       return {
         success: false,
         message: errMsg(error, "获取失败"),
+        forbidden: asApiError(error).response?.status === 403,
         data: { items: [], next_after_id: params.afterId ?? 0 },
       };
     }

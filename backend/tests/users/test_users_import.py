@@ -392,3 +392,20 @@ def test_row_level_error_still_commits_without_failing_request():
     # 行级错误照常提交，且不应触发整体 rollback
     assert db.commit_count == 1
     assert db.rollback_count == 0
+
+
+def test_parse_xlsx_rows_checks_archive_budget_before_openpyxl(monkeypatch):
+    def reject(_content):
+        raise import_service.WorkbookArchiveError(
+            "XBK_WORKBOOK_ARCHIVE_TOO_LARGE",
+            "compressed payload too large",
+            status_code=413,
+        )
+
+    monkeypatch.setattr(import_service, "validate_xlsx_archive_budget", reject)
+
+    with pytest.raises(HTTPException) as exc_info:
+        import_service.parse_xlsx_rows(b"not-a-real-xlsx")
+
+    assert exc_info.value.status_code == 413
+    assert "compressed payload too large" in exc_info.value.detail

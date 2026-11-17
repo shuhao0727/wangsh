@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
 
 from app.core.deps import get_db, require_admin
+from app.utils.excel_safety import force_text_workbook
 from app.services import classroom as svc
 from app.schemas.agents import (
     GroupDiscussionAdminSessionListResponse,
@@ -158,6 +159,7 @@ async def admin_export_sessions(
         ws.freeze_panes = "A2"
 
         buffer = io.BytesIO()
+        force_text_workbook(wb)
         wb.save(buffer)
         buffer.seek(0)
         return buffer.getvalue()

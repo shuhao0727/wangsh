@@ -18,6 +18,7 @@ from app.models.assessment import (
 )
 from app.services.assessment.session_service import get_config_sessions
 from app.services.xbk.exports.common import apply_table_style, auto_adjust_column_width
+from app.utils.excel_safety import force_text_workbook
 
 STATUS_TEXT = {
     "in_progress": "答题中",
@@ -214,6 +215,7 @@ async def build_assessment_export_xlsx(
     _build_knowledge_sheet(wb, kp_data, all_kp_keys)
 
     output = BytesIO()
+    force_text_workbook(wb)
     wb.save(output)
     output.seek(0)
     return output

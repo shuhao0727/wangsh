@@ -3,10 +3,11 @@ import json
 from datetime import date
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, Query, status, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db.database import AsyncSessionLocal
 from app.core.deps import (
     get_db,
     require_admin,
@@ -207,6 +208,108 @@ async def get_group_discussion_messages(
     ]
     return GroupDiscussionMessageListResponse(items=items, next_after_id=int(next_after))
 
+async def _check_group_discussion_access(
+    session_id: int,
+    user: Dict[str, Any],
+    last_access_check: float,
+) -> float:
+    now = asyncio.get_running_loop().time()
+    if now - last_access_check < 5.0:
+        return last_access_check
+    async with AsyncSessionLocal() as check_db:
+        await ensure_session_view_access(check_db, session_id=int(session_id), user=user)
+    return now
+
+
+async def _list_group_discussion_messages(
+    session_id: int,
+    after_id: int,
+    user: Dict[str, Any],
+) -> tuple[list, int]:
+    async with AsyncSessionLocal() as poll_db:
+        await ensure_session_view_access(poll_db, session_id=int(session_id), user=user)
+        rows, next_after = await list_messages(
+            poll_db,
+            session_id=int(session_id),
+            after_id=int(after_id or 0),
+            limit=200,
+        )
+    return rows, int(next_after)
+
+
+async def _open_group_discussion_pubsub(channel: str):
+    if not settings.GROUP_DISCUSSION_REDIS_ENABLED:
+        return None
+    try:
+        client = await cache.get_client()
+        pubsub = client.pubsub()
+        await pubsub.subscribe(channel)
+        return pubsub
+    except Exception:
+        return None
+
+
+async def _stream_group_discussion_messages(
+    session_id: int,
+    after_id: int,
+    user: Dict[str, Any],
+):
+    channel = f"znt:group_discussion:ch:{int(session_id)}"
+    pubsub = await _open_group_discussion_pubsub(channel)
+
+    last_access_check = 0.0
+    try:
+        while True:
+            try:
+                last_access_check = await _check_group_discussion_access(
+                    session_id, user, last_access_check
+                )
+                if pubsub is not None:
+                    msg = await pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
+                    if msg is None:
+                        yield ":keepalive\n\n"
+                        continue
+                else:
+                    await asyncio.sleep(1)
+
+                rows, next_after = await _list_group_discussion_messages(
+                    session_id, after_id, user
+                )
+                if rows:
+                    items = [
+                        {
+                            "id": int(r.id),
+                            "session_id": int(r.session_id),
+                            "user_id": int(r.user_id),
+                            "user_display_name": str(r.user_display_name),
+                            "content": str(r.content),
+                            "created_at": r.created_at.isoformat(),
+                        }
+                        for r in rows
+                    ]
+                    after_id = int(next_after)
+                    payload = json.dumps(
+                        {"items": items, "next_after_id": int(next_after)},
+                        ensure_ascii=False,
+                    )
+                    yield f"data: {payload}\n\n"
+            except HTTPException:
+                yield 'event: access_revoked\ndata: {"detail":"access_revoked"}\n\n'
+                break
+            except asyncio.CancelledError:
+                break
+            except Exception:
+                yield ":keepalive\n\n"
+                await asyncio.sleep(1)
+    finally:
+        if pubsub is not None:
+            try:
+                await pubsub.unsubscribe(channel)
+                await pubsub.close()
+            except Exception:
+                pass
+
+
 @router.get("/stream")
 async def stream_group_discussion_messages(
     request: Request = None,
@@ -218,66 +321,13 @@ async def stream_group_discussion_messages(
     user = _require_discussion_user(current_user)
     await _enforce_frontend_visibility(db, user)
     await ensure_session_view_access(db, session_id=session_id, user=user)
-
-    async def gen():
-        nonlocal after_id
-        channel = f"znt:group_discussion:ch:{int(session_id)}"
-        pubsub = None
-        if settings.GROUP_DISCUSSION_REDIS_ENABLED:
-            try:
-                client = await cache.get_client()
-                pubsub = client.pubsub()
-                await pubsub.subscribe(channel)
-            except Exception:
-                pubsub = None
-
-        try:
-            while True:
-                try:
-                    if pubsub is not None:
-                        msg = await pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
-                        if msg is None:
-                            yield ":keepalive\n\n"
-                            continue
-                    else:
-                        await asyncio.sleep(1)
-
-                    rows, next_after = await list_messages(
-                        db, session_id=int(session_id), after_id=int(after_id or 0), limit=200
-                    )
-                    if rows:
-                        items = [
-                            {
-                                "id": int(r.id),
-                                "session_id": int(r.session_id),
-                                "user_id": int(r.user_id),
-                                "user_display_name": str(r.user_display_name),
-                                "content": str(r.content),
-                                "created_at": r.created_at.isoformat(),
-                            }
-                            for r in rows
-                        ]
-                        after_id = int(next_after)
-                        payload = json.dumps(
-                            {"items": items, "next_after_id": int(next_after)},
-                            ensure_ascii=False,
-                        )
-                        yield f"data: {payload}\n\n"
-                except asyncio.CancelledError:
-                    break
-                except Exception:
-                    yield ":keepalive\n\n"
-                    await asyncio.sleep(1)
-        finally:
-            if pubsub is not None:
-                try:
-                    await pubsub.unsubscribe(channel)
-                    await pubsub.close()
-                except Exception:
-                    pass
+    await db.close()
 
     return StreamingResponse(
-        session_checked_stream(gen(), request),
+        session_checked_stream(
+            _stream_group_discussion_messages(int(session_id), int(after_id or 0), user),
+            request,
+        ),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache, no-transform",

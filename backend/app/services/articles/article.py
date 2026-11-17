@@ -16,6 +16,29 @@ from app.schemas.articles import (
 )
 
 
+def _article_update_values(article_data: ArticleUpdate) -> Dict[str, Any]:
+    """区分“未提交”与“显式 null”：前者保持原值，后者清空可空字段。"""
+    fields = article_data.model_fields_set
+    values: Dict[str, Any] = {}
+    if article_data.title is not None:
+        values["title"] = article_data.title
+    if article_data.slug is not None:
+        values["slug"] = article_data.slug
+    if article_data.content is not None:
+        values["content"] = article_data.content
+    if "summary" in fields:
+        values["summary"] = article_data.summary
+    if "custom_css" in fields:
+        values["custom_css"] = article_data.custom_css
+    if "style_key" in fields:
+        values["style_key"] = article_data.style_key
+    if article_data.published is not None:
+        values["published"] = article_data.published
+    if "category_id" in fields:
+        values["category_id"] = article_data.category_id
+    return values
+
+
 class ArticleService:
     """文章服务类 - 提供文章的CRUD操作"""
     
@@ -125,27 +148,13 @@ class ArticleService:
             if slug_check.scalar_one_or_none():
                 raise ValueError(f"slug '{article_data.slug}' 已存在")
         
-        # 构建更新数据
-        update_data = {}
-        if article_data.title is not None:
-            update_data['title'] = article_data.title
-        if article_data.slug is not None:
-            update_data['slug'] = article_data.slug
-        if article_data.content is not None:
-            update_data['content'] = article_data.content
-        if article_data.summary is not None:
-            update_data['summary'] = article_data.summary
-        if article_data.custom_css is not None:
-            update_data['custom_css'] = article_data.custom_css
-        if article_data.style_key is not None:
+        if "style_key" in article_data.model_fields_set and article_data.style_key is not None:
             style_check = await db.execute(select(MarkdownStyle).where(MarkdownStyle.key == article_data.style_key))
             if not style_check.scalar_one_or_none():
                 raise ValueError(f"Markdown样式 '{article_data.style_key}' 不存在")
-            update_data["style_key"] = article_data.style_key
-        if article_data.published is not None:
-            update_data['published'] = article_data.published
-        if article_data.category_id is not None:
-            update_data['category_id'] = article_data.category_id
+
+        # 构建更新数据：显式 null 表示清空，未提交字段保持原值。
+        update_data = _article_update_values(article_data)
         
         # 执行更新
         await db.execute(

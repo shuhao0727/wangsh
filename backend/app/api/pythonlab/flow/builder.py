@@ -22,6 +22,7 @@ from app.api.pythonlab.constants import (
     PARSER_VERSION_FLOW,
     WS_RATE_LIMIT_PER_SEC,
 )
+from app.api.pythonlab.cpu_limits import run_cpu
 from app.api.pythonlab.structured_ir import build_ir_functions, build_ir_module
 from app.api.pythonlab.utils import make_edge, options_hash, sha256_text, stable_id
 from app.utils.cache import cache
@@ -67,8 +68,74 @@ def _build_fallback_flow_result(code: str, diagnostics: List[Dict[str, Any]], pa
     }
 
 
+def _clamp_int(value: Any, maximum: int) -> int:
+    if value is None or value == "":
+        return maximum
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"无效的整数配置: {value!r}") from exc
+    if parsed <= 0:
+        return maximum
+    return min(parsed, maximum)
+
+
+def _normalize_options(options: Dict[str, Any]) -> Dict[str, Any]:
+    """服务端钳制客户端可提交的解析预算，并用同一份 options 计算缓存键。"""
+    normalized = dict(options) if isinstance(options, dict) else {}
+    limits_raw = normalized.get("limits")
+    limits = dict(limits_raw) if isinstance(limits_raw, dict) else {}
+    expand_raw = normalized.get("expand")
+    expand = dict(expand_raw) if isinstance(expand_raw, dict) else {}
+
+    limits["maxNodes"] = _clamp_int(limits.get("maxNodes"), DEFAULT_MAX_NODES)
+    limits["maxEdges"] = _clamp_int(limits.get("maxEdges"), DEFAULT_MAX_EDGES)
+    limits["maxAstNodes"] = _clamp_int(limits.get("maxAstNodes"), DEFAULT_MAX_AST_NODES)
+    limits["maxParseMs"] = _clamp_int(limits.get("maxParseMs"), DEFAULT_FLOW_MAX_PARSE_MS)
+    expand["maxDepth"] = _clamp_int(expand.get("maxDepth"), DEFAULT_MAX_DEPTH)
+    functions = str(expand.get("functions") or "all").strip().lower()
+    expand["functions"] = functions if functions in {"none", "top", "all"} else "all"
+    normalized["limits"] = limits
+    normalized["expand"] = expand
+    return normalized
+
+
+def _parse_flow_ast(
+    code: str,
+    diagnostics: List[Dict[str, Any]],
+    t0: float,
+) -> tuple[ast.AST | None, Dict[str, Any] | None]:
+    try:
+        return ast.parse(code), None
+    except RecursionError:
+        diagnostics.append(
+            {
+                "level": "error",
+                "code": E_SYNTAX,
+                "message": "RecursionError: 代码嵌套过深",
+                "range": {"startLine": 1, "startCol": 1, "endLine": 1, "endCol": 2},
+            }
+        )
+        parse_ms = int((time.perf_counter() - t0) * 1000)
+        return None, _build_fallback_flow_result(code, diagnostics, parse_ms, "嵌套过深，已回退到稳定展示")
+    except SyntaxError as e:
+        line = int(getattr(e, "lineno", 1) or 1)
+        col = int(getattr(e, "offset", 1) or 1)
+        diagnostics.append(
+            {
+                "level": "error",
+                "code": E_SYNTAX,
+                "message": f"SyntaxError: {e.msg}",
+                "range": {"startLine": line, "startCol": col, "endLine": line, "endCol": col + 1},
+            }
+        )
+        parse_ms = int((time.perf_counter() - t0) * 1000)
+        return None, _build_fallback_flow_result(code, diagnostics, parse_ms, "语法错误，已回退到稳定展示")
+
+
 def _build_flow(code: str, options: Dict[str, Any]) -> Dict[str, Any]:
     t0 = time.perf_counter()
+    options = _normalize_options(options)
     limits = options.get("limits") if isinstance(options.get("limits"), dict) else {}
     expand = options.get("expand") if isinstance(options.get("expand"), dict) else {}
 
@@ -84,21 +151,9 @@ def _build_flow(code: str, options: Dict[str, Any]) -> Dict[str, Any]:
 
     diagnostics: List[Dict[str, Any]] = []
 
-    try:
-        tree = ast.parse(code)
-    except SyntaxError as e:
-        line = int(getattr(e, "lineno", 1) or 1)
-        col = int(getattr(e, "offset", 1) or 1)
-        diagnostics.append(
-            {
-                "level": "error",
-                "code": E_SYNTAX,
-                "message": f"SyntaxError: {e.msg}",
-                "range": {"startLine": line, "startCol": col, "endLine": line, "endCol": col + 1},
-            }
-        )
-        parse_ms = int((time.perf_counter() - t0) * 1000)
-        return _build_fallback_flow_result(code, diagnostics, parse_ms, "语法错误，已回退到稳定展示")
+    tree, fallback = _parse_flow_ast(code, diagnostics, t0)
+    if fallback is not None:
+        return fallback
 
     ok_ast, ast_count = _collect_ast_nodes(tree, max_ast_nodes)
     if not ok_ast:
@@ -202,6 +257,7 @@ async def parse_flow_internal(code: str, options: Dict[str, Any], user_id: int) 
     from .exceptions import RateLimitError
     from .utils import _now_ms
 
+    options = _normalize_options(options)
     limits = options.get("limits") if isinstance(options.get("limits"), dict) else {}
     max_parse_ms = int(limits.get("maxParseMs") or DEFAULT_FLOW_MAX_PARSE_MS)
 
@@ -233,7 +289,10 @@ async def parse_flow_internal(code: str, options: Dict[str, Any], user_id: int) 
 
     try:
         import asyncio
-        built = await asyncio.wait_for(asyncio.to_thread(_build_flow, code, options), timeout=max(0.2, max_parse_ms / 1000.0))
+        built = await asyncio.wait_for(
+            asyncio.to_thread(run_cpu, _build_flow, code, options),
+            timeout=max(0.2, max_parse_ms / 1000.0),
+        )
     except asyncio.TimeoutError:
         built = _build_fallback_flow_result(
             code=code,

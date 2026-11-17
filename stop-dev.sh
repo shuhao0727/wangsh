@@ -1,9 +1,10 @@
 #!/bin/bash
 # ============================================
 # WangSh 项目本地开发停止脚本
-# 版本：3.0.0
+# 版本：3.1.0
 # 改进：只停止本项目可识别的开发进程（Python 监听者、本树 Vite），
-#       不再按端口无条件 kill，避免误杀 Docker 端口代理和其他项目
+#       不再按端口无条件 kill，避免误杀 Docker 端口代理和其他项目；
+#       --all 检测到由其他目录创建的同一 Compose 项目容器时拒绝停止，防误停生产
 # ============================================
 
 set -euo pipefail
@@ -18,6 +19,9 @@ NC='\033[0m' # No Color
 # 端口配置
 BACKEND_PORT=8000
 FRONTEND_PORT=6608
+
+# 允许停止由其他目录创建的同一项目容器（默认拒绝，防误停生产）
+ALLOW_CROSS_DIR_STOP=false
 
 # 项目根目录与前端目录（用于识别本树 Vite 监听者）
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
@@ -102,6 +106,57 @@ stop_prod_compose() {
         docker compose ${env_files[@]+"${env_files[@]}"} -f "${PROJECT_ROOT}/docker-compose.yml" "$@"
 }
 
+# 用与 down 相同的 compose 文件和环境文件渲染 canonical 配置，读取 Compose 实际项目名。
+# 无法渲染或解析时返回非零，由调用方拒绝停止（fail-closed）。
+compose_project_name() {
+    local compose_file="$1"
+    shift
+    local -a env_args=()
+    local env_file config_json project
+    for env_file in "$@"; do
+        [ -f "${env_file}" ] && env_args+=(--env-file "${env_file}")
+    done
+    if ! config_json="$(env -u COMPOSE_FILE -u COMPOSE_PROJECT_NAME -u COMPOSE_ENV_FILES -u COMPOSE_PROFILES \
+        -u COMPOSE_PATH_SEPARATOR -u COMPOSE_PROJECT_DIRECTORY \
+        docker compose ${env_args[@]+"${env_args[@]}"} -f "${PROJECT_ROOT}/${compose_file}" config --format json 2>/dev/null)"; then
+        return 1
+    fi
+    project="$(printf '%s' "${config_json}" | python3 -I -B -c 'import json, sys
+try:
+    name = json.load(sys.stdin).get("name", "")
+except Exception:
+    name = ""
+sys.stdout.write(name if isinstance(name, str) else "")' 2>/dev/null)" || return 1
+    [ -n "${project}" ] || return 1
+    printf '%s' "${project}"
+}
+
+# 拒绝停止由其他目录创建的同一项目容器；查询失败也拒绝（fail-closed）。
+guard_cross_dir_project() {
+    local project="$1"
+    local current_dir listing working_dir other_dir=""
+    current_dir="$(cd "${PROJECT_ROOT}" && pwd -P)"
+    if ! listing="$(docker ps -a \
+        --filter "label=com.docker.compose.project=${project}" \
+        --format '{{.Label "com.docker.compose.project.working_dir"}}' 2>/dev/null)"; then
+        print_error "无法查询 Docker 项目 ${project} 的容器，拒绝执行 down。"
+        return 1
+    fi
+    while IFS= read -r working_dir; do
+        [ -n "${working_dir}" ] || continue
+        if [ "${working_dir}" != "${current_dir}" ]; then
+            other_dir="${working_dir}"
+            break
+        fi
+    done <<< "${listing}"
+    if [ -n "${other_dir}" ]; then
+        print_error "检测到项目 ${project} 有由其他目录创建的容器（${other_dir}）。"
+        print_error "stop-dev.sh 只应用于本机开发栈；如确认要停止该项目，请加 --include-prod。"
+        return 1
+    fi
+    return 0
+}
+
 # 函数：停止Docker容器
 stop_docker_containers() {
     print_info "停止Docker容器..."
@@ -116,7 +171,31 @@ stop_docker_containers() {
         print_error "未找到 docker-compose.dev.yml 文件"
         return 1
     fi
-    
+
+    # 防误停：项目名由目录名推导，生产发布目录与旧目录可能同为 wangsh（OPS-07）。
+    # 在任何 compose down 之前检查，避免开发文件先命中同一项目。
+    if [ "${ALLOW_CROSS_DIR_STOP:-false}" != "true" ]; then
+        local dev_project prod_project
+        if ! dev_project="$(compose_project_name "docker-compose.dev.yml" "${PROJECT_ROOT}/.env.dev" "${PROJECT_ROOT}/.env.local")"; then
+            print_error "无法确定开发 Compose 项目名，拒绝执行 down（请检查 .env.dev 与 docker-compose.dev.yml）。"
+            return 1
+        fi
+        if ! guard_cross_dir_project "${dev_project}"; then
+            return 1
+        fi
+        if [ -f "${PROJECT_ROOT}/.env" ]; then
+            if ! prod_project="$(compose_project_name "docker-compose.yml" "${PROJECT_ROOT}/.env")"; then
+                print_error "无法确定生产 Compose 项目名，拒绝执行 down（请检查 .env 与 docker-compose.yml）。"
+                return 1
+            fi
+            if [ "${prod_project}" != "${dev_project}" ] && ! guard_cross_dir_project "${prod_project}"; then
+                return 1
+            fi
+        fi
+    else
+        print_warning "已使用 --include-prod：允许停止由其他目录创建的同一项目容器"
+    fi
+
     # 停止开发 Docker 容器
     cd "${PROJECT_ROOT}"
     stop_dev_compose down --remove-orphans || true
@@ -275,7 +354,8 @@ show_help() {
     echo ""
     echo "选项:"
     echo "  无参数      停止所有本地进程（前端+后端）"
-    echo "  --all       停止所有本地进程和Docker容器；同时会停止本机生产 Compose 栈（如存在）"
+    echo "  --all       停止所有本地进程和Docker容器；检测到由其他目录创建的同一项目容器时拒绝"
+    echo "  --include-prod  与 --all 同用，确认允许停止由其他目录创建的同一项目容器（例如生产）"
     echo "  --status    显示当前服务状态"
     echo "  --help      显示此帮助信息"
     echo ""
@@ -310,6 +390,9 @@ main() {
             --all)
                 stop_docker=true
                 ;;
+            --include-prod)
+                ALLOW_CROSS_DIR_STOP=true
+                ;;
             --status)
                 show_status=true
                 ;;
@@ -324,7 +407,11 @@ main() {
                 ;;
         esac
     done
-    
+
+    if [ "${ALLOW_CROSS_DIR_STOP}" = "true" ] && ! $stop_docker; then
+        print_warning "--include-prod 仅与 --all 一起生效"
+    fi
+
     # 显示状态模式
     if $show_status; then
         show_current_status

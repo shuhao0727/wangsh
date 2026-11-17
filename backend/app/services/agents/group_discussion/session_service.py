@@ -248,7 +248,7 @@ async def set_group_name(
     session_id: int,
     group_name: Optional[str],
     user: Dict[str, Any],
-) -> None:
+) -> GroupDiscussionSession:
     """设置组名（仅创建者可修改）"""
     session = (
         await db.execute(select(GroupDiscussionSession).where(GroupDiscussionSession.id == session_id))
@@ -261,6 +261,8 @@ async def set_group_name(
 
     session.group_name = _normalize_group_name(group_name)
     await db.commit()
+    await db.refresh(session)
+    return session
 
 
 async def list_messages(

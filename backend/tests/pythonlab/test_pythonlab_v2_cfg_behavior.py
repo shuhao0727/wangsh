@@ -3,6 +3,7 @@ import asyncio
 from fastapi import HTTPException
 
 import app.api.pythonlab.cfg as cfg_api
+from app.api.pythonlab.constants import DEFAULT_MAX_NODES, MAX_CODE_SIZE_BYTES
 
 
 def test_parse_cfg_rejects_invalid_code_payload():
@@ -72,3 +73,35 @@ def test_parse_cfg_reports_syntax_error_diagnostics():
     assert result["diagnostics"]
     assert result["diagnostics"][0]["level"] == "error"
     assert "SyntaxError" in result["diagnostics"][0]["message"]
+
+
+def test_parse_cfg_rejects_oversized_code():
+    code = "a=1\n" * (MAX_CODE_SIZE_BYTES // 4 + 1)
+
+    try:
+        asyncio.run(cfg_api.parse_cfg({"code": code}, current_user={"id": 1}))
+        raise AssertionError("expected HTTPException")
+    except HTTPException as exc:
+        assert exc.status_code == 413
+
+
+def test_parse_cfg_rejects_deep_elif_recursion():
+    code = "if x:\n    pass\n" + "elif x:\n    pass\n" * 600
+
+    try:
+        asyncio.run(cfg_api.parse_cfg({"code": code}, current_user={"id": 1}))
+        raise AssertionError("expected HTTPException")
+    except HTTPException as exc:
+        assert exc.status_code == 413
+        assert "嵌套过深" in str(exc.detail)
+
+
+def test_parse_cfg_rejects_too_many_nodes():
+    code = "a=1\n" * (DEFAULT_MAX_NODES + 1)
+
+    try:
+        asyncio.run(cfg_api.parse_cfg({"code": code}, current_user={"id": 1}))
+        raise AssertionError("expected HTTPException")
+    except HTTPException as exc:
+        assert exc.status_code == 413
+        assert "节点过多" in str(exc.detail)

@@ -556,9 +556,9 @@ async def dap_ws(websocket: WebSocket, session_id: str, db: AsyncSession = Depen
         _ws_log("ws_disconnected", ws_epoch=ws_epoch)
     except Exception as e:
         _ws_log("ws_proxy_error", ws_epoch=ws_epoch, error=f"{type(e).__name__}: {e}")
-        bridge_handled_error = isinstance(e, RuntimeError) and str(e) in {"dap message too large", "debug ws ownership lost"}
+        bridge_handled_error = isinstance(e, RuntimeError) and str(e) in {"dap message too large", "dap buffer limit", "debug ws ownership lost"}
         if bridge is not None:
-            if not (isinstance(e, RuntimeError) and str(e) in {"rate limited", "dap message too large", "debug ws ownership lost"}):
+            if not (isinstance(e, RuntimeError) and str(e) in {"rate limited", "dap message too large", "dap buffer limit", "debug ws ownership lost"}):
                 if isinstance(e, EOFError):
                     await bridge._send_output("调试服务连接已断开，请重试运行（如仍失败请先停止/清理会话）。\n")
                 else:
