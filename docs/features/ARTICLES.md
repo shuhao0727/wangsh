@@ -114,6 +114,7 @@ MarkdownStyle.articles → Article[]      (一对多)
 - 详情接口（按 ID/Slug）需要登录，普通用户与 `admin` 只能看到已发布文章，仅 `super_admin` 可看未发布
 - 公开接口无需认证，仅返回 `published=True` 的文章
 - 公开列表支持 `?q=` 关键词搜索（标题和内容模糊匹配，关键词参与缓存键）
+- 更新时显式传 `null` 可清空 `summary`、`custom_css`、`style_key`、`category_id`；未提交字段保持原值
 
 ---
 

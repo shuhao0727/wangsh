@@ -2,7 +2,7 @@
 
 > 状态：active
 > Owner：testing
-> 最近更新：2026-11-06
+> 最近更新：2026-11-16
 
 本页只维护最近验证；早期整理批次见[归档](../archive/README.md)，未结事项见[唯一台账](../plans/project-consolidation.md)。
 
@@ -18,6 +18,13 @@
 
 | 检查 | 命令 / 范围 | 结果 |
 |---|---|---|
+| 2026-11-16 高危修复（未发布） | 定向 pytest（优化行为 + v2 路由）；`pytest tests/pythonlab --ignore=tests/pythonlab/test_ws_cleanup_atomic_isolated.py`；`node --test scripts/stop-dev-compose.test.mjs scripts/start-dev-processes.test.mjs`；`bash -n stop-dev.sh`；迁移守卫；治理检查 `--base-ref 154aae0` | 定向 pytest **18 passed**；PythonLab 模块 **419 passed / 3 skipped**（排除已知自含收集用例）；脚本合同 **14/14**；stop-dev 语法通过；迁移守卫 50 文件通过；治理检查见下一行。未提交、未发布、未部署 |
+| 2026-11-16 治理例外清理（未发布） | `pytest tests/articles`；`pytest tests -k article`；治理检查（当前与 `--base-ref 154aae0`） | articles **18 passed**（含 7 个序列化路径回归；`-k article` 另 10 skipped / 3942 deselected）；治理 **errors=0 / warnings=42**；`articles.py` 766→563 行，`docker.py` 天花板 756→658，两条过期例外移除。未提交、未发布 |
+| 2026-11-16 真实开发栈验收（未发布） | 7 个 dev 容器（project=`wangsh`、working_dir=`/Users/wsh/wangsh`）；backend `/api/v1/health`；真实 HTTP + asyncpg；临时 Compose 项目 `wangsh_guard_test` | dev 栈 PG/Redis 挂载 `data/dev/*`，backend 源码挂载 `/app` 且 reload；越权与文章序列化 **31/31 HTTP 检查通过**；`stop-dev.sh --all` 跨目录拒绝且临时容器保持运行，`--include-prod` 后临时容器移除、真实 7 容器 ID 前后一致。测试日志/文章/分类 0 残留，4 个合成用户已清理。未覆盖：生产、浏览器 UI、PythonLab 沙箱调试 |
+| 2026-11-16 深度审计 P1 修复（未发布） | `pytest tests/pythonlab --ignore=tests/pythonlab/test_ws_cleanup_atomic_isolated.py`；真实 dev HTTP（syntax/cfg/AI）；治理 `--base-ref 154aae0` | PythonLab **430 passed / 3 skipped**；真实 HTTP **6/6**（syntax 超限 413、正常 200；cfg/AI/generate 超限 413）；治理 **errors=0 / warnings=42**；workspace symlink 与 DAP buffer 单测通过。未提交、未发布；真实 debug WS 会话未压测 |
+| 2026-11-16 深度审计 P2 修复（未发布） | 组合 pytest（AI 导出、文章、小组讨论、用户导入、测评、XBK 文本/导出）；真实 dev HTTP 文章 null；治理 | **1061 passed / 20 skipped**；真实 HTTP **12/12**（更新与回读确认 summary/custom_css/style_key/category_id 清空）；治理 **errors=0 / warnings=42**；Excel 公式文本化、SSE 撤销断流、改名返回 session、ZIP 预算单测通过。未提交、未发布 |
+| 2026-11-17 复审修复（未发布） | 后端组合 pytest（PythonLab/小组讨论/AI 导出/文章/用户导入/测评/XBK）；前端 type-check + Vitest；治理 | 后端 **1499 passed / 23 skipped**；前端 **3 passed** + type-check；治理 **errors=0 / warnings=42**；新增 SSE 空闲复核、flow limits 钳制、RecursionError、CPU 并发、Excel 逐工作簿断言、baseline 清理。未提交、未发布 |
+| 2026-11-17 复审真实 Docker 验证（未发布） | 真实 dev 栈 7 容器；合成学生 + 管理员；真实 Redis/DB；SSE + HTTP；flow/syntax/cfg | **14/14 通过**：SSE 空闲流被移除后收到 `event: access_revoked`；flow huge limits 200/truncated、invalid limit 400；syntax RecursionError 结构化错误；cfg deep elif 413；flow RecursionError fallback。测试用户/会话/成员 0 残留，health 200。未覆盖：前端真实浏览器撤销 UI、生产 |
 | 2.2.8 镜像到齐与官方核验 | 服务器 `import_exact_oci.py`、`deploy.sh verify-release-set`、逐镜像 inspect | 六镜像 RepoDigest/amd64 与 release-set 逐条一致；官方 registry 核验 `images=6`；三个经 OCI 原 digest 传输的镜像 `rebuilt=false`/`repacked_manifest=false` |
 | 2.2.8 纯正式镜像合成栈 | `wangsh_sim` 隔离栈、回环 16608、原 4 场景 | Chrome 4/4、WebKit 4/4 PASS；`official_runtime_images=true`、无源码挂载、打包源码 hash 与 `2d9dda0` 一致。首两轮失败为本地缺 node_modules 与隔离栈未跑 AUTH 受控迁移，均非产品缺陷 |
 | 生产停流与配对快照 | `freeze_and_backup.py` | 网关与三个写入服务按序停止、PG/Redis 保留；worker 活动/保留/计划均 0；pg_dump + `pg_restore --list` 自检；7 个备份文件逐文件 SHA256 记录 |

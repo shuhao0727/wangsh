@@ -75,7 +75,7 @@ PythonLab 是基于 Docker 沙箱的 Python 代码调试环境，支持断点调
 | 会话生命周期 | 启动、恢复、停止、清理 | `/sessions*` | owner 权限和刷新恢复保持 |
 | DAP 重连 | 页面重连 | `last_seq` + buffered replay | 窗口内顺序重放和暂停态恢复 |
 | 终端 | 终端交互 Tab | terminal WS / Pyodide bridge | 按 active runner 切换 |
-| 代码生成与优化 | 流程图、优化弹窗 | `/flow/generate_code`、`/optimize/*` | apply/rollback 合同保持 |
+| 代码生成与优化 | 流程图、优化弹窗 | `/flow/generate_code`、`/optimize/*` | apply/rollback 仅记录所有者 |
 | Prompt/Agent 配置 | Admin 配置 | `/flow/prompt_template` 等 | Admin 依赖不能因重构丢失 |
 
 公开 API 统一使用 `/api/v2/pythonlab/*`；历史 `/api/v1/debug/*` 兼容入口已删除。
@@ -209,6 +209,8 @@ WebSocket 接入时只有没有容器归属的旧 TCP 会话才要求 `dap_port`
 - 主入口：`/api/v2/pythonlab/sessions/{session_id}/ws` - 调试 WebSocket（DAP）
 - 主入口：`/api/v2/pythonlab/sessions/{session_id}/terminal` - 终端 WebSocket
 - 历史 `/api/v1/debug/*` 兼容入口已下线
+- 输入上限（2026-11-16）：`syntax/check`、`cfg/parse` 超过 256KB 返回 413；CFG 最多 2000 节点；AI `messages` 最多 50 条且 JSON ≤256KB，flow ≤256KB；DAP 首个 response 前缓冲上限 8MB/2000 条，超限以 1009 关闭。
+- `flow/parse` 的 limits 由服务端钳制到 2000 节点/4000 边/50000 AST/1500ms，非法整数返回 400；syntax/cfg 的 `RecursionError` 返回结构化错误或 413。
 
 ### 消息格式
 
@@ -399,6 +401,8 @@ HTTP provider 仅对选定的 `NetworkError` / `TimeoutException` 类型进入�
 - `POST /api/v2/pythonlab/flow/generate_code` - 流程图生成代码（已登录用户）
 - `POST /api/v2/pythonlab/ai/chat` - AI 助手对话（已登录用户）
 - `POST /api/v2/pythonlab/optimize/code` - AI 优化代码（已登录用户）
+- `POST /api/v2/pythonlab/optimize/apply/{log_id}` - 应用优化结果（仅记录所有者）
+- `GET /api/v2/pythonlab/optimize/rollback/{log_id}` - 回滚优化（仅记录所有者）
 - `GET /api/v2/pythonlab/flow/prompt_template` - 获取全局提示模板（管理员）
 - `POST /api/v2/pythonlab/flow/prompt_template` - 保存全局提示模板（管理员）
 

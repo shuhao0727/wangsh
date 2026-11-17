@@ -40,6 +40,18 @@
 
 ---
 
+## 未发布：PythonLab 优化记录越权与 stop-dev 生产保护（2026-11-16）
+
+- **PYLAB-IDOR-01（P1）**：`POST /api/v2/pythonlab/optimize/apply/{log_id}` 与 `GET /api/v2/pythonlab/optimize/rollback/{log_id}` 原先只要求登录，服务层仅按自增 `log_id` 查询，未校验 `OptimizeLog.user_id`；任何已登录账号可枚举 ID 读取他人 `original_content` 或把他人记录置为 applied。修复：API 传入当前用户，服务层按 `id + user_id` 查询，不匹配统一返回 404；补双用户 apply/rollback 回归。验证：定向 pytest 18 passed；PythonLab 模块 419 passed / 3 skipped（排除已知自含收集用例）。未提交、未发布、未部署。
+- **OPS-07**：`stop-dev.sh --all` 在任何 compose down 前用 `docker compose config` 取 canonical 项目名，并检查 `docker ps -a` 中同一项目是否有由其他目录创建的容器；检测到、项目名无法确定或查询失败均拒绝，需显式 `--include-prod` 才继续。验证：脚本合同 14/14、`bash -n` 通过。未提交、未发布。
+- **治理例外清理**：`articles.py` 的重复文章序列化抽到 `presenters.py`（766→563 行），`docker.py` 天花板由 756 降至 658；两条 2026-11-15 到期的 file-size 例外移除。`check_python_governance.py check` 与 `--base-ref 154aae0` 均 **errors=0 / warnings=42**。验证：articles 相关 pytest 18 passed（含 7 个序列化路径回归）。未提交、未发布。
+- **真实开发栈验收（2026-11-16）**：dev 栈 7 容器，PG/Redis 挂载 `data/dev/*`，backend 源码挂载并 reload；真实 HTTP + asyncpg 验证越权与文章序列化 **31/31 通过**（B 不能 apply/rollback A，A 不能访问 B；文章管理/公开端点字段符合 schema）。`stop-dev.sh --all` 跨目录拒绝、`--include-prod` 仅移除临时测试项目，真实 7 容器 ID 前后一致；测试日志/文章/分类 0 残留，4 个合成用户已清理。未覆盖：生产、浏览器 UI、PythonLab 沙箱调试。
+- **深度审计 P1 修复（2026-11-16）**：PythonLab workspace 符号链接改为父目录临时文件 + `os.replace`，不再跟随学生放置的链接；syntax/cfg 加 256KB 上限、CFG 2000 节点上限，AI messages 50 条/256KB、flow 256KB，AST/CFG 移入有界线程池；DAP 首响应前缓冲上限 8MB/2000 条。验证：PythonLab 430 passed / 3 skipped，真实 dev HTTP 6/6，治理 errors=0 / warnings=42。未提交、未发布；真实 debug WS 未压测。
+- **深度审计 P2 修复（2026-11-16）**：对话/测评/小组讨论导出统一 `force_text_workbook`；用户导入在 openpyxl 前接 XBK ZIP 预算；小组讨论 SSE 改短会话、每 5 秒复核成员、移除后断流，改名返回 session；文章更新用 `model_fields_set` 支持显式 null 清空。验证：组合 pytest 1061 passed / 20 skipped，真实 dev HTTP 12/12，治理 errors=0 / warnings=42。未提交、未发布。
+- **复审修复（2026-11-17）**：小组讨论 SSE 空闲路径每 5 秒复核、收到消息前复核；flow/parse 服务端钳制 limits 并接入 `run_cpu`；前端消费 `access_revoked` 并停止 403 轮询；syntax/cfg 捕获 `RecursionError`；补 CPU 并发、Excel 逐工作簿断言、baseline 清理。验证：后端 1499 passed / 23 skipped，前端 3 passed + type-check，治理 errors=0 / warnings=42；真实 dev 验证 14/14（SSE 空闲撤销、flow 钳制/truncated、invalid limit 400、syntax/cfg/flow RecursionError），测试数据 0 残留。未提交、未发布。
+
+---
+
 ## v2.2.10：PythonLab 调试容器断网与启动恢复（2026-11-06 已部署）
 
 - 构建源 `154aae0`（ci-quality run 42161748042 通过）；发布 workflow run 42162473928 发布六镜像，release-set SHA256 `eeb55305dba1e95a6fb1f85c2473aa6abb602fed9acf0c5287008d5071c7d584`。服务器访问不了 Docker Hub，六镜像经 OCI 归档传输并逐 blob 校验后导入。
