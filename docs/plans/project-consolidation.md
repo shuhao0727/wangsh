@@ -2,13 +2,14 @@
 
 > 状态：active
 > Owner：project-governance
-> 最近复核：2026-11-16
+> 最近复核：2026-11-17
 > 归档条件：未结事项已关闭，或已转入有明确 owner 和关闭条件的后续台账。
 
 ## 当前状态
 
 - 更新：2026-11-06；**2.2.10 已部署生产**（2026-11-06 14:19，构建源 `154aae0`，`current -> /home/shuhao/wangsh-releases/2.2.10/source`，[批次记录](../archive/testing/2026-11-06-release-2210.md)）：PYLAB-NET-01、PYLAB-03 随之上线，部署后不登录检查通过，操作机经域名入口 http 返回 2.2.10。2.2.9（构建源 `50f8c9f`，[批次记录](../archive/testing/2026-11-06-release-229.md)）保留为回滚目标，其部署后外部入口经老大手机流量访问确认可用。2.2.9、2.2.10 附注 tag 已创建并推送 `origin`，分别指向构建源 `50f8c9f`、`154aae0`，远端对象与附注核验一致。
-- 2026-11-17：复审 2026-11-16 未提交改动，确认 2 P2/6 P3 并全部本地修复；后端组合 1499 passed / 23 skipped，前端 3 passed + type-check，治理 errors=0 / warnings=42。真实 dev 验证 14/14（SSE 空闲撤销、flow 钳制/truncated、syntax/cfg/flow RecursionError），测试数据 0 残留。未提交、未发布。
+- 2026-11-17：2.2.11 六镜像与 tag 已发布（构建源 `15c818c`，dockerhub run 44002776220，release-set SHA256 `090ff234...f7b502`，tag 对象 `bfce336`）。生产仍为 2.2.10；操作机到服务器 SSH 6607/22 握手被关闭、6608 空响应，停流/备份/切换未执行，待服务器通道恢复。
+- 2026-11-17：复审 2026-11-16 未提交改动，确认 2 P2/6 P3 并全部本地修复；后端组合 1499 passed / 23 skipped，前端 3 passed + type-check，治理 errors=0 / warnings=42。真实 dev 验证 14/14（SSE 空闲撤销、flow 钳制/truncated、syntax/cfg/flow RecursionError），测试数据 0 残留。已提交为 `15c818c`，随 2.2.11 发布六镜像/tag；生产待部署。
 - 2026-11-16：本地修复 PYLAB-IDOR-01（PythonLab 优化记录横向越权）与 OPS-07（stop-dev.sh 跨目录项目保护），均未提交、未发布；治理门禁已恢复 **errors=0 / warnings=42**（`articles.py` 拆分至 563 行、`docker.py` 天花板降至 658，两条过期例外移除）。真实开发栈验收 **31/31 HTTP 检查通过**，`stop-dev.sh` 真实 Docker 跨目录拒绝与 `--include-prod` 放行通过，测试数据已清理。同日深度审计新增 9 项未结（3 P1/6 P2），详见未结表；3 条 P1 与 6 条 P2 均已本地修复。
 - 现行计划：2026-11-04 四方对齐记录已完成处置，转入归档（见[计划索引](README.md)）；**2026-11-05 新增 active 专项计划**：[2.2.2→2.2.8 审查问题修复计划](2026-11-05-release-228-review-fixes.md)（2026-11-05 老大已按推荐拍板，执行中；已修条目已推送 origin/main，见计划当前状态）。未结事项仍以本台账为准。
 - 安全：服务器后门事件六项持久化已清除；**用户 2026-11-05 明确接受遗留风险**（不轮换密码、SSH 密码认证保持开启、不做主机重装），SEC-03 记录该决定；应用数据保密性未验证。
@@ -152,8 +153,9 @@ A 类本轮无待改代码项；DIFY-02 已核验为非缺陷并关闭；D 类�
 
 ## 变更日志
 
+- 2026-11-17：2.2.11 六镜像与 tag 已发布：构建源 `15c818c`，ci-quality run 44002036552、dockerhub run 44002776220，release-set SHA256 `090ff2346c3735313a98fa4557a6c57c41d8928b2dee03cb4690e9c305f7b502`，tag `2.2.11` 对象 `bfce336`、peeled `15c818c`。生产仍为 2.2.10；SSH/6608 不可达，部署未执行。
 - 2026-11-17：复审修复真实 dev 验证 14/14：SSE 空闲流被移除后收到 `event: access_revoked`；flow huge limits 返回 2000 节点/truncated，invalid limit 400；syntax/cfg/flow RecursionError 映射；测试用户/会话/成员 0 残留，health 200。未覆盖前端真实浏览器撤销 UI 与生产。
-- 2026-11-17：复审 2026-11-16 未提交改动，确认 2 P2/6 P3 并全部本地修复：SSE 空闲复核、flow/parse 服务端钳制、前端 access_revoked/403、RecursionError 映射、CPU/Excel 测试、baseline 收口。后端组合 1499 passed / 23 skipped，前端 3 passed + type-check，治理 errors=0 / warnings=42；未提交、未发布。
+- 2026-11-17：复审 2026-11-16 未提交改动，确认 2 P2/6 P3 并全部本地修复：SSE 空闲复核、flow/parse 服务端钳制、前端 access_revoked/403、RecursionError 映射、CPU/Excel 测试、baseline 收口。后端组合 1499 passed / 23 skipped，前端 3 passed + type-check，治理 errors=0 / warnings=42。
 - 2026-11-16：修复 6 条 P2：Excel 导出统一文本化、用户导入 ZIP 预算、小组讨论 SSE 短会话/周期复核/改名返回 session、文章显式 null 清空。定向 1061 passed / 20 skipped，真实 dev HTTP 12/12，治理 errors=0 / warnings=42；未提交、未发布。
 - 2026-11-16：深度审计确认 9 项未结问题（3 P1/6 P2）：PYLAB-WS-SYMLINK-01、PYLAB-INPUT-LIMIT-01、PYLAB-WS-BUFFER-01、EXPORT-XLSX-FORMULA-01、GD-SSE-REVOKE-01、GD-SSE-DB-01、GD-RENAME-01、USER-IMPORT-XLSX-01、ARTICLE-UPDATE-NULL-01；均已登记。3 条 P1 与 6 条 P2 均已同日本地修复（未提交、未发布）。
 - 2026-11-16：真实开发栈验收：7 个 dev 容器（PG/Redis `data/dev/*`、backend 源码挂载并 reload）；越权与文章序列化 **31/31 HTTP 检查通过**；`stop-dev.sh --all` 跨目录拒绝、`--include-prod` 仅移除临时项目，真实 7 容器 ID 不变；测试日志/文章/分类 0 残留，4 个合成用户已清理。未覆盖生产、浏览器 UI、PythonLab 沙箱调试。

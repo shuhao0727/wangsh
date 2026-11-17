@@ -2,13 +2,14 @@
 
 > 状态：active
 > Owner：testing
-> 最近更新：2026-11-16
+> 最近更新：2026-11-17
 
 本页只维护最近验证；早期整理批次见[归档](../archive/README.md)，未结事项见[唯一台账](../plans/project-consolidation.md)。
 
 ## 基线与边界
 
 - 当前生产：**2.2.10**（2026-11-06 14:19 部署，构建源 `154aae0`，见下方 2.2.10 两行与[批次记录](../archive/testing/2026-11-06-release-2210.md)）；回滚目标 2.2.9（构建源 `50f8c9f`）。其后各条为 2.2.8/2.2.9 时期的基线记录，保留作历史。
+- 2.2.11 六镜像与 tag 已发布（构建源 `15c818c`，ci-quality run 44002036552，dockerhub run 44002776220，release-set SHA256 `090ff2346c3735313a98fa4557a6c57c41d8928b2dee03cb4690e9c305f7b502`）；生产仍为 2.2.10。2026-11-17 操作机到服务器 SSH 6607/22 握手被关闭、6608 HTTP/HTTPS 空响应，部署未执行。
 - 当前源码：本地 `main` 含 2.2.8 构建源 `2d9dda0` 的历史，2026-11-05 推送前联网核对 `origin/main` 为 `a129e14`，同日按授权快进推送到 `759e49a`（2.2.8 审查修复 6 个提交，未打 tag、未部署，推送后 markdown-quality 通过；ci-quality（run 42034193780）**失败**：python governance 报 `dify_test.py::run_dify_test` 复杂度 22 超过历史上限 21（`2d239cf` A-2 新增 3xx 分支引入，提交前漏跑治理检查），pytest 步骤因此未执行，repo-config 与 frontend-quality 通过。`50bb866` 修复并推送：`run_dify_test` 两处相同的成功响应抽为 `_dify_success_response`（22→18）；补跑 `--base-ref a129e14` 又发现 `run_agent_chat_blocking`、`stream_agent_chat` 同因 3xx 分支 18→19，3xx 判断分别并入非 200 处理（`_provider_failure`、既有 `_provider_error_frame`），恢复到 14 与 18；行为不变（阻塞路径另用 400+ 组合与拆分前逐例比对一致），未调整基线。重跑 CI：**通过**（run 42039152655：python governance 两次 errors=0；干净 PostgreSQL 上 pytest 3809 passed / 123 skipped；repo-config、frontend-quality 通过））；2.2.8 构建源与已部署身份见[发布记录](../operations/RELEASE_NOTES.md)。**2.2.8已于2026-11-04部署生产**，六镜像按digest核验、配对备份与隔离恢复通过、专用合成账号部署后双浏览器验收后按精确ID清理。
 - 2.2.6的[发布workflow41661803455](https://github.com/shuhao0727/wangsh/actions/runs/41661803455)已成功，六镜像/release-set已发布；2026-11-04联网复核workflow与远端标签。此前“尚未构建”是文档未跟进，现据实际证据订正，不能因此重复发布。
 - 生产访问：局域网已停用。本轮经既有 SSH 主机核验，实际外部入口为 `wangsh.cn:6608`（网关 80 映射）；本机 DNS 被代理劫持到 198.18.0.7，按真实地址 153.34.245.40 复测。**6607 为 SSH 端口**（`DEPLOY.md` 与 `~/.ssh/config` 一致；2026-11-05 服务器本机 http/https 探测均无响应，此前"另一套 Next.js 应用"的观察是本机 DNS 劫持期的误判，待 `--resolve` 复测确认）。实际 PG/Redis 为旧发布目录 bind，备用 production 配置命名卷不适用。
@@ -25,6 +26,7 @@
 | 2026-11-16 深度审计 P2 修复（未发布） | 组合 pytest（AI 导出、文章、小组讨论、用户导入、测评、XBK 文本/导出）；真实 dev HTTP 文章 null；治理 | **1061 passed / 20 skipped**；真实 HTTP **12/12**（更新与回读确认 summary/custom_css/style_key/category_id 清空）；治理 **errors=0 / warnings=42**；Excel 公式文本化、SSE 撤销断流、改名返回 session、ZIP 预算单测通过。未提交、未发布 |
 | 2026-11-17 复审修复（未发布） | 后端组合 pytest（PythonLab/小组讨论/AI 导出/文章/用户导入/测评/XBK）；前端 type-check + Vitest；治理 | 后端 **1499 passed / 23 skipped**；前端 **3 passed** + type-check；治理 **errors=0 / warnings=42**；新增 SSE 空闲复核、flow limits 钳制、RecursionError、CPU 并发、Excel 逐工作簿断言、baseline 清理。未提交、未发布 |
 | 2026-11-17 复审真实 Docker 验证（未发布） | 真实 dev 栈 7 容器；合成学生 + 管理员；真实 Redis/DB；SSE + HTTP；flow/syntax/cfg | **14/14 通过**：SSE 空闲流被移除后收到 `event: access_revoked`；flow huge limits 200/truncated、invalid limit 400；syntax RecursionError 结构化错误；cfg deep elif 413；flow RecursionError fallback。测试用户/会话/成员 0 残留，health 200。未覆盖：前端真实浏览器撤销 UI、生产 |
+| 2026-11-17 2.2.11 构建与 tag（生产待部署） | main `d16b782`/`b83eefc`/`15c818c`；ci-quality 44002036552；dockerhub-amd64 44002776220；release-set artifact | 六镜像 `2.2.11` 发布，release-set SHA256 `090ff234...f7b502`；tag `2.2.11`（对象 `bfce336`，peeled `15c818c`）已推送；生产仍 2.2.10；服务器 SSH/6608 不可达，停流/备份/切换未执行 |
 | 2.2.8 镜像到齐与官方核验 | 服务器 `import_exact_oci.py`、`deploy.sh verify-release-set`、逐镜像 inspect | 六镜像 RepoDigest/amd64 与 release-set 逐条一致；官方 registry 核验 `images=6`；三个经 OCI 原 digest 传输的镜像 `rebuilt=false`/`repacked_manifest=false` |
 | 2.2.8 纯正式镜像合成栈 | `wangsh_sim` 隔离栈、回环 16608、原 4 场景 | Chrome 4/4、WebKit 4/4 PASS；`official_runtime_images=true`、无源码挂载、打包源码 hash 与 `2d9dda0` 一致。首两轮失败为本地缺 node_modules 与隔离栈未跑 AUTH 受控迁移，均非产品缺陷 |
 | 生产停流与配对快照 | `freeze_and_backup.py` | 网关与三个写入服务按序停止、PG/Redis 保留；worker 活动/保留/计划均 0；pg_dump + `pg_restore --list` 自检；7 个备份文件逐文件 SHA256 记录 |
@@ -82,7 +84,7 @@
 | 2.2.10 生产停流、恢复与切换（2026-11-06） | `freeze_and_backup.py`、`restore_pair_isolated.py`、`start_candidate_production.py`、`open_gateway_verified.py`、部署后只读检查 | 14:13:33 停网关，worker 在途 0、动态容器 0、活跃事务 0；配对备份 7 个文件；隔离恢复 54 表 / 49 序列 / 2226 Redis 键 / 3 份业务归档一致，2.2.10 在恢复数据上正常启动；按服务切换，PG/Redis 的 ID、启动时间、挂载不变；六镜像等于 release-set、21 个后端文件 hash 一致、`APP_VERSION=2.2.10`；14:19:18 网关启动并健康，停流约 5 分 46 秒，`current -> 2.2.10/source`。部署后（不登录）：详细健康全部 ok、未登录 flow 测试连接 401、Celery 2 节点、5 个服务切换后日志 ERROR/Traceback 0；操作机经域名入口 http 返回 2.2.10。**未覆盖**：生产调试会话的网络核对（截至 14:56 无会话容器）、登录态验收、外部 https 入口、真实用户访问、回滚实测 |
 | 2.2.8 审查修复（`d6375a3`/`199c5e9`/`2d239cf`/`0fa64ca`，已推送） | `pytest tests -p no:cacheprovider -k 'ai_agents or pythonlab or sandbox'`（排除自含模块）；自含离线回归；前端 type-check、AIAgents vitest、eslint；`node --test scripts/*.test.mjs` | SSRF-FLOW-01 新增 13 条、A-1 新增 6 条、A-2 新增 7 条（含 Dify 双候选）全部通过；所选范围 **870 passed / 60 skipped**（跳过项为其他文件的隔离 bootstrap 要求）；自含 19 项 OK；前端 2 文件 4 例通过、lint 0 error；D-R2 合同测试实际执行 guard，6 种变异全部被拦。SSRF-FLOW-01、A 组（A-1/A-2/FE-TEST-01）、D-R2 独立审查均通过。开发栈（合成管理员 + 容器内 `127.0.0.1:11434` 合成供应商桩）API 层 **8/8**：测试连接成功、302 不跟随（桩只收 1 次请求、不回显响应体）、学生流式 200、flow 测试连接学生 403 且不出站；Playwright Chromium 两处管理员页失败/成功显示正确，只测不保存。生产只读核对：生效 flag 地址与 2 个公网智能体地址校验通过、不重定向；9 个智能体全部停用；7 个 Dify 内网地址未发请求。**未覆盖**：生产发布后验证 |
 | 2.2.9 / 2.2.10 git tag（2026-11-06） | `git push --atomic` 两个显式 tag；GitHub API 核对远端 refs 与 tag 对象 | 两个附注 tag 已推送 `origin`：`2.2.9 → 50f8c9f`、`2.2.10 → 154aae0`；远端对象与本地一致，附注中的构建提交、发布 workflow run、release-set SHA256 齐全；未覆盖已有 tag |
-| 文档门禁 | `node scripts/check-markdown-contracts.mjs`、Markdown合同、`git diff --check` | 2026-11-06 tag 状态回填后 118 files / 756 links / 0 missing；历史2026-11-06 2.2.10 部署后118/756、2026-11-06 2.2.10 部署前准备后118/757、2.2.10 发版准备后117/752、2026-11-06 PYLAB-03 本地修复后117/749、2026-11-06 PYLAB-NET-01 本地修复后117/748、2026-11-06 2.2.9 部署后117/746、2026-11-05 2.2.9发布准备116/741、2026-11-05审查修复执行中116/740、审查落账后116/738、台账重审后115/730，2026-11-03为109/702，2.2.6批次110/709、部署前110/713、2.2.8部署后111/720、四方对齐后112/724、清理后113/725。新增后门事件记录后更新当前派生计数，不覆盖历史 |
+| 文档门禁 | `node scripts/check-markdown-contracts.mjs`、Markdown合同、`git diff --check` | 2026-11-17 2.2.11 发布记录后 118 files / 757 links / 0 missing；2026-11-06 tag 状态回填后 118 files / 756 links / 0 missing；历史2026-11-06 2.2.10 部署后118/756、2026-11-06 2.2.10 部署前准备后118/757、2.2.10 发版准备后117/752、2026-11-06 PYLAB-03 本地修复后117/749、2026-11-06 PYLAB-NET-01 本地修复后117/748、2026-11-06 2.2.9 部署后117/746、2026-11-05 2.2.9发布准备116/741、2026-11-05审查修复执行中116/740、审查落账后116/738、台账重审后115/730，2026-11-03为109/702，2.2.6批次110/709、部署前110/713、2.2.8部署后111/720、四方对齐后112/724、清理后113/725。新增后门事件记录后更新当前派生计数，不覆盖历史 |
 | 脚本语法 / 差异 | 已改 shell 的 `bash -n`、Node `--check`、`git diff --check` | 通过 |
 
 根合同首轮为133/134：仅文档派生链接数过期；更新当前统计后全量复验通过。后续增加容器CLI等合同后为151项，未删除失败断言刷绿。
