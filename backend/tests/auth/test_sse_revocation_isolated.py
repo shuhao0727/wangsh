@@ -79,9 +79,7 @@ def test_sse_idle_failure_and_cleanup(isolated, monkeypatch, module_name, functi
     from app.core import stream_session
     async def run():
         monkeypatch.setattr(stream_session, 'CHECK_INTERVAL_SECONDS', 0.01)
-        # Only the injected timeout case needs an accelerated deadline. Real
-        # SQLite/JWT checks under coverage can exceed 30ms while remaining healthy.
-        monkeypatch.setattr(stream_session, 'CHECK_TIMEOUT_SECONDS', 0.03 if failure == 'cache_timeout' else 2.0)
+        monkeypatch.setattr(stream_session, 'CHECK_TIMEOUT_SECONDS', 2.0)
         async with isolated() as h:
             stream, queue, removed, pair = await open_stream(h, monkeypatch, module_name, function_name)
             if failure == 'logout_before_subscribe':
@@ -92,16 +90,19 @@ def test_sse_idle_failure_and_cleanup(isolated, monkeypatch, module_name, functi
                 assert not removed  # No subscription was ever opened.
                 return
             assert 'connected' in await anext(stream)
-            consumer = asyncio.create_task(anext(stream))
-            await asyncio.sleep(0)
-            if failure == 'idle_logout':
-                await h.logout(token=pair['access_token'], cookies={})
-            elif failure.startswith('cache_'):
+            if failure.startswith('cache_'):
                 async def fail(*args, **kwargs):
                     if failure == 'cache_timeout':
                         await asyncio.Event().wait()
                     raise RuntimeError('synthetic cache failure')
                 monkeypatch.setattr(stream_session, 'verify_request_session_detail', fail)
+                if failure == 'cache_timeout':
+                    # Accelerate only the injected failure, not the healthy first frame.
+                    monkeypatch.setattr(stream_session, 'CHECK_TIMEOUT_SECONDS', 0.03)
+            consumer = asyncio.create_task(anext(stream))
+            await asyncio.sleep(0)
+            if failure == 'idle_logout':
+                await h.logout(token=pair['access_token'], cookies={})
             elif failure == 'cancel':
                 consumer.cancel()
             if failure == "cancel":
