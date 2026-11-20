@@ -302,6 +302,71 @@ def test_existing_session_can_resume_outside_window_but_other_user_cannot_start(
     asyncio.run(scenario())
 
 
+def test_available_opt_in_lists_only_own_unfinished_session_after_closing(isolated):
+    async def scenario():
+        async with isolated() as h:
+            config_id = await h.seed(NOW - timedelta(minutes=1), NOW + timedelta(minutes=2))
+            async with h.db_factory() as db:
+                config = await db.get(AssessmentConfig, config_id)
+                config.time_limit_minutes = 20
+                await db.commit()
+            first = await h.start(config_id)
+            assert first.status_code == 200, first.text
+            session_id = first.json()["session_id"]
+            path = f"/sessions/{session_id}"
+            question = (await h.request("GET", f"{path}/questions")).json()[0]
+            answer = await h.request("POST", f"{path}/answer", json={
+                "answer_id": question["answer_id"], "student_answer": "A",
+            })
+            assert answer.status_code == 200, answer.text
+            h.clock.now = NOW + timedelta(minutes=4)
+
+            assert (await h.request("GET", "/available")).json() == []
+            query = "/available?include_in_progress=true"
+            resumed = await h.request("GET", query)
+            assert resumed.status_code == 200, resumed.text
+            [item] = resumed.json()
+            assert item["id"] == config_id
+            assert item["session_id"] == session_id
+            assert item["session_status"] == "in_progress"
+            assert item["time_limit_minutes"] == 20
+            assert datetime.fromisoformat(item["started_at"]).replace(tzinfo=UTC) == NOW
+            assert (await h.request("GET", query, user_id=2)).json() == []
+            assert (await h.start(config_id, user_id=2)).status_code == 422
+            async with h.db_factory() as db:
+                config = await db.get(AssessmentConfig, config_id)
+                config.time_limit_minutes = 10
+                await db.commit()
+            before = await h.state()
+            resumed = await h.request("GET", f"{path}/resume")
+            assert resumed.status_code == 200, resumed.text
+            restored = resumed.json()
+            assert restored["session_id"] == session_id
+            assert restored["status"] == "in_progress"
+            assert restored["time_limit_minutes"] == 10
+            assert restored["started_at"] == item["started_at"]
+            assert restored["questions"][0]["student_answer"] == "A"
+            assert "correct_answer" not in restored["questions"][0]
+            assert (await h.request("GET", f"{path}/resume", user_id=2)).status_code == 422
+            assert await h.state() == before
+
+            async with h.db_factory() as db:
+                config = await db.get(AssessmentConfig, config_id)
+                config.enabled = False
+                await db.commit()
+            assert (await h.request("GET", query)).json() == []
+            assert (await h.start(config_id)).status_code == 422
+            assert (await h.request("GET", f"{path}/resume")).status_code == 422
+            async with h.db_factory() as db:
+                session = await db.get(AssessmentSession, session_id)
+                session.status = "graded"
+                await db.commit()
+            completed = await h.request("GET", f"{path}/resume")
+            assert completed.status_code == 200, completed.text
+            assert completed.json() == {"session_id": session_id, "status": "graded"}
+    asyncio.run(scenario())
+
+
 def test_existing_session_for_other_config_does_not_bypass_window(isolated):
     async def scenario():
         async with isolated() as h:

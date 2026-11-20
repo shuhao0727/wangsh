@@ -16,8 +16,10 @@ from sqlalchemy import update
 from app.api.endpoints.agents.ai_agents import analysis_streams, stream, group_discussion
 from app.core import deps, stream_session, session_family
 from app.core.config import settings
-from app.models import User, RefreshToken, AIAgent
+from app.db.database import Base
+from app.models import User, RefreshToken, AIAgent, GroupDiscussionMessage, GroupDiscussionSession
 from app.services.agents import chat_stream
+from app.services.agents.group_discussion import session_service as discussion_sessions
 
 _spec = importlib.util.spec_from_file_location(
     "ai_sse_auth_fixture", Path(__file__).parents[1] / "auth/test_logout_revocation_isolated.py")
@@ -158,10 +160,14 @@ async def setup(h, monkeypatch, case):
     # 2026-10-27：提示词模板存在性校验前移到设置阶段，但模板内容仍在流内解析。
     # 运行器夹具库只建 auth 表，这里补建模板表，使模板确实存在、内容解析进入阻塞替身。
     from app.models.agents import AgentAnalysisPromptTemplate
+    tables = [AgentAnalysisPromptTemplate.__table__]
+    if module is group_discussion:
+        # The initial catch-up reads message storage before waiting for Redis notifications.
+        monkeypatch.setattr(group_discussion, "AsyncSessionLocal", h.db_factory)
+        monkeypatch.setattr(discussion_sessions, "cache", h.cache)
+        tables.extend([GroupDiscussionSession.__table__, GroupDiscussionMessage.__table__])
     async with h.db_factory() as db:
-        await db.run_sync(
-            lambda s: AgentAnalysisPromptTemplate.__table__.create(s.connection(), checkfirst=True)
-        )
+        await db.run_sync(lambda s: Base.metadata.create_all(s.connection(), tables=tables))
         db.add(AgentAnalysisPromptTemplate(
             id=1, analysis_type="hot_questions", name="synthetic", content="synthetic", is_active=True,
         ))

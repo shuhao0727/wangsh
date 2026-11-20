@@ -67,7 +67,7 @@ def test_ended_activity_cannot_be_edited_or_deleted(monkeypatch, operation):
     async def fake_get_activity(_db, _activity_id):
         return activity
 
-    monkeypatch.setattr(classroom_svc, "_get_activity", fake_get_activity)
+    monkeypatch.setattr(classroom_svc, "_get_activity_for_update" if operation == "update" else "_get_activity", fake_get_activity)
     db = _FakeDB()
 
     with pytest.raises(ValueError, match="草稿状态"):

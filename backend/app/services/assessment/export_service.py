@@ -16,6 +16,7 @@ from app.models.assessment import (
     AssessmentAnswer,
     AssessmentBasicProfile,
 )
+from app.services.assessment.answer_question import answer_question_fields
 from app.services.assessment.session_service import get_config_sessions
 from app.services.xbk.exports.common import apply_table_style, auto_adjust_column_width
 from app.utils.excel_safety import force_text_workbook
@@ -31,11 +32,11 @@ STATUS_TEXT = {
 def _answer_details(session: AssessmentSession) -> list[dict]:
     details = []
     for a in session.answers:
-        q = a.question
+        question = answer_question_fields(a)
         details.append({
-            "content": q.content if q else "",
+            "content": question["content"],
             "student_answer": a.student_answer or "",
-            "correct_answer": q.correct_answer if q else "",
+            "correct_answer": question["correct_answer"],
             "is_correct": "正确" if a.is_correct else ("错误" if a.is_correct is False else "-"),
             "earned_score": a.ai_score if a.ai_score is not None else "-",
             "max_score": a.max_score,

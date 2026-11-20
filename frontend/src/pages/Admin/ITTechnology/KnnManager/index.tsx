@@ -72,9 +72,9 @@ export default function KnnManager({ onBack, backLabel = "IT 应用" }: { onBack
     await accept(await knnApi.refill(batch.id, numbers, allowed));
   }, allowed ? `已允许 ${numbers.length} 人重填一次` : "已撤销重填权限");
   const downloadFrozen = (data: FrozenData) => downloadKnn(new Blob([JSON.stringify(data, null, 2)], { type: "application/json;charset=utf-8" }), `knn-${id}.json`);
-  const freeze = async (number: string) => {
+  const freeze = async (studentNo?: string) => {
     if (!batch) return;
-    const data = await knnApi.freeze(batch.id, number);
+    const data = await knnApi.freeze(batch.id, studentNo);
     await refresh(); downloadFrozen(data); showMessage.success("课堂数据已冻结");
   };
   const remove = async () => {

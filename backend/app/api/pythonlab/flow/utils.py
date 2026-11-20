@@ -8,7 +8,10 @@ import ast
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
+from app.api.pythonlab.constants import MAX_NODE_FULL_TITLE_CHARS, MAX_NODE_TITLE_CHARS
 from app.api.pythonlab.utils import (
+    bounded_source_segment,
+    clamp_title,
     is_elif_if,
     node_title,
     range_from_ast,
@@ -23,17 +26,16 @@ def _now_ms() -> int:
 
 
 def _node_title_wrapper(code: str, n: ast.AST) -> str:
-    seg = ast.get_source_segment(code, n)
-    if isinstance(seg, str) and seg.strip():
-        return seg.strip()
+    seg = bounded_source_segment(code, n, MAX_NODE_TITLE_CHARS)
+    if seg:
+        return seg
     return node_title(code, n)
 
 
 def _full_title(code: str, n: Optional[ast.AST]) -> str:
     if n is None:
         return ""
-    seg = ast.get_source_segment(code, n)
-    return seg.strip() if isinstance(seg, str) else ""
+    return bounded_source_segment(code, n, MAX_NODE_FULL_TITLE_CHARS)
 
 
 def _header_title(code: str, n: Optional[ast.AST]) -> str:
@@ -230,7 +232,7 @@ def _make_node(code: str, kind: str, n: Optional[ast.AST], parent_id: Optional[s
             rng["endLine"] = rng["startLine"]
             rng["endCol"] = max(rng["startCol"], rng["endCol"])
     full = _full_title(code, n)
-    t = (title or (_header_title(code, n) if n is not None else "")).strip() or kind
+    t = clamp_title(title or (_header_title(code, n) if n is not None else "")) or kind
     nid = stable_id(kind, str(rng["startLine"]), str(rng["startCol"]), str(rng["endLine"]), str(rng["endCol"]), parent_id or "", t)
     node = {"id": nid, "kind": kind, "title": t, "range": rng, "parentId": parent_id}
     if full and full != t:

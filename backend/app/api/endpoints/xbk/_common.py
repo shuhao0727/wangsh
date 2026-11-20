@@ -12,6 +12,7 @@ from app.core.deps import get_current_user_or_none
 from app.db.database import get_db
 from app.models import FeatureFlag, XbkCourse, XbkStudent
 from app.schemas.xbk.academic_year import AcademicYear
+from app.services.xbk.grade_scope import normalize_grade
 from app.services.xbk.public_config import XBK_PUBLIC_FLAG_KEY
 from app.services.xbk.locking import lock_key_rows
 
@@ -74,33 +75,24 @@ def apply_common_filters(
     return stmt
 
 
-async def _active_parents(
+async def _active_parent_grades(
     db: AsyncSession, model, field: str, keys: list, *, lock: bool,
-) -> tuple[set, Dict[tuple[str, str, str], str]]:
-    """返回有效的父实体自然键集合；课程额外返回开设年级映射。"""
-    active: set = set()
-    grades: Dict[tuple[str, str, str], str] = {}
+) -> Dict[tuple[str, str, str], Optional[str]]:
+    """按自然键返回活跃父记录及其年级，保留年级为空的记录。"""
     if lock:
         parents = await lock_key_rows(db, model, ("year", "term", field), keys, shared=True)
-        for row in parents:
-            if row.is_deleted:
-                continue
-            active.add((row.year, row.term, getattr(row, field)))
-            if model is XbkCourse and row.grade:
-                grades[(row.year, row.term, row.course_code)] = row.grade
-        return active, grades
+        return {(row.year, row.term, getattr(row, field)): normalize_grade(row.grade)
+                for row in parents if not row.is_deleted}
+    grades: Dict[tuple[str, str, str], Optional[str]] = {}
+    columns = (model.year, model.term, getattr(model, field))
     for offset in range(0, len(keys), 500):
-        columns = (model.year, model.term, getattr(model, field))
-        select_columns = (*columns, model.grade) if model is XbkCourse else columns
-        result = await db.execute(select(*select_columns).where(
+        result = await db.execute(select(*columns, model.grade).where(
             model.is_deleted.is_(False),
             tuple_(*columns).in_(keys[offset:offset + 500]),
         ))
-        for record in result.all():
-            active.add((record[0], record[1], record[2]))
-            if model is XbkCourse and len(record) > 3 and record[3]:
-                grades[(record[0], record[1], record[2])] = record[3]
-    return active, grades
+        for year, term, code, grade in result.all():
+            grades[(year, term, code)] = normalize_grade(grade)
+    return grades
 
 
 async def selection_reference_errors(
@@ -116,7 +108,7 @@ async def selection_reference_errors(
     # 课程开设年级：课程只面向其所属年级开设（为空表示全年级可选）。
     # 预检必须与执行阶段给出一致的年级错误，否则会先显示“可导入”
     # 再在提交时整份 409。
-    course_grades: Dict[tuple[str, str, str], str] = {}
+    parent_grades = {}
     for model, field, label, advice in (
         (XbkStudent, "student_no", "学生", "请先维护学生名单"),
         (XbkCourse, "course_code", "课程", "请先维护选课目录"),
@@ -125,30 +117,32 @@ async def selection_reference_errors(
             (row["year"], row["term"], row[field]) for row in rows
             if field != "course_code" or row[field] not in UNSELECTED_COURSE_CODES
         ))
-        active, grades = await _active_parents(db, model, field, keys, lock=lock)
-        course_grades.update(grades)
+        active = await _active_parent_grades(db, model, field, keys, lock=lock)
+        parent_grades[field] = active
         for index, row in enumerate(rows):
             if field == "course_code" and row[field] in UNSELECTED_COURSE_CODES:
                 continue
             if (row["year"], row["term"], row[field]) not in active:
                 errors[index].append(f"{label}不存在（{advice}；须为同学年、同学期且未删除）")
-    _append_grade_scope_errors(rows, course_grades, errors)
+    _append_grade_scope_errors(rows, parent_grades["student_no"], parent_grades["course_code"], errors)
     return errors
 
 
 def _append_grade_scope_errors(
     rows: List[Dict[str, Any]],
-    course_grades: Dict[tuple[str, str, str], str],
+    student_grades: Dict[tuple[str, str, str], Optional[str]],
+    course_grades: Dict[tuple[str, str, str], Optional[str]],
     errors: List[List[str]],
 ) -> None:
-    """课程只面向开设年级；与执行阶段共用同一文案。"""
+    """按当前学生名册核对课程年级范围。"""
     for index, row in enumerate(rows):
-        if row.get("course_code") in UNSELECTED_COURSE_CODES:
+        if errors[index] or row["course_code"] in UNSELECTED_COURSE_CODES:
             continue
-        scope = str(course_grades.get((row["year"], row["term"], row.get("course_code"))) or "").strip()
-        student_grade = str(row.get("grade") or "").strip()
-        if scope and student_grade and scope != student_grade:
+        year, term, code = row["year"], row["term"], row["course_code"]
+        scope = course_grades[(year, term, code)]
+        student_grade = student_grades[(year, term, row["student_no"])]
+        if scope and scope != student_grade:
             errors[index].append(
-                f"课程 {row['course_code']} 仅面向 {scope} 开设，"
-                f"不能分配给 {student_grade} 的学生"
+                f"课程 {code} 仅面向 {scope} 开设，"
+                f"不能分配给 {student_grade or '未分年级'} 的学生"
             )

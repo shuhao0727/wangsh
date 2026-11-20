@@ -75,6 +75,20 @@ function dedup(profiles: StudentProfile[]): StudentProfile[] {
   return Array.from(map.values()).sort((a, b) => b.id - a.id);
 }
 
+function parseQuestionOptions(options: string | null): string[] {
+  if (!options) return [];
+  try {
+    const parsed = JSON.parse(options);
+    if (Array.isArray(parsed)) return parsed;
+    if (parsed && typeof parsed === "object") {
+      return Object.entries(parsed).map(([key, value]) => `${key}. ${value}`);
+    }
+  } catch {
+    // Historical questions may have no valid option list.
+  }
+  return [];
+}
+
 const clampPercent = (value?: number | null) => {
   if (typeof value !== "number" || Number.isNaN(value)) return 0;
   return Math.max(0, Math.min(100, value));
@@ -311,7 +325,7 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
     if (!userId) return;
     try {
       setLoading(true);
-      const list = await assessmentSessionApi.available();
+      const list = await assessmentSessionApi.available({ includeInProgress: true });
       setAvailableList(list);
     } catch (e: any) {
       showMessage.error(e.message || "加载失败");
@@ -325,50 +339,37 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
   }, [open, view, loadAvailable]);
 
   // ─── 开始/继续检测 ───
+  const showQuiz = useCallback((session: {
+    session_id: number;
+    config_title: string;
+    time_limit_minutes: number;
+    started_at: string | null;
+  }, questions: QuestionForStudent[]) => {
+    setSessionId(session.session_id);
+    setConfigTitle(session.config_title);
+    setTimeLimitMin(session.time_limit_minutes);
+    setStartedAt(session.started_at);
+    setQuestions(questions);
+    setCurrentIdx(0);
+    setAnswerResults(new Map());
+    answerDraftsRef.current.clear();
+    failedAnswersRef.current.clear();
+    submittedSessionRef.current = null;
+    setAnswerInput("");
+    setView("quiz");
+  }, []);
+
   const handleStart = useCallback(async (configId: number) => {
     try {
       setStartingConfigId(configId);
-      const resp = await assessmentSessionApi.start(configId);
-      setSessionId(resp.session_id);
-      setConfigTitle(resp.config_title);
-      setTimeLimitMin(resp.time_limit_minutes);
-      setStartedAt(resp.started_at);
-      const qs = await assessmentSessionApi.getQuestions(resp.session_id);
-      setQuestions(qs);
-      setCurrentIdx(0);
-      setAnswerResults(new Map());
-      answerDraftsRef.current.clear();
-      failedAnswersRef.current.clear();
-      submittedSessionRef.current = null;
-      setAnswerInput("");
-      setView("quiz");
+      const session = await assessmentSessionApi.start(configId);
+      showQuiz(session, await assessmentSessionApi.getQuestions(session.session_id));
     } catch (e: any) {
       showMessage.error(e.message || "开始检测失败");
     } finally {
       setStartingConfigId(null);
     }
-  }, []);
-
-  const handleContinue = useCallback(async (sid: number, title: string) => {
-    try {
-      setLoading(true);
-      setSessionId(sid);
-      setConfigTitle(title);
-      const qs = await assessmentSessionApi.getQuestions(sid);
-      setQuestions(qs);
-      setCurrentIdx(0);
-      setAnswerResults(new Map());
-      answerDraftsRef.current.clear();
-      failedAnswersRef.current.clear();
-      submittedSessionRef.current = null;
-      setAnswerInput("");
-      setView("quiz");
-    } catch (e: any) {
-      showMessage.error(e.message || "加载题目失败");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  }, [showQuiz]);
 
   // ─── 提交单题 ───
   const handleSubmitAnswer = useCallback(async (answerId: number, answer: string) => {
@@ -530,6 +531,24 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
     }
   }, []);
 
+  const handleContinue = useCallback(async (sid: number | null) => {
+    if (sid === null) return;
+    try {
+      setLoading(true);
+      const session = await assessmentSessionApi.resume(sid);
+      if (session.status === "in_progress") {
+        showQuiz(session, session.questions);
+      } else {
+        await handleViewResult(session.session_id);
+      }
+    } catch (e: any) {
+      showMessage.error(e.message || "续答检测失败");
+      await loadAvailable();
+    } finally {
+      setLoading(false);
+    }
+  }, [handleViewResult, loadAvailable, showQuiz]);
+
   // ─── 手动刷新（按当前视图） ───
   const handleManualRefresh = useCallback(() => {
     if (view === "list") {
@@ -638,13 +657,13 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
               )
             )}
             {item.session_status === "in_progress" && (
-              <Button size="sm" onClick={() => handleContinue(item.session_id!, item.title)}>继续答题</Button>
+              <Button size="sm" onClick={() => handleContinue(item.session_id)}>继续答题</Button>
             )}
-            {item.session_status === "graded" && (
+            {(item.session_status === "submitted" || item.session_status === "graded") && item.session_id !== null && (
               <div className="flex items-center gap-2">
-                <Badge variant="success">
-                  {item.earned_score}/{item.total_score} 分
-                </Badge>
+                {item.earned_score !== null && (
+                  <Badge variant="success">{item.earned_score}/{item.total_score} 分</Badge>
+                )}
                 <Button variant="link" size="sm" onClick={() => handleViewResult(item.session_id!)}>查看结果</Button>
               </div>
             )}
@@ -671,18 +690,9 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
     const q = questions[currentIdx];
     if (!q) return <div className="p-5">加载中...</div>;
     const result = answerResults.get(q.answer_id);
-    const _answered = !!result || q.is_answered;
-    let options: string[] = [];
-    if (q.options) {
-      try {
-        const parsed = JSON.parse(q.options);
-        if (Array.isArray(parsed)) {
-          options = parsed;
-        } else if (parsed && typeof parsed === "object") {
-          options = Object.entries(parsed).map(([k, v]) => `${k}. ${v}`);
-        }
-      } catch {}
-    }
+    const answered = !!result || q.is_answered;
+    const answerDisabled = answered || submittingAnswerId !== null || submitting || submittedSessionRef.current === sessionId;
+    const options = parseQuestionOptions(q.options);
 
     return (
       <div className="flex flex-col flex-1 overflow-hidden">
@@ -755,9 +765,9 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
                       name={`assessment-choice-${q.answer_id}`}
                       value={letter}
                       checked={(q.student_answer || undefined) === letter}
-                      disabled={!!result || submittingAnswerId !== null || submitting || submittedSessionRef.current === sessionId}
+                      disabled={answerDisabled}
                       onChange={() => {
-                        if (!result && !submittingRef.current) {
+                        if (!answered && !submittingRef.current) {
                           void handleSubmitAnswer(q.answer_id, letter);
                         }
                       }}
@@ -785,17 +795,17 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
           {q.question_type === "fill" && (
             <div>
               <Input
-                value={result ? (q.student_answer || "") : answerInput}
-                onChange={(e) => !result && updateAnswerInput(q.answer_id, e.target.value)}
-                disabled={!!result || submittingAnswerId !== null || submitting || submittedSessionRef.current === sessionId}
+                value={answered ? (q.student_answer || "") : answerInput}
+                onChange={(e) => updateAnswerInput(q.answer_id, e.target.value)}
+                disabled={answerDisabled}
                 placeholder="输入答案"
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && !result && answerInput.trim()) {
+                  if (e.key === "Enter" && !answered && answerInput.trim()) {
                     void handleSubmitAnswer(q.answer_id, answerInput);
                   }
                 }}
               />
-              {!result && submittingAnswerId !== q.answer_id && (
+              {!answered && submittingAnswerId !== q.answer_id && (
                 <Button
                   size="sm"
                   className="mt-2 !bg-[var(--ws-color-purple)] hover:!bg-[var(--ws-color-purple)]"
@@ -812,17 +822,17 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
             <div>
               <Textarea
                 rows={4}
-                value={result ? (q.student_answer || "") : answerInput}
-                onChange={(e) => !result && updateAnswerInput(q.answer_id, e.target.value)}
-                disabled={!!result || submittingAnswerId !== null || submitting || submittedSessionRef.current === sessionId}
+                value={answered ? (q.student_answer || "") : answerInput}
+                onChange={(e) => updateAnswerInput(q.answer_id, e.target.value)}
+                disabled={answerDisabled}
                 placeholder="输入答案"
                 onBlur={() => {
-                  if (!result && !failedAnswersRef.current.has(q.answer_id) && answerInput.trim()) {
+                  if (!answered && !failedAnswersRef.current.has(q.answer_id) && answerInput.trim()) {
                     void handleSubmitAnswer(q.answer_id, answerInput);
                   }
                 }}
               />
-              {!result && answerInput.trim() && (
+              {!answered && answerInput.trim() && (
                 <Button
                   size="sm"
                   className="mt-2"
@@ -969,6 +979,9 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
                 </summary>
                 <div className="border-t border-[var(--ws-color-border-secondary)] px-[var(--ws-space-2)] py-[var(--ws-space-1)] text-sm">
                   <div className="mb-1">{a.content}</div>
+                  {a.question_type === "choice" && parseQuestionOptions(a.options).map((option, index) => (
+                    <div key={index}>{option}</div>
+                  ))}
                   <div>
                     我的答案：
                     <span className={a.is_correct ? "text-[var(--ws-color-success)]" : "text-[var(--ws-color-error)]"}>

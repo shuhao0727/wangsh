@@ -3,7 +3,7 @@
 from typing import List, Optional
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import attributes, selectinload
 
 from app.models.classroom import ClassroomActivity, ClassroomPlan, ClassroomPlanItem
 from app.models.core.user import User
@@ -186,15 +186,7 @@ async def next_item(
     current = next((it for it in items if it.status == "active"), None)
     try:
         if current:
-            await activity_svc.end_activity(
-                db,
-                current.activity_id,
-                analysis_agent_id=current.activity.analysis_agent_id,
-                analysis_prompt=current.activity.analysis_prompt,
-                commit=False,
-                deferred_events=deferred_events,
-            )
-            current.status = "ended"
+            await _finish_item(db, current, deferred_events)
             await db.flush()
 
         # 找下一个 pending 的题目
@@ -277,15 +269,7 @@ async def start_item(
     current = next((it for it in plan.items if it.status == "active"), None)
     try:
         if current:
-            await activity_svc.end_activity(
-                db,
-                current.activity_id,
-                analysis_agent_id=current.activity.analysis_agent_id,
-                analysis_prompt=current.activity.analysis_prompt,
-                commit=False,
-                deferred_events=deferred_events,
-            )
-            current.status = "ended"
+            await _finish_item(db, current, deferred_events)
             await db.flush()
         # 开始目标 item（根据活动状态选择 start 或 restart）
         if target.activity and target.activity.status == "ended":
@@ -333,15 +317,7 @@ async def end_item(
         raise ValueError("该题目未在进行中")
     deferred_events: list[dict] = []
     try:
-        await activity_svc.end_activity(
-            db,
-            target.activity_id,
-            analysis_agent_id=target.activity.analysis_agent_id,
-            analysis_prompt=target.activity.analysis_prompt,
-            commit=False,
-            deferred_events=deferred_events,
-        )
-        target.status = "ended"
+        await _finish_item(db, target, deferred_events)
         if plan.current_item_id == target.id:
             plan.current_item_id = None
         await db.commit()
@@ -369,15 +345,7 @@ async def end_plan(
     try:
         for item in plan.items:
             if item.status == "active":
-                await activity_svc.end_activity(
-                    db,
-                    item.activity_id,
-                    analysis_agent_id=item.activity.analysis_agent_id,
-                    analysis_prompt=item.activity.analysis_prompt,
-                    commit=False,
-                    deferred_events=deferred_events,
-                )
-                item.status = "ended"
+                await _finish_item(db, item, deferred_events)
         plan.status = "ended"
         plan.current_item_id = None
         await db.commit()
@@ -386,6 +354,22 @@ async def end_plan(
         raise
     await activity_svc.dispatch_activity_events(db, deferred_events)
     return await _get_plan(db, plan.id)
+
+
+async def _finish_item(
+    db: AsyncSession, item: ClassroomPlanItem, deferred_events: list[dict]
+) -> None:
+    # The plan transaction already locked and refreshed the activity row.
+    if item.activity.status != "ended":
+        await activity_svc.end_activity(
+            db,
+            item.activity_id,
+            analysis_agent_id=item.activity.analysis_agent_id,
+            analysis_prompt=item.activity.analysis_prompt,
+            commit=False,
+            deferred_events=deferred_events,
+        )
+    item.status = "ended"
 
 
 # ── 学生端 ──
@@ -414,32 +398,28 @@ async def get_active_plan(
 
 async def _get_locked_plan(db: AsyncSession, plan_id: int) -> ClassroomPlan:
     """锁定计划、items 和活动，并刷新已加载活动，避免校验后被并发改班。"""
-    plan = await _get_plan(db, plan_id)
-    locked_plan = (
+    plan = (
         await db.execute(
             select(ClassroomPlan)
             .where(ClassroomPlan.id == plan_id)
-            .options(
-                selectinload(ClassroomPlan.items).selectinload(
-                    ClassroomPlanItem.activity
-                )
-            )
             .with_for_update()
             .execution_options(populate_existing=True)
         )
     ).scalar_one_or_none()
-    if locked_plan is not None:
-        plan = locked_plan
+    if plan is None:
+        raise ClassroomPlanNotFoundError(f"计划 {plan_id} 不存在")
 
-    item_ids = [item.id for item in plan.items]
-    if item_ids:
-        await db.execute(
-            select(ClassroomPlanItem)
-            .where(ClassroomPlanItem.id.in_(item_ids))
-            .options(selectinload(ClassroomPlanItem.activity))
-            .with_for_update()
-            .execution_options(populate_existing=True)
-        )
+    # A draft activity can be deleted concurrently, cascading to its plan item.
+    # Populate from the locked result, not from a pre-lock relationship snapshot.
+    items = (await db.execute(
+        select(ClassroomPlanItem)
+        .where(ClassroomPlanItem.plan_id == plan_id)
+        .order_by(ClassroomPlanItem.order_index)
+        .options(selectinload(ClassroomPlanItem.activity))
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )).scalars().all()
+    attributes.set_committed_value(plan, "items", items)
 
     owner_ids = {
         owner_id

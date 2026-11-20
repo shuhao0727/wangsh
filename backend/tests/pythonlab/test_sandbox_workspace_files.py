@@ -1,3 +1,4 @@
+import stat
 from pathlib import Path
 
 import pytest
@@ -47,3 +48,24 @@ def test_prepare_workspace_files_rejects_symlink_workspace(tmp_path):
         provider._prepare_workspace_files(ws, "attacker\n", {})
 
     assert not (target / "main.py").exists()
+
+
+def test_prepare_workspace_files_restores_unwritable_workspace(tmp_path):
+    """学生把自己的 workspace 改成只读后，worker 仍应能写入并恢复权限。
+
+    学生容器与 worker 同 UID，chmod 掉目录写权限会让 os.replace 失败；
+    这不是拒绝写入的理由，工作区必须能自愈。
+    """
+    root = tmp_path / "workspaces"
+    root.mkdir()
+    ws = root / "u1"
+    ws.mkdir()
+    ws.chmod(0o500)
+
+    provider = DockerProvider()
+    provider._prepare_workspace_files(ws, "print('hi')\n", {"session_id": "s1"})
+
+    assert (ws / "main.py").read_text(encoding="utf-8") == "print('hi')\n"
+    assert (ws / "sitecustomize.py").read_text(encoding="utf-8").strip()
+    assert stat.S_IMODE(ws.stat().st_mode) == 0o755
+    assert not list(root.glob(".u1.*.tmp"))

@@ -72,6 +72,55 @@ describe("ClassroomPanel role boundary", () => {
     );
   });
 
+  it.each([403, 404])("stops automatic classroom requests on HTTP %s until manual refresh", async (status) => {
+    vi.useFakeTimers();
+    vi.mocked(classroomApi.getActive).mockRejectedValueOnce({ response: { status } });
+    render(<ClassroomPanel isAuthenticated isStudent isAdmin={false} userId={2} />);
+    await act(async () => { await vi.advanceTimersByTimeAsync(60000); });
+    expect(classroomApi.getActive).toHaveBeenCalledOnce();
+    expect(MockEventSource.created).toHaveLength(1);
+    expect(MockEventSource.created[0].close).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole("button", { name: "课堂互动" }));
+    expect(screen.getByRole("status")).toHaveTextContent("暂时无法读取课堂");
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "刷新" })); });
+    expect(classroomApi.getActive).toHaveBeenCalled();
+    expect(screen.queryByText(/暂时无法读取课堂/)).not.toBeInTheDocument();
+  });
+
+  it("reconciles on stream connection and retries a transient notification read", async () => {
+    vi.useFakeTimers();
+    render(<ClassroomPanel isAuthenticated isStudent isAdmin={false} userId={2} />);
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    expect(classroomApi.getActive).toHaveBeenCalledOnce();
+    const source = MockEventSource.created[0];
+    vi.mocked(classroomApi.getActive).mockRejectedValueOnce({ response: { status: 503 } });
+    await act(async () => {
+      source.onmessage?.(new MessageEvent("message", { data: '{"type":"connected"}' }));
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(classroomApi.getActive).toHaveBeenCalledTimes(2);
+    await act(async () => { await vi.advanceTimersByTimeAsync(6000); });
+    expect(classroomApi.getActive).toHaveBeenCalledTimes(3);
+    await act(async () => { await vi.advanceTimersByTimeAsync(30000); });
+    expect(classroomApi.getActive).toHaveBeenCalledTimes(3);
+  });
+
+  it("backs off after consecutive transient classroom reads fail and resets on success", async () => {
+    vi.useFakeTimers();
+    vi.mocked(classroomApi.getActive)
+      .mockRejectedValueOnce({ response: { status: 503 } })
+      .mockRejectedValueOnce({ response: { status: 503 } });
+    render(<ClassroomPanel isAuthenticated isStudent isAdmin={false} userId={2} />);
+    await act(async () => { await vi.advanceTimersByTimeAsync(5999); });
+    expect(classroomApi.getActive).toHaveBeenCalledTimes(1);
+    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+    expect(classroomApi.getActive).toHaveBeenCalledTimes(2);
+    await act(async () => { await vi.advanceTimersByTimeAsync(12000); });
+    expect(classroomApi.getActive).toHaveBeenCalledTimes(3);
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
+    expect(classroomApi.getActive).toHaveBeenCalledTimes(4);
+  });
+
   it("keeps polling and realtime updates enabled for a student", async () => {
     render(
       <ClassroomPanel
@@ -281,6 +330,23 @@ describe("ClassroomPanel role boundary", () => {
     expect(screen.queryByText("已提交")).not.toBeInTheDocument();
   });
 
+  it("does not mark the next activity submitted when the previous answer arrives late", async () => {
+    const answer = deferred<Awaited<ReturnType<typeof classroomApi.respond>>>();
+    const current = { id: 11, title: "前一题", activity_type: "vote", status: "active", allow_multiple: false,
+      options: [{ key: "A", text: "甲" }] } as Awaited<ReturnType<typeof classroomApi.getActive>>[number];
+    vi.mocked(classroomApi.getActive).mockResolvedValueOnce([current])
+      .mockResolvedValue([{ ...current, id: 12, title: "下一题" }]);
+    vi.spyOn(classroomApi, "respond").mockReturnValueOnce(answer.promise);
+    render(<ClassroomPanel isAuthenticated isStudent isAdmin={false} userId={2} />);
+    fireEvent.click(await screen.findByRole("radio"));
+    fireEvent.click(screen.getByRole("button", { name: "提交答案" }));
+    await act(async () => { MockEventSource.created[0].onmessage?.(new MessageEvent("message", { data: "{}" })); });
+    await screen.findByText("下一题");
+    await act(async () => { answer.resolve({ id: 99, answer: "A", is_correct: true, submitted_at: "2030-01-01T00:00:00Z" }); });
+    expect(screen.getByRole("button", { name: "提交答案" })).toBeVisible();
+    expect(screen.queryByText("你的答案：A")).not.toBeInTheDocument();
+  });
+
   it("keeps the newest active refresh when same-student requests finish out of order", async () => {
     const first = deferred<Awaited<ReturnType<typeof classroomApi.getActive>>>();
     const second = deferred<Awaited<ReturnType<typeof classroomApi.getActive>>>();
@@ -450,7 +516,8 @@ describe("ClassroomPanel role boundary", () => {
     expect(screen.getByText("较新的课堂题目")).toBeInTheDocument();
   });
 
-  it("keeps statistics for the latest selected history item", async () => {
+  it("reads student results for the latest selected history item", async () => {
+    vi.spyOn(classroomApi, "getStatistics").mockRejectedValue(new Error("仅教职工可读"));
     vi.mocked(classroomApi.getActive).mockResolvedValue([]);
     vi.mocked(planApi.getActivePlan).mockResolvedValue({
       id: 1,
@@ -494,9 +561,9 @@ describe("ClassroomPanel role boundary", () => {
         },
       ],
     });
-    const firstStats = deferred<Awaited<ReturnType<typeof classroomApi.getStatistics>>>();
-    const secondStats = deferred<Awaited<ReturnType<typeof classroomApi.getStatistics>>>();
-    vi.spyOn(classroomApi, "getStatistics")
+    const firstStats = deferred<Awaited<ReturnType<typeof classroomApi.getResult>>>();
+    const secondStats = deferred<Awaited<ReturnType<typeof classroomApi.getResult>>>();
+    vi.spyOn(classroomApi, "getResult")
       .mockReturnValueOnce(firstStats.promise)
       .mockReturnValueOnce(secondStats.promise);
 
@@ -512,31 +579,26 @@ describe("ClassroomPanel role boundary", () => {
     await waitFor(() => expect(planApi.getActivePlan).toHaveBeenCalledOnce());
     fireEvent.click(screen.getByRole("button", { name: "课堂互动" }));
     fireEvent.click(await screen.findByText("1"));
-    await waitFor(() => expect(classroomApi.getStatistics).toHaveBeenCalledWith(101));
+    await waitFor(() => expect(classroomApi.getResult).toHaveBeenCalledWith(101));
     fireEvent.click(screen.getByRole("button", { name: /下一题/ }));
-    await waitFor(() => expect(classroomApi.getStatistics).toHaveBeenCalledWith(102));
+    await waitFor(() => expect(classroomApi.getResult).toHaveBeenCalledWith(102));
 
-    secondStats.resolve({
-      activity_id: 102,
-      total_responses: 22,
-      option_counts: { A: 22 },
-      correct_count: 22,
-      correct_rate: 100,
+    const review = (id: number, count: number, my_answer: string): Awaited<ReturnType<typeof classroomApi.getResult>> => ({
+      id, activity_type: "vote", title: "回顾", options: null, allow_multiple: false,
+      my_answer, is_correct: true, correct_answer: null,
+      stats: { activity_id: id, total_responses: count, option_counts: { A: count }, correct_count: count, correct_rate: 100 },
     });
+    secondStats.resolve(review(102, 22, "只属于第二题的作答"));
     expect(await screen.findByText(/22 人参与/)).toBeInTheDocument();
 
     await act(async () => {
-      firstStats.resolve({
-        activity_id: 101,
-        total_responses: 11,
-        option_counts: { A: 11 },
-        correct_count: 11,
-        correct_rate: 100,
-      });
+      firstStats.resolve(review(101, 11, "只属于第一题的作答"));
       await firstStats.promise;
     });
 
     expect(screen.getByText(/22 人参与/)).toBeInTheDocument();
     expect(screen.queryByText(/11 人参与/)).not.toBeInTheDocument();
+    expect(screen.getByText(/只属于第二题的作答/)).toBeInTheDocument();
+    expect(screen.queryByText(/只属于第一题的作答/)).not.toBeInTheDocument();
   });
 });

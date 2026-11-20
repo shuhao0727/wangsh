@@ -47,5 +47,18 @@ describe("groupDiscussionApi.listMessages", () => {
 
     expect(result.success).toBe(false);
     expect(result.forbidden).toBe(false);
+    expect(result.missing).toBe(false);
+  });
+
+  it("marks a deleted discussion group (404) as missing", async () => {
+    mockedGet.mockRejectedValueOnce({
+      response: { status: 404, data: { detail: "讨论组不存在" } },
+    });
+
+    const result = await groupDiscussionApi.listMessages({ sessionId: 1 });
+
+    expect(result.success).toBe(false);
+    expect(result.missing).toBe(true);
+    expect(result.forbidden).toBe(false);
   });
 });

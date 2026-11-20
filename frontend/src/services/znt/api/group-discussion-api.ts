@@ -280,9 +280,11 @@ export const groupDiscussionApi = {
     sessionId: number;
     afterId?: number;
     limit?: number;
-  }): Promise<BaseResponse<GroupDiscussionMessageListResponse> & { forbidden?: boolean }> => {
+    signal?: AbortSignal;
+  }): Promise<BaseResponse<GroupDiscussionMessageListResponse> & { forbidden?: boolean; missing?: boolean }> => {
     try {
       const response = await api.get(`${BASE_PATH}/messages`, {
+        signal: params.signal,
         params: {
           session_id: params.sessionId,
           after_id: params.afterId ?? 0,
@@ -293,11 +295,14 @@ export const groupDiscussionApi = {
       const data = (raw && typeof raw === "object" && "data" in raw ? raw.data : raw) as unknown;
       return { success: true, message: "获取成功", data: data as GroupDiscussionMessageListResponse };
     } catch (error: unknown) {
-      logger.error("获取小组讨论消息失败:", error);
+      if (!params.signal?.aborted) logger.error("获取小组讨论消息失败:", error);
+      const status = asApiError(error).response?.status;
       return {
         success: false,
         message: errMsg(error, "获取失败"),
-        forbidden: asApiError(error).response?.status === 403,
+        forbidden: status === 403,
+        // 404 表示讨论组已被删除；调用方必须停止轮询，否则会每 3 秒无限重试。
+        missing: status === 404,
         data: { items: [], next_after_id: params.afterId ?? 0 },
       };
     }

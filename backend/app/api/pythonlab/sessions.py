@@ -2,6 +2,7 @@ import uuid
 from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from loguru import logger
 from pydantic import BaseModel, Field
 
 from app.core.deps import require_user
@@ -20,6 +21,13 @@ from app.api.pythonlab.constants import (
     SESSION_STATUS_TERMINATING,
     WS_MAX_DAP_MSG_BYTES,
     WS_MAX_STDOUT_KB,
+)
+from app.api.pythonlab.session_state import (
+    StopDispatchError,
+    dispatch_session_stop,
+    is_stop_confirmed,
+    is_stop_in_progress,
+    read_session_snapshot,
 )
 from app.api.pythonlab.utils import now_iso, sha256_text
 
@@ -51,6 +59,13 @@ def _session_ws_path(request: Request, session_id: str) -> str:
     return f"{prefix}/sessions/{session_id}/ws"
 
 
+def _can_remove_session_index(meta: Dict[str, Any]) -> bool:
+    state = str(meta.get("status") or "").upper()
+    return state in INACTIVE_STATUSES and (
+        state != SESSION_STATUS_TERMINATED or is_stop_confirmed(meta)
+    )
+
+
 async def _cleanup_and_count_active_sessions(user_id: int) -> int:
     client = await cache.get_client()
     user_sessions_key = f"{CACHE_KEY_USER_SESSIONS_PREFIX}:{user_id}:sessions"
@@ -74,14 +89,9 @@ async def _cleanup_and_count_active_sessions(user_id: int) -> int:
             except Exception:
                 pass
             continue
-        st = str(meta.get("status") or "").upper()
-        if st in INACTIVE_STATUSES:
-            try:
-                await client.srem(user_sessions_key, sid)
-            except Exception:
-                pass
-            continue
-        if st in ACTIVE_STATUSES:
+        if _can_remove_session_index(meta):
+            await _discard_session_member(client, user_sessions_key, sid)
+        elif str(meta.get("status") or "").upper() in ACTIVE_STATUSES:
             active += 1
     return active
 
@@ -132,6 +142,7 @@ class DebugSessionResponse(BaseModel):
     docker_container_id: Optional[str] = None
     error_code: Optional[str] = None
     error_detail: Optional[str] = None
+    stop_confirmed: bool = False
 
 
 @router.post("/sessions", response_model=DebugSessionCreateResponse)
@@ -224,21 +235,27 @@ async def get_session(session_id: str, request: Request, current_user: Dict[str,
 async def stop_session(session_id: str, current_user: Dict[str, Any] = Depends(require_user)):
     user_id = int(current_user.get("id") or 0)
     session_key = f"{CACHE_KEY_SESSION_PREFIX}:{session_id}"
-    meta = await cache.get(session_key)
-    if not meta:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="会话不存在或已过期")
-    if int(meta.get("owner_user_id") or 0) != user_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权限访问该会话")
-
     try:
-        celery_app.send_task("app.tasks.pythonlab.stop_session", args=[session_id])
-    except Exception:
-        pass
-
-    meta["status"] = SESSION_STATUS_TERMINATED
-    meta["last_heartbeat_at"] = now_iso()
-    await cache.set(session_key, meta, expire_seconds=60)
-    return {"ok": True}
+        client = await cache.get_client()
+        while True:
+            raw, meta = await read_session_snapshot(client, session_key)
+            if not meta:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="会话不存在或已过期")
+            if int(meta.get("owner_user_id") or 0) != user_id:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权限访问该会话")
+            if is_stop_confirmed(meta):
+                return {"ok": True, "status": SESSION_STATUS_TERMINATED}
+            if is_stop_in_progress(meta) or await dispatch_session_stop(
+                client, session_id, raw, meta, int(meta.get("ttl_seconds") or DEFAULT_SESSION_TTL),
+                now_iso(), celery_app.send_task,
+            ):
+                return {"ok": True, "status": SESSION_STATUS_TERMINATING}
+    except StopDispatchError as exc:
+        logger.exception("PythonLab 停止任务派发未确认")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"error_code": "STOP_DISPATCH_FAILED", "message": "停止任务派发未确认，请重试"},
+        ) from exc
 
 
 @router.get("/sessions")
@@ -265,17 +282,20 @@ async def list_sessions(request: Request, current_user: Dict[str, Any] = Depends
             continue
         if int(meta.get("owner_user_id") or 0) != user_id:
             continue
-        st = str(meta.get("status") or "").upper()
-        if st in INACTIVE_STATUSES:
-            try:
-                await client.srem(user_sessions_key, sid)
-            except Exception:
-                pass
+        if _can_remove_session_index(meta):
+            await _discard_session_member(client, user_sessions_key, sid)
             continue
         items.append(_rewrite_dap_host_for_client(meta, request))
 
     items.sort(key=lambda x: str(x.get("created_at") or ""), reverse=True)
     return {"items": items, "total": len(items)}
+
+
+async def _discard_session_member(client, key, session_id):
+    try:
+        await client.srem(key, session_id)
+    except Exception:
+        pass
 
 
 @router.post("/sessions/cleanup")
@@ -291,35 +311,34 @@ async def cleanup_sessions(current_user: Dict[str, Any] = Depends(require_user))
     except Exception:
         members = []
 
+    pending: List[str] = []
     stopped: List[str] = []
+    ok = True
     for sid in members:
-        meta = await cache.get(f"{CACHE_KEY_SESSION_PREFIX}:{sid}")
+        key = f"{CACHE_KEY_SESSION_PREFIX}:{sid}"
+        raw, meta = await read_session_snapshot(client, key)
         if not meta:
-            try:
-                await client.srem(user_sessions_key, sid)
-            except Exception:
-                pass
+            await _discard_session_member(client, user_sessions_key, sid)
             continue
         if int(meta.get("owner_user_id") or 0) != user_id:
             continue
-        st = str(meta.get("status") or "").upper()
-        if st in INACTIVE_STATUSES:
-            try:
-                await client.srem(user_sessions_key, sid)
-            except Exception:
-                pass
+        if _can_remove_session_index(meta):
+            if is_stop_confirmed(meta):
+                stopped.append(str(sid))
+            await _discard_session_member(client, user_sessions_key, sid)
             continue
         try:
-            celery_app.send_task("app.tasks.pythonlab.stop_session", args=[sid])
-        except Exception:
-            pass
-        meta["status"] = SESSION_STATUS_TERMINATING
-        meta["last_heartbeat_at"] = now_iso()
-        await cache.set(f"{CACHE_KEY_SESSION_PREFIX}:{sid}", meta, expire_seconds=int(meta.get("ttl_seconds") or DEFAULT_SESSION_TTL))
-        try:
-            await client.srem(user_sessions_key, sid)
-        except Exception:
-            pass
-        stopped.append(str(sid))
+            accepted = is_stop_in_progress(meta) or await dispatch_session_stop(
+                client, sid, raw, meta, int(meta.get("ttl_seconds") or DEFAULT_SESSION_TTL),
+                now_iso(), celery_app.send_task,
+            )
+        except StopDispatchError:
+            logger.exception("PythonLab 清理会话的停止任务派发未确认")
+            accepted = False
+        if not accepted:
+            ok = False
+            continue
+        pending.append(str(sid))
 
-    return {"ok": True, "stopped": stopped, "stopped_count": len(stopped)}
+    return {"ok": ok, "accepted": pending, "accepted_count": len(pending),
+            "stopped": stopped, "stopped_count": len(stopped)}

@@ -9,11 +9,13 @@ import { useNavigate } from "react-router-dom";
 
 const PersonalProgramsPage: React.FC = () => {
   const navigate = useNavigate();
-  const [xbkEnabled, setXbkEnabled] = useState(false);
+  const [xbkEnabled, setXbkEnabled] = useState<boolean | null>(null);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let mounted = true;
+    setLoading(true);
     void (async () => {
       try {
         const config = await xbkPublicConfigApi.get();
@@ -21,7 +23,7 @@ const PersonalProgramsPage: React.FC = () => {
         setXbkEnabled(Boolean(config.enabled));
       } catch {
         if (!mounted) return;
-        setXbkEnabled(false);
+        setXbkEnabled(null);
       } finally {
         if (!mounted) return;
         setLoading(false);
@@ -30,7 +32,7 @@ const PersonalProgramsPage: React.FC = () => {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [loadAttempt]);
 
   return (
     <div
@@ -63,12 +65,12 @@ const PersonalProgramsPage: React.FC = () => {
       ) : (
         <div className="flex min-h-60 flex-1 items-center justify-center border-y border-[var(--ws-color-border-secondary)]">
           <EmptyState
-            description="暂无公开的个人程序"
-            action={
-              <Button variant="outline" size="sm" onClick={() => navigate("/home")}>
-                返回首页
-              </Button>
-            }
+            description={xbkEnabled === null ? "无法读取 XBK 公开设置，入口状态未知。" : "暂无公开的个人程序"}
+            action={xbkEnabled === null ? (
+              <Button variant="outline" size="sm" onClick={() => setLoadAttempt((attempt) => attempt + 1)}>重试</Button>
+            ) : (
+              <Button variant="outline" size="sm" onClick={() => navigate("/home")}>返回首页</Button>
+            )}
           />
         </div>
       )}

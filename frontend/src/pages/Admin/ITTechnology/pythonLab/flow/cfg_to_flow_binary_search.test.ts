@@ -1,5 +1,7 @@
+import type { PythonLabCfgResponse } from "../services/pythonlabCodeApi";
 import { cfgToFlow } from "./cfg_to_flow";
 import { generatePythonFromFlow } from "./ir";
+import { normalizeFlowImport } from "./model";
 
 test("cfgToFlow does not insert orphan join or merge into end when a branch returns", () => {
   const cfg: any = {
@@ -108,4 +110,22 @@ test("cfgToFlow 支持教学分步标题并保持图码双向可还原", () => {
   expect(generated).toContain("total += i");
   expect(generated.includes("获取下一个元素")).toBe(false);
   expect(generated.includes("循环开始")).toBe(false);
+});
+
+test("CFG 限长标题导出再导入仍禁止回写", () => {
+  const title = `text = '${"a".repeat(504)}…`;
+  const cfg: PythonLabCfgResponse = {
+    sourcePath: "/workspace/main.py",
+    version: "test",
+    diagnostics: [],
+    nodes: [
+      { id: "module", kind: "Module", title: "main.py", range: { startLine: 1, startCol: 1, endLine: 1, endCol: 1 } },
+      { id: "assign", kind: "Assign", title, range: { startLine: 1, startCol: 1, endLine: 1, endCol: 610 } },
+    ],
+    edges: [{ id: "entry", from: "module", to: "assign", kind: "Entry" }],
+  };
+  const restored = normalizeFlowImport(JSON.parse(JSON.stringify(cfgToFlow(cfg))));
+  expect(restored?.nodes).toHaveLength(3);
+  expect(restored?.nodes.find((node) => node.id === "assign")).toMatchObject({ title, writebackBlocked: true });
+  expect(restored?.nodes.every((node) => node.writebackBlocked)).toBe(true);
 });

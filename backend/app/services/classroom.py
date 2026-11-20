@@ -71,7 +71,7 @@ async def create_activity(db: AsyncSession, data: dict, user_id: int) -> Classro
 
 
 async def update_activity(db: AsyncSession, activity_id: int, data: dict) -> ClassroomActivity:
-    activity = await _get_activity(db, activity_id)
+    activity = await _get_activity_for_update(db, activity_id)
     if activity.status != "draft":
         raise ValueError("只有草稿状态的活动可以编辑")
     for k, v in data.items():
@@ -114,10 +114,11 @@ async def bulk_delete_activities(db: AsyncSession, activity_ids: List[int]) -> d
 async def duplicate_activity(db: AsyncSession, activity_id: int, user_id: int) -> ClassroomActivity:
     """复制活动为新草稿"""
     src = await _get_activity(db, activity_id)
+    suffix = "（副本）"
     analysis_status = "pending" if src.activity_type == "fill_blank" else "not_applicable"
     new_act = ClassroomActivity(
         activity_type=src.activity_type,
-        title=src.title + "（副本）",
+        title=src.title[:200 - len(suffix)] + suffix,
         class_name=normalize_class_name(src.class_name),
         description=src.description,
         options=src.options,
@@ -219,8 +220,9 @@ async def start_activity(
     activity = await _get_activity_for_update(db, activity_id)
     if activity.status != "draft":
         raise ValueError("只能开始草稿状态的活动")
+    if not normalize_class_name(activity.class_name):
+        raise ValueError("请先编辑草稿并填写班级，再开始活动")
     events = deferred_events if deferred_events is not None else []
-    # 自动结束同教师其他 active 活动
     active_q = select(ClassroomActivity).where(
         ClassroomActivity.created_by == activity.created_by,
         ClassroomActivity.status == "active",
@@ -309,6 +311,8 @@ async def restart_activity(
     activity = await _get_activity_for_update(db, activity_id)
     if activity.status != "ended":
         raise ValueError("只能重新开始已结束的活动")
+    if not normalize_class_name(activity.class_name):
+        raise ValueError("活动缺少班级，请复制为新草稿，填写班级后再开始")
     events = deferred_events if deferred_events is not None else []
     active_q = select(ClassroomActivity).where(
         ClassroomActivity.created_by == activity.created_by,
@@ -323,11 +327,7 @@ async def restart_activity(
             commit=False,
             deferred_events=events,
         )
-    # 清除旧答题记录
-    await db.execute(
-        delete(ClassroomResponse).where(ClassroomResponse.activity_id == activity_id)
-    )
-    # 重置状态
+    await db.execute(delete(ClassroomResponse).where(ClassroomResponse.activity_id == activity_id))
     now = datetime.now(timezone.utc)
     activity.status = "active"
     activity.started_at = now

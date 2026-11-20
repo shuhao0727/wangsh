@@ -94,7 +94,7 @@ const DianmingManager: React.FC = () => {
   const start = (pageSafe - 1) * pageSize;
   const pageRows = displayedData.slice(start, start + pageSize);
   const editorTitle = editingRecord ? '编辑班级名单' : '新建/导入班级';
-  const editorDescription = editingRecord ? '修改后会覆盖原有名单，一行一个姓名。' : '直接粘贴学生名单，一行一个姓名。';
+  const editorDescription = editingRecord ? '保存后覆盖当前班级名单。年份和班级固定，一行一个姓名。' : '直接粘贴学生名单，一行一个姓名。';
 
   useEffect(() => {
     if (page > totalPages) {
@@ -157,8 +157,8 @@ const DianmingManager: React.FC = () => {
     try {
       if (editingRecord) {
         await dianmingApi.updateClassStudents({
-          year: values.year,
-          class_name: values.class_name,
+          year: editingRecord.year,
+          class_name: editingRecord.class_name,
           names_text: values.names_text,
         });
         showMessage.success('更新成功');
@@ -303,7 +303,7 @@ const DianmingManager: React.FC = () => {
                     <FormItem>
                       <FormLabel>年份/届别</FormLabel>
                       <FormControl>
-                        <Input placeholder="例如：2024级" disabled={formLoading || form.formState.isSubmitting} {...field} />
+                        <Input placeholder="例如：2024级" readOnly={editingRecord !== null} disabled={formLoading || form.formState.isSubmitting} {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -316,7 +316,7 @@ const DianmingManager: React.FC = () => {
                     <FormItem>
                       <FormLabel>班级名称</FormLabel>
                       <FormControl>
-                        <Input placeholder="例如：软件工程1班" disabled={formLoading || form.formState.isSubmitting} {...field} />
+                        <Input placeholder="例如：软件工程1班" readOnly={editingRecord !== null} disabled={formLoading || form.formState.isSubmitting} {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

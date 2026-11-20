@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import { showMessage } from "@/lib/toast";
-import { logger } from "@services/logger";
 
 import {
   createDebugCapabilityMapV1,
@@ -19,7 +18,6 @@ import {
 import type { DebugMap } from "../flow/debugMap";
 import { decidePythonLabLaunchPlan } from "../launchPlan";
 import { useDebug, type Breakpoint } from "../stores";
-import { pythonlabSessionApi } from "../services/pythonlabSessionApi";
 import type { DapCapabilities, RunnerState } from "./useDapRunner";
 import { canUseSharedArrayBuffer, type PyodideTerminalBridge } from "./usePyodideRunner";
 import { useUnifiedRunner } from "./useUnifiedRunner";
@@ -64,8 +62,10 @@ export function useDebugSession(params: {
   code: string;
   debugMap: DebugMap | null;
   pythonlabRuntime: string;
+  recoveryScope?: string;
+  hasPriorSession?: boolean;
 }): DebugSessionApi {
-  const { code, debugMap, pythonlabRuntime } = params;
+  const { code, debugMap, pythonlabRuntime, recoveryScope, hasPriorSession } = params;
   const {
     breakpoints,
     activeRunnerKind,
@@ -77,7 +77,7 @@ export function useDebugSession(params: {
     updateBreakpoints: updateBreakpointsRaw,
   } = useDebug();
 
-  const unified = useUnifiedRunner({ code, debugMap, activeKind: activeRunnerKind });
+  const unified = useUnifiedRunner({ code, debugMap, activeKind: activeRunnerKind, recoveryScope });
   const {
     dap: dapApi,
     py: pyApi,
@@ -104,6 +104,9 @@ export function useDebugSession(params: {
   const pyApiRef = useRef(pyApi);
   pyApiRef.current = pyApi;
   const runClickLockUntilRef = useRef(0);
+  const stoppingRemoteRef = useRef(false);
+  const launchScopeRef = useRef(recoveryScope);
+  launchScopeRef.current = recoveryScope;
 
   const updateBreakpoints = useCallback(
     (updater: BreakpointUpdater) => {
@@ -133,52 +136,71 @@ export function useDebugSession(params: {
     } as RunnerState);
   }, [activeState, breakpoints, enabledBreakpointCount, lastDebugFallback]);
 
+  const launchAfterRemoteStop = useCallback(async (launch: () => void) => {
+    if (stoppingRemoteRef.current) return;
+    const scope = launchScopeRef.current;
+    const dap = dapApiRef.current;
+    if (dap.state.sessionId || dap.state.status === "starting") {
+      stoppingRemoteRef.current = true;
+      try {
+        await dap.stopDebug();
+      } catch (reason) {
+        showMessage.error(reason instanceof Error ? reason.message : "停止未确认，请重试");
+        return;
+      } finally {
+        stoppingRemoteRef.current = false;
+      }
+    }
+    if (launchScopeRef.current === scope) launch();
+  }, []);
+
   const onRun = useCallback(
     (stdinLines: string[] = []) => {
+      if (hasPriorSession) {
+        showMessage.info("请先停止刷新前的调试会话");
+        return;
+      }
       const now = Date.now();
       if (now < runClickLockUntilRef.current) {
         showMessage.info("操作过快，请稍候再试");
         return;
       }
 
-      const isRestart =
-        runnerView.status === "starting" ||
-        runnerView.status === "running" ||
-        runnerView.status === "paused";
-      if (isRestart && runnerView.sessionId) {
-        logger.debug("Auto-restarting session...");
-        pythonlabSessionApi.stop(runnerView.sessionId).catch(() => {});
-      }
-
       runClickLockUntilRef.current = now + 800;
-      setLastLaunchMode("run");
-      setLastDebugFallback(null);
+      void launchAfterRemoteStop(() => {
+        setLastLaunchMode("run");
+        setLastDebugFallback(null);
 
-      const plan = decidePythonLabLaunchPlan({
-        enabledBreakpointCount: 0,
-        pythonlabRuntime,
-        sourceCode: code,
-        supportsPyodideStdin: canUseSharedArrayBuffer(),
-      });
-      setLastDebugFallback(plan.debugFallbackReason);
+        const plan = decidePythonLabLaunchPlan({
+          enabledBreakpointCount: 0,
+          pythonlabRuntime,
+          sourceCode: code,
+          supportsPyodideStdin: canUseSharedArrayBuffer(),
+        });
+        setLastDebugFallback(plan.debugFallbackReason);
 
-      switchPythonlabRunner({
-        runnerKind: plan.runnerKind,
-        setActiveRunnerKind,
-        dapRunner: dapApiRef.current,
-        pyRunner: pyApiRef.current,
-      });
-      launchPythonlabRunAction({
-        runnerKind: plan.runnerKind,
-        dapRunner: dapApiRef.current,
-        pyRunner: pyApiRef.current,
-        stdinLines,
+        switchPythonlabRunner({
+          runnerKind: plan.runnerKind,
+          setActiveRunnerKind,
+          dapRunner: dapApiRef.current,
+          pyRunner: pyApiRef.current,
+        });
+        launchPythonlabRunAction({
+          runnerKind: plan.runnerKind,
+          dapRunner: dapApiRef.current,
+          pyRunner: pyApiRef.current,
+          stdinLines,
+        });
       });
     },
-    [code, pythonlabRuntime, runnerView.sessionId, runnerView.status, setActiveRunnerKind, setLastDebugFallback, setLastLaunchMode]
+    [code, hasPriorSession, launchAfterRemoteStop, pythonlabRuntime, setActiveRunnerKind, setLastDebugFallback, setLastLaunchMode]
   );
 
   const onDebug = useCallback(() => {
+    if (hasPriorSession) {
+      showMessage.info("请先停止刷新前的调试会话");
+      return;
+    }
     const now = Date.now();
     if (now < runClickLockUntilRef.current) return;
     if (runnerView.status === "starting" || runnerView.status === "running") return;
@@ -189,42 +211,38 @@ export function useDebugSession(params: {
       return;
     }
 
-    // 用户级沙箱容器是复用的：残留的旧会话会让后端拒绝以新模式接管，报
-    // “运行环境模式不兼容，请先停止旧会话”。与 onRun 的自动重启保持一致，
-    // 这里先显式停止旧会话再启动调试，避免用户面对无法自救的提示。
-    const staleSessionId = runnerView.sessionId;
-    if (staleSessionId) {
-      pythonlabSessionApi.stop(staleSessionId).catch(() => {});
-    }
+    void launchAfterRemoteStop(() => {
+      const plan = decidePythonLabLaunchPlan({
+        enabledBreakpointCount,
+        pythonlabRuntime,
+      });
 
-    const plan = decidePythonLabLaunchPlan({
-      enabledBreakpointCount,
-      pythonlabRuntime,
-    });
+      setLastLaunchMode("debug");
+      if (plan.debugFallbackReason) {
+        showMessage.warning(plan.debugFallbackReason);
+      }
+      setLastDebugFallback(null);
 
-    setLastLaunchMode("debug");
-    if (plan.debugFallbackReason) {
-      showMessage.warning(plan.debugFallbackReason);
-    }
-    setLastDebugFallback(null);
-
-    switchPythonlabRunner({
-      runnerKind: plan.runnerKind,
-      setActiveRunnerKind,
-      dapRunner: dapApiRef.current,
-      pyRunner: pyApiRef.current,
-    });
-    launchPythonlabDebugAction({
-      runnerKind: plan.runnerKind,
-      dapRunner: dapApiRef.current,
-      breakpoints: breakpoints.map((bp) => ({ ...bp })),
-      onDapFailure: () => {
-        setLastLaunchMode("idle");
-      },
+      switchPythonlabRunner({
+        runnerKind: plan.runnerKind,
+        setActiveRunnerKind,
+        dapRunner: dapApiRef.current,
+        pyRunner: pyApiRef.current,
+      });
+      launchPythonlabDebugAction({
+        runnerKind: plan.runnerKind,
+        dapRunner: dapApiRef.current,
+        breakpoints: breakpoints.map((bp) => ({ ...bp })),
+        onDapFailure: () => {
+          setLastLaunchMode("idle");
+        },
+      });
     });
   }, [
     breakpoints,
     enabledBreakpointCount,
+    hasPriorSession,
+    launchAfterRemoteStop,
     pythonlabRuntime,
     runnerView.status,
     setActiveRunnerKind,
@@ -248,17 +266,21 @@ export function useDebugSession(params: {
     void stepOutUnifiedRun();
   }, [stepOutUnifiedRun]);
   const onReset = useCallback(() => {
-    // 只重置前端状态会让共享沙箱容器与用户会话集合残留：用户再次调试时会被
-    // “运行环境模式不兼容，请先停止旧会话”阻断，而 Reset 又停不掉后端会话。
-    // 因此这里必须显式通知后端停止当前会话（后端 stop 会回收容器并清理会话集合）。
-    const sessionId = runnerView.sessionId;
-    if (sessionId) {
-      pythonlabSessionApi.stop(sessionId).catch(() => {});
-    }
-    resetAllRunners();
-    setLastLaunchMode("idle");
-    setLastDebugFallback(null);
-  }, [resetAllRunners, runnerView.sessionId, setLastDebugFallback, setLastLaunchMode]);
+    if (stoppingRemoteRef.current) return;
+    stoppingRemoteRef.current = true;
+    void (async () => {
+      try {
+        await dapApiRef.current.stopDebug();
+        pyApiRef.current.reset();
+        setLastLaunchMode("idle");
+        setLastDebugFallback(null);
+      } catch (reason) {
+        showMessage.error(reason instanceof Error ? reason.message : "停止未确认，请重试");
+      } finally {
+        stoppingRemoteRef.current = false;
+      }
+    })();
+  }, [setLastDebugFallback, setLastLaunchMode]);
 
   const debugCapabilityBase = useMemo(() => createDebugCapabilityMapV1(debugMode), [debugMode]);
   const runnerPolicy = activeRunnerKind;

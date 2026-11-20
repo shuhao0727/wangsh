@@ -53,42 +53,31 @@ def _parse_question_json(raw_text: str, knowledge_point: str, question_type: str
 
 
 def _parse_grading_json(raw_text: str, max_score: int) -> dict:
-    """解析 AI 评分返回的 JSON"""
+    """解析 AI 评分，只有明确提供的分数才视为有效。"""
     import re
 
     text = raw_text.strip()
-
-    # 尝试提取 JSON 对象
     start = text.find("{")
     end = text.rfind("}")
-    if start != -1 and end != -1 and end > start:
-        text = text[start:end + 1]
+    candidates = [text[start:end + 1] if 0 <= start < end else text]
+    match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
+    if match:
+        candidates.append(match.group(1))
 
-    try:
-        data = json.loads(text)
-        score = int(data.get("score", 0))
-        score = max(0, min(score, max_score))
+    for candidate in candidates:
+        try:
+            data = json.loads(candidate)
+            score = data["score"]
+            is_correct = data.get("is_correct", False)
+            if type(score) not in (int, str) or not isinstance(is_correct, bool):
+                continue
+            score = int(score)
+        except (KeyError, ValueError, TypeError):
+            continue
         return {
-            "score": score,
-            "is_correct": bool(data.get("is_correct", False)),
+            "score": max(0, min(score, max_score)),
+            "is_correct": is_correct,
             "feedback": str(data.get("feedback", "")),
         }
-    except (json.JSONDecodeError, ValueError, TypeError):
-        pass
 
-    # 尝试从 markdown 代码块提取
-    match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", raw_text, re.DOTALL)
-    if match:
-        try:
-            data = json.loads(match.group(1))
-            score = max(0, min(int(data.get("score", 0)), max_score))
-            return {
-                "score": score,
-                "is_correct": bool(data.get("is_correct", False)),
-                "feedback": str(data.get("feedback", "")),
-            }
-        except (json.JSONDecodeError, ValueError, TypeError):
-            pass
-
-    logger.warning(f"无法解析 AI 评分 JSON: {raw_text[:200]}")
-    return {"score": 0, "is_correct": False, "feedback": "AI 评分解析失败"}
+    raise ValueError("AI 评分解析失败")

@@ -7,6 +7,8 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock
 from types import SimpleNamespace
 
+import pytest
+
 from app.services.assessment import session_service
 from app.services.assessment.session_service import (
     _parse_grading_json,
@@ -55,17 +57,17 @@ def test_parse_grading_json_negative_score():
     assert result["score"] == 0  # clamped to 0
 
 
-def test_parse_grading_json_invalid():
-    raw = "这不是 JSON"
-    result = _parse_grading_json(raw, max_score=10)
-    assert result["score"] == 0
-    assert result["is_correct"] is False
-    assert "解析失败" in result["feedback"]
+@pytest.mark.parametrize("raw", [
+    "这不是 JSON", "", "{}", "[]", '{"score": false}', '{"score": 0, "is_correct": "false"}',
+])
+def test_parse_grading_json_invalid(raw):
+    with pytest.raises(ValueError, match="评分解析失败"):
+        _parse_grading_json(raw, max_score=10)
 
 
-def test_parse_grading_json_empty():
-    result = _parse_grading_json("", max_score=10)
-    assert result["score"] == 0
+def test_parse_grading_json_explicit_zero():
+    result = _parse_grading_json('{"score": 0, "feedback": "未答对"}', max_score=10)
+    assert result == {"score": 0, "is_correct": False, "feedback": "未答对"}
 
 
 # ─── Mock 工具 ───

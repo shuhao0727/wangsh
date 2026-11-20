@@ -16,7 +16,6 @@ from app.models.assessment import (
     AssessmentSession,
     AssessmentAnswer,
     AssessmentBasicProfile,
-    AssessmentQuestion,
 )
 
 
@@ -54,17 +53,9 @@ async def generate_basic_profile(
     wrong_points: list[str] = []
 
     for a in answers:
-        q = a.question
-        if not q and a.question_id:
-            q_r = await db.execute(
-                select(AssessmentQuestion)
-                .where(AssessmentQuestion.id == a.question_id)
-            )
-            q = q_r.scalar_one_or_none()
-
-        kp = q.knowledge_point if q else None
+        kp = getattr(a, "knowledge_point", None)
         if not kp:
-            kp = "其他"
+            kp = (a.question.knowledge_point if a.question else None) or "其他"
 
         if kp not in kp_scores:
             kp_scores[kp] = {"earned": 0, "total": 0}

@@ -1,7 +1,7 @@
 // 课堂互动 - 管理端
 
 import { showMessage } from "@/lib/toast";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import { useAdminSSE } from "@hooks/useAdminSSE";
 import {
   type RowSelectionState,
@@ -39,6 +39,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   useClassroomList,
   useActiveAgents,
+  activityDetailUnavailable,
   useActivityDetail,
   useStartActivity,
   useEndActivity,
@@ -100,11 +101,11 @@ const AdminClassroomInteractionPage: React.FC = () => {
   const { data: activeAgents = [], isLoading: loadingAgents } = useActiveAgents();
 
   // ── TanStack Query: detail ───────────────────────────────
-  const {
-    data: detailActivity,
-    refetch: refetchDetail,
-  } = useActivityDetail(detailActivityId);
+  const detail = useActivityDetail(detailOpen ? detailActivityId : null);
+  const unavailable = activityDetailUnavailable(detail.error);
+  const detailActivity = unavailable ? undefined : detail.data;
   const detailStats = detailActivity?.stats ?? null;
+  const refetchDetail = detail.refetch;
 
   // SSE
   useAdminSSE("classroom_interaction_changed", () => {
@@ -118,15 +119,6 @@ const AdminClassroomInteractionPage: React.FC = () => {
   const bulkDeleteMutation = useBulkDeleteActivities();
   const duplicateMutation = useDuplicateActivity();
   const restartMutation = useRestartActivity();
-
-  // ── Detail polling ───────────────────────────────────────
-  useEffect(() => {
-    if (!detailOpen || !detailActivityId || detailActivity?.status !== "active") return;
-    const timer = setInterval(() => {
-      void refetchDetail();
-    }, 3000);
-    return () => clearInterval(timer);
-  }, [detailOpen, detailActivityId, detailActivity?.status, refetchDetail]);
 
   // ── Handlers ─────────────────────────────────────────────
   const handleRefreshList = useCallback(async () => {
@@ -469,7 +461,12 @@ const AdminClassroomInteractionPage: React.FC = () => {
         activity={detailActivity ?? null}
         stats={detailStats}
         onClose={closeDetail}
-        extra={detailExtra}
+        extra={detail.isError ? (
+          <div className="flex flex-wrap items-center gap-2 text-sm text-text-secondary">
+            <p role="alert">{unavailable ? "活动已不可用" : "活动详情暂时无法读取"}。</p>
+            <Button variant="outline" size="sm" disabled={detail.isFetching} onClick={() => void refetchDetail()}>重试</Button>
+          </div>
+        ) : detailExtra}
       />
 
       <ConfirmDialog

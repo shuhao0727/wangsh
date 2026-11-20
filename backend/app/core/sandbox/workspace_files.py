@@ -58,11 +58,14 @@ def prepare_workspace_files(ws_path: Path, code: str, meta: Dict[str, Any]) -> N
         raise RuntimeError("workspace path is a symlink; refusing to write")
     ws_path.mkdir(parents=True, exist_ok=True)
 
-    _write_regular_file(ws_path, "main.py", code, 0o644)
-    _write_regular_file(ws_path, "meta.json", json.dumps(meta, ensure_ascii=False), 0o644)
-    _write_regular_file(ws_path, ".pythonlab_plain_run.sh", PLAIN_RUN_SCRIPT, 0o755)
-    _write_regular_file(ws_path, "sitecustomize.py", get_sitecustomize_content(), 0o644)
+    # 学生容器与 worker 同 UID，可以在自己的 workspace 里 chmod 掉写权限。
+    # 先恢复目录可写，否则 os.replace 会失败，而这不是拒绝写入的理由。
     try:
         os.chmod(ws_path, 0o755)
     except OSError:
         pass
+
+    _write_regular_file(ws_path, "main.py", code, 0o644)
+    _write_regular_file(ws_path, "meta.json", json.dumps(meta, ensure_ascii=False), 0o644)
+    _write_regular_file(ws_path, ".pythonlab_plain_run.sh", PLAIN_RUN_SCRIPT, 0o755)
+    _write_regular_file(ws_path, "sitecustomize.py", get_sitecustomize_content(), 0o644)

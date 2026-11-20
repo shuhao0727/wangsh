@@ -123,7 +123,7 @@ const BasicLayout: React.FC = () => {
             <button
               type="button"
               className="logo appearance-none border-0 bg-transparent p-0 text-left"
-              onClick={() => void navigate("/")}
+              onClick={() => void navigate("/home")}
               aria-label="返回首页"
             >
               <div className="logo-icon">W</div>

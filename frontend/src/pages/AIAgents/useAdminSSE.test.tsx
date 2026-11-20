@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { useAdminSSE } from "@hooks/useAdminSSE";
+
+const identity = vi.hoisted(() => ({ role: "admin" }));
+vi.mock("@hooks/useAuth", () => ({
+  default: () => ({ isAuthenticated: true, user: { role_code: identity.role } }),
+}));
 
 class MockEventSource {
   static instances: MockEventSource[] = [];
@@ -18,6 +23,7 @@ class MockEventSource {
 
 describe("useAdminSSE", () => {
   beforeEach(() => {
+    identity.role = "admin";
     MockEventSource.instances = [];
     vi.stubGlobal("EventSource", MockEventSource);
   });
@@ -35,6 +41,27 @@ describe("useAdminSSE", () => {
     renderHook(() => useAdminSSE("agent_changed", () => undefined, true));
     await waitFor(() => expect(MockEventSource.instances).toHaveLength(1));
     expect(MockEventSource.instances[0].url).toContain("/admin/stream");
+  });
+
+  it("skips the global stream for a teacher and closes it on role downgrade", async () => {
+    vi.useFakeTimers();
+    try {
+      identity.role = "teacher";
+      const { rerender } = renderHook(() => useAdminSSE("agent_changed", () => undefined));
+      expect(MockEventSource.instances).toHaveLength(0);
+      identity.role = "admin";
+      rerender();
+      expect(MockEventSource.instances).toHaveLength(1);
+      const stream = MockEventSource.instances[0];
+      act(() => stream.onerror?.());
+      identity.role = "teacher";
+      rerender();
+      await act(async () => { await vi.advanceTimersByTimeAsync(60000); });
+      expect(stream.close).toHaveBeenCalledOnce();
+      expect(MockEventSource.instances).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("closes the stream when disabled after being enabled", async () => {

@@ -12,6 +12,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
+import { formatBlankAnswers } from "@/lib/classroomAnswers";
 import type { Activity, ActivityStats, OptionItem } from "@services/classroom";
 
 const ANALYSIS_STATUS_MAP: Record<string, { variant: React.ComponentProps<typeof Badge>["variant"]; text: string }> = {
@@ -21,30 +22,6 @@ const ANALYSIS_STATUS_MAP: Record<string, { variant: React.ComponentProps<typeof
   failed:         { variant: "danger", text: "分析失败" },
   skipped:        { variant: "warning", text: "已跳过" },
   not_applicable: { variant: "neutral", text: "不适用" },
-};
-
-const parseBlankAnswers = (raw?: string | null): string[] => {
-  const text = String(raw || "").trim();
-  if (!text) return [];
-  if (!text.startsWith("[") && !text.startsWith("{")) return [text];
-  try {
-    const parsed = JSON.parse(text);
-    if (Array.isArray(parsed)) return parsed.map((v) => String(v ?? "").trim());
-    if (parsed && typeof parsed === "object") {
-      return Object.keys(parsed)
-        .sort((a, b) => Number(a) - Number(b))
-        .map((k) => String((parsed as Record<string, unknown>)[k] ?? "").trim());
-    }
-  } catch {
-    return [text];
-  }
-  return [text];
-};
-
-const formatCorrectAnswer = (raw?: string | null): string => {
-  const blanks = parseBlankAnswers(raw);
-  if (blanks.length <= 1) return String(raw || "");
-  return blanks.map((v, i) => `(${i + 1}) ${v}`).join("；");
 };
 
 const SimpleMarkdown: React.FC<{ text: string }> = ({ text }) => {
@@ -186,7 +163,7 @@ export const ActivityDetailContent: React.FC<{ activity: Activity; stats: Activi
       {activity.correct_answer && (
         <div className="mb-3 rounded-md bg-[var(--ws-color-success-soft)] px-2.5 py-1.5 text-sm">
           <span className="font-medium text-[var(--ws-color-success)]">参考答案：</span>
-          {formatCorrectAnswer(activity.correct_answer)}
+          {formatBlankAnswers(activity.correct_answer)}
         </div>
       )}
 

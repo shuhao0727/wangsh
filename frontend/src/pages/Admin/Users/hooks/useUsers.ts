@@ -86,8 +86,11 @@ export const useUsers = (initialParams: SearchParams = {}) => {
 
   const handleSearch = useCallback((value: string) => {
     setSearchKeyword(value);
-    setCurrentPage(1);
-  }, []);
+    if (value.trim() !== searchKeyword.trim() || currentPage !== 1) {
+      setSelectedRowKeysState([]);
+      setCurrentPage(1);
+    }
+  }, [searchKeyword, currentPage]);
 
   const handleReset = useCallback(() => {
     setSearchKeyword("");
@@ -177,8 +180,8 @@ export const useUsers = (initialParams: SearchParams = {}) => {
     setDetailVisible(true);
   }, []);
 
-  const handleBatchDelete = useCallback(async () => {
-    if (selectedRowKeys.length === 0) {
+  const handleBatchDelete = useCallback(async (userIds: number[]) => {
+    if (userIds.length === 0) {
       showMessage.warning("请选择要删除的用户");
       return;
     }
@@ -188,16 +191,15 @@ export const useUsers = (initialParams: SearchParams = {}) => {
     if (batchDeleteMutation.isPending) {
       return;
     }
-    const count = selectedRowKeys.length;
     try {
-      await batchDeleteMutation.mutateAsync(selectedRowKeys);
+      await batchDeleteMutation.mutateAsync(userIds);
       setSelectedRowKeysState([]);
-      showMessage.success(`成功删除 ${count} 个用户`);
+      showMessage.success(`成功删除 ${userIds.length} 个用户`);
     } catch (error) {
       logger.error("批量删除失败:", error);
       showMessage.error("批量删除失败");
     }
-  }, [selectedRowKeys, batchDeleteMutation]);
+  }, [batchDeleteMutation]);
 
   const handleDownloadTemplate = useCallback(
     async (format: "xlsx" | "csv" = "xlsx") => {
@@ -226,22 +228,14 @@ export const useUsers = (initialParams: SearchParams = {}) => {
     async (file: File) => {
       try {
         const result = await importMutation.mutateAsync(file);
-        if (result.success) {
-          const successMessage =
-            result.message ||
-            `导入完成。成功导入: ${result.imported_count}, 更新: ${result.updated_count}, 失败: ${result.error_count}`;
-          if (result.error_count > 0) {
-            showMessage.warning(successMessage);
-            if (result.errors.length > 0) {
-              logger.warn("导入错误详情:", result.errors);
-            }
-          } else {
-            showMessage.success(successMessage);
-          }
+        if (result.error_count > 0 && result.imported_count + result.updated_count > 0) {
+          showMessage.warning("部分用户未导入，请查看行错误");
+        } else if (result.success) {
+          showMessage.success(result.message || `新增 ${result.imported_count}，更新 ${result.updated_count}`);
         } else {
           showMessage.error(result.message || "文件上传失败");
         }
-        return false;
+        return result;
       } catch (error: any) {
         logger.error("文件上传失败:", error);
         if (error.response?.data?.detail) {
@@ -251,7 +245,7 @@ export const useUsers = (initialParams: SearchParams = {}) => {
         } else {
           showMessage.error("文件上传失败");
         }
-        return false;
+        return null;
       }
     },
     [importMutation],
@@ -260,11 +254,13 @@ export const useUsers = (initialParams: SearchParams = {}) => {
   const handleRoleFilter = useCallback((roleCode: string | undefined) => {
     setRoleFilter(roleCode);
     setCurrentPage(1);
+    setSelectedRowKeysState([]);
   }, []);
 
   const handleStatusFilter = useCallback((isActive: boolean | undefined) => {
     setStatusFilter(isActive);
     setCurrentPage(1);
+    setSelectedRowKeysState([]);
   }, []);
 
   const setSelectedRowKeys = useCallback((keys: number[]) => {

@@ -12,7 +12,8 @@ GDPR 合规接口测试
 import pytest
 from fastapi import FastAPI, HTTPException, Request
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import select
+from sqlalchemy import event, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
@@ -149,6 +150,30 @@ async def test_export_user_data(client: AsyncClient, auth_headers: dict, test_us
     )
     actions = set(audit.scalars().all())
     assert {"EXPORT_DATA_REQUESTED", "EXPORT_DATA_COMPLETED"} <= actions
+
+
+@pytest.mark.asyncio
+async def test_export_records_failed_audit_after_read_transaction_fails(engine, test_user, db):
+    factory = async_sessionmaker(engine, expire_on_commit=False, autoflush=False)
+    async with factory() as export_db:
+        @event.listens_for(export_db.sync_session, "do_orm_execute")
+        def fail_discussion_read(state):
+            if state.bind_mapper is GroupDiscussionMessage.__mapper__:
+                # SQLite 的查询报错不会中止事务，用真实 flush 错误模拟提交必须先回滚。
+                state.session.add(AuditLog(action="SYNTHETIC_READ_FAILURE"))
+                state.session.flush()
+
+        with pytest.raises(HTTPException) as exc:
+            await privacy_api.export_my_data(current_user=test_user, db=export_db)
+        assert (exc.value.status_code, exc.value.detail) == (500, "服务器内部错误")
+        assert isinstance(exc.value.__cause__, IntegrityError)
+
+    audits = (await db.scalars(select(AuditLog).order_by(AuditLog.id))).all()
+    assert [row.action for row in audits] == ["EXPORT_DATA_REQUESTED", "EXPORT_DATA_FAILED"]
+    requested, failed = audits
+    assert requested.resource_id and failed.resource_id == requested.resource_id
+    assert requested.user_id == failed.user_id == test_user["id"]
+    assert requested.resource_type == failed.resource_type == "privacy_operation"
 
 
 @pytest.mark.asyncio

@@ -168,3 +168,18 @@ test("--include-prod is wired into argument parsing and the guard", () => {
   assert.match(source, /ALLOW_CROSS_DIR_STOP:-false/);
   assert.match(source, /--include-prod 仅与 --all 一起生效/);
 });
+
+test("banner version tracks the header version", () => {
+  const header = source.match(/^# 版本：(\d+\.\d+\.\d+)$/m);
+  const constant = source.match(/^SCRIPT_VERSION='(\d+\.\d+\.\d+)'$/m);
+  assert.ok(header, "stop-dev.sh must declare its version in the header comment");
+  assert.ok(constant, "stop-dev.sh must declare SCRIPT_VERSION for the banner and --help");
+  assert.equal(constant[1], header[1], "banner version must match the header version");
+  assert.match(source, /停止器 v\$\{SCRIPT_VERSION\}/);
+  assert.doesNotMatch(source, /停止器 v[0-9]/);
+});
+
+test("--help documents the cross-directory guard instead of promising production teardown", () => {
+  assert.doesNotMatch(source, /含本机生产 Compose 栈/);
+  assert.match(source, /跨目录创建的同项目容器默认拒绝/);
+});

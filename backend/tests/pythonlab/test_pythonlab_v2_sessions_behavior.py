@@ -1,6 +1,8 @@
 import asyncio
+import json
 from copy import deepcopy
 
+import pytest
 from fastapi import HTTPException
 from starlette.requests import Request
 
@@ -8,9 +10,21 @@ import app.api.pythonlab.sessions as sessions_api
 
 
 class FakeRedisClient:
-    def __init__(self):
+    def __init__(self, cache):
+        self.cache = cache
         self.sets: dict[str, set[str]] = {}
         self.expiries: dict[str, int] = {}
+
+    async def get(self, key):
+        value = self.cache.store.get(key)
+        return json.dumps(value, ensure_ascii=False) if value is not None else None
+
+    async def eval(self, script, numkeys, key, expected, replacement, ttl):
+        assert numkeys == 1 and "redis.call('GET', KEYS[1]) ~= ARGV[1]" in script
+        if await self.get(key) != expected:
+            return 0
+        await self.cache.set(key, json.loads(replacement), expire_seconds=ttl)
+        return 1
 
     async def smembers(self, key: str):
         return set(self.sets.get(key, set()))
@@ -30,7 +44,7 @@ class FakeCache:
     def __init__(self):
         self.store: dict[str, object] = {}
         self.expiries: dict[str, int] = {}
-        self.client = FakeRedisClient()
+        self.client = FakeRedisClient(self)
 
     async def set(self, key: str, value, expire_seconds: int | None = None):
         self.store[key] = deepcopy(value)
@@ -197,6 +211,15 @@ def test_get_session_rewrites_host_docker_internal_for_client(monkeypatch):
     assert result.dap_host == "demo.example.com"
     assert result.dap_port == 5678
 
+    for updates, expected in [
+        ({"status": "TERMINATING"}, ("TERMINATING", None, False)),
+        ({"error_code": "SANDBOX_STOP_FAILED"}, ("TERMINATING", "SANDBOX_STOP_FAILED", False)),
+        ({"status": "TERMINATED", "error_code": None, "stop_confirmed": True}, ("TERMINATED", None, True)),
+    ]:
+        fake_cache.store[session_key].update(updates)
+        result = asyncio.run(sessions_api.get_session(session_id, request, current_user={"id": 9}))
+        assert (result.status, result.error_code, result.stop_confirmed) == expected
+
 
 def test_session_ws_path_defaults_to_v2_when_prefix_missing():
     request = _make_request("/sessions", method="POST")
@@ -236,6 +259,7 @@ def test_list_sessions_keeps_owned_active_items_sorted(monkeypatch):
         **fake_cache.store[f"{sessions_api.CACHE_KEY_SESSION_PREFIX}:dbg_old"],
         "session_id": "dbg_inactive",
         "status": sessions_api.SESSION_STATUS_TERMINATED,
+        "stop_confirmed": True,
     }
     fake_cache.store[f"{sessions_api.CACHE_KEY_SESSION_PREFIX}:dbg_other_owner"] = {
         **fake_cache.store[f"{sessions_api.CACHE_KEY_SESSION_PREFIX}:dbg_old"],
@@ -252,7 +276,7 @@ def test_list_sessions_keeps_owned_active_items_sorted(monkeypatch):
     assert "dbg_inactive" not in fake_cache.client.sets[user_sessions_key]
 
 
-def test_stop_session_marks_terminated_and_dispatches_task(monkeypatch):
+def test_stop_session_reports_terminating_and_deduplicates_dispatch(monkeypatch):
     fake_cache, fake_celery = _patch_session_env(monkeypatch)
     session_id = "dbg_stop"
     session_key = f"{sessions_api.CACHE_KEY_SESSION_PREFIX}:{session_id}"
@@ -260,18 +284,108 @@ def test_stop_session_marks_terminated_and_dispatches_task(monkeypatch):
         "session_id": session_id,
         "owner_user_id": 3,
         "status": "RUNNING",
+        "ttl_seconds": 300,
         "last_heartbeat_at": "2026-04-06T23:59:59+00:00",
     }
 
-    result = asyncio.run(sessions_api.stop_session(session_id, current_user={"id": 3}))
+    for _ in range(2):
+        result = asyncio.run(sessions_api.stop_session(session_id, current_user={"id": 3}))
+        assert result == {"ok": True, "status": "TERMINATING"}
 
-    assert result == {"ok": True}
-    updated_meta = fake_cache.store[session_key]
-    assert isinstance(updated_meta, dict)
-    assert updated_meta["status"] == sessions_api.SESSION_STATUS_TERMINATED
-    assert updated_meta["last_heartbeat_at"] == "2026-04-07T00:00:00+00:00"
-    assert fake_cache.expiries[session_key] == 60
+    assert fake_cache.store[session_key]["status"] == "TERMINATING"
+    assert fake_cache.expiries[session_key] == 300
     assert fake_celery.calls == [("app.tasks.pythonlab.stop_session", [session_id])]
+
+
+def test_stop_session_publish_failure_leaves_session_retryable(monkeypatch):
+    fake_cache, fake_celery = _patch_session_env(monkeypatch)
+    session_key = f"{sessions_api.CACHE_KEY_SESSION_PREFIX}:dbg_stop"
+    previous = {"session_id": "dbg_stop", "owner_user_id": 3, "status": "RUNNING", "ttl_seconds": 300}
+    fake_cache.store[session_key] = deepcopy(previous)
+
+    def broker_unavailable(*args, **kwargs):
+        raise ConnectionError("offline broker")
+
+    with monkeypatch.context() as unavailable:
+        unavailable.setattr(fake_celery, "send_task", broker_unavailable)
+        with pytest.raises(HTTPException) as exc:
+            asyncio.run(sessions_api.stop_session("dbg_stop", current_user={"id": 3}))
+        assert exc.value.status_code == 503
+        assert exc.value.detail["error_code"] == "STOP_DISPATCH_FAILED"
+        assert fake_cache.store[session_key] == previous
+
+    result = asyncio.run(sessions_api.stop_session("dbg_stop", current_user={"id": 3}))
+    assert result == {"ok": True, "status": "TERMINATING"}
+    assert fake_celery.calls == [("app.tasks.pythonlab.stop_session", ["dbg_stop"])]
+
+
+def test_stop_session_reports_only_worker_confirmed_terminal_state(monkeypatch):
+    fake_cache, fake_celery = _patch_session_env(monkeypatch)
+    session_key = f"{sessions_api.CACHE_KEY_SESSION_PREFIX}:dbg_stop"
+    fake_cache.store[session_key] = {
+        "session_id": "dbg_stop", "owner_user_id": 3, "status": "TERMINATED", "stop_confirmed": True,
+    }
+
+    result = asyncio.run(sessions_api.stop_session("dbg_stop", current_user={"id": 3}))
+
+    assert result == {"ok": True, "status": "TERMINATED"}
+    assert fake_celery.calls == []
+
+
+def test_stop_session_does_not_trust_legacy_terminal_marker(monkeypatch):
+    fake_cache, fake_celery = _patch_session_env(monkeypatch)
+    session_key = f"{sessions_api.CACHE_KEY_SESSION_PREFIX}:dbg_stop"
+    fake_cache.store[session_key] = {"session_id": "dbg_stop", "owner_user_id": 3, "status": "TERMINATED"}
+
+    result = asyncio.run(sessions_api.stop_session("dbg_stop", current_user={"id": 3}))
+
+    assert result == {"ok": True, "status": "TERMINATING"}
+    assert fake_celery.calls == [("app.tasks.pythonlab.stop_session", ["dbg_stop"])]
+
+
+@pytest.mark.parametrize(("owner_id", "expected_status"), [(9, 403), (None, 404)])
+def test_stop_session_cannot_dispatch_without_owned_meta(monkeypatch, owner_id, expected_status):
+    fake_cache, fake_celery = _patch_session_env(monkeypatch)
+    if owner_id is not None:
+        fake_cache.store[f"{sessions_api.CACHE_KEY_SESSION_PREFIX}:dbg_stop"] = {
+            "session_id": "dbg_stop", "owner_user_id": owner_id, "status": "RUNNING",
+        }
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(sessions_api.stop_session("dbg_stop", current_user={"id": 3}))
+
+    assert exc.value.status_code == expected_status
+    assert fake_celery.calls == []
+
+
+@pytest.mark.parametrize("entry", ["count", "list", "cleanup"])
+def test_unconfirmed_termination_keeps_session_index(monkeypatch, entry):
+    fake_cache, fake_celery = _patch_session_env(monkeypatch)
+    session_id = "dbg_unconfirmed"
+    user = {"id": 11}
+    sessions_key = f"{sessions_api.CACHE_KEY_USER_SESSIONS_PREFIX}:11:sessions"
+    session_key = f"{sessions_api.CACHE_KEY_SESSION_PREFIX}:{session_id}"
+    fake_cache.client.sets[sessions_key] = {session_id}
+    fake_cache.store[session_key] = {
+        "session_id": session_id, "owner_user_id": 11, "status": "TERMINATED",
+    }
+
+    async def run():
+        if entry == "count":
+            assert await sessions_api._cleanup_and_count_active_sessions(11) == 0
+        elif entry == "list":
+            request = _make_request("/api/v2/pythonlab/sessions", method="GET")
+            listed = await sessions_api.list_sessions(request, current_user=user)
+            assert [item["session_id"] for item in listed["items"]] == [session_id]
+        else:
+            cleaned = await sessions_api.cleanup_sessions(current_user=user)
+            assert cleaned["accepted"] == [session_id]
+            assert cleaned["stopped"] == []
+            assert fake_cache.store[session_key]["status"] == "TERMINATING"
+            assert fake_celery.calls == [("app.tasks.pythonlab.stop_session", [session_id])]
+        assert session_id in fake_cache.client.sets[sessions_key]
+
+    asyncio.run(run())
 
 
 def test_cleanup_sessions_only_stops_owned_active_sessions(monkeypatch):
@@ -290,6 +404,7 @@ def test_cleanup_sessions_only_stops_owned_active_sessions(monkeypatch):
         "session_id": "dbg_inactive",
         "owner_user_id": user_id,
         "status": sessions_api.SESSION_STATUS_TERMINATED,
+        "stop_confirmed": True,
         "ttl_seconds": 1800,
         "last_heartbeat_at": "before",
     }
@@ -303,12 +418,18 @@ def test_cleanup_sessions_only_stops_owned_active_sessions(monkeypatch):
 
     result = asyncio.run(sessions_api.cleanup_sessions(current_user={"id": user_id}))
 
-    assert result == {"ok": True, "stopped": ["dbg_active"], "stopped_count": 1}
+    assert result == {
+        "ok": True, "accepted": ["dbg_active"], "accepted_count": 1,
+        "stopped": ["dbg_inactive"], "stopped_count": 1,
+    }
     active_meta = fake_cache.store[f"{sessions_api.CACHE_KEY_SESSION_PREFIX}:dbg_active"]
     assert isinstance(active_meta, dict)
     assert active_meta["status"] == sessions_api.SESSION_STATUS_TERMINATING
     assert active_meta["last_heartbeat_at"] == "2026-04-07T00:00:00+00:00"
-    assert "dbg_active" not in fake_cache.client.sets[user_sessions_key]
+    assert "dbg_active" in fake_cache.client.sets[user_sessions_key]
+    active_meta["error_code"] = "SANDBOX_STOP_FAILED"
+    listed = asyncio.run(sessions_api.list_sessions(_make_request("/api/v2/pythonlab/sessions"), current_user={"id": user_id}))
+    assert [(item["session_id"], item["error_code"]) for item in listed["items"]] == [("dbg_active", "SANDBOX_STOP_FAILED")]
     assert "dbg_inactive" not in fake_cache.client.sets[user_sessions_key]
     assert "dbg_missing" not in fake_cache.client.sets[user_sessions_key]
     assert "dbg_other_owner" in fake_cache.client.sets[user_sessions_key]

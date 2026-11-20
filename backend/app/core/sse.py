@@ -26,6 +26,7 @@ def sse_response(
     channel: str,
     *,
     sub_id: Optional[str] = None,
+    allowed_roles: tuple[str, ...] | None = None,
     subscribe_fn: Optional[Callable[[str, str], Awaitable[Any]]] = None,
     unsubscribe_fn: Optional[Callable[[str, str], Awaitable[None]]] = None,
 ) -> StreamingResponse:
@@ -56,7 +57,7 @@ def sse_response(
             await unsub(channel, stream_id)
 
     return StreamingResponse(
-        session_checked_stream(gen(), request),
+        session_checked_stream(gen(), request, allowed_roles=allowed_roles),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache, no-transform",

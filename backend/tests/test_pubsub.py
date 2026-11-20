@@ -16,7 +16,10 @@ SSE pub/sub 模块测试
 
 import asyncio
 import time
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 
 def _reset():
@@ -24,7 +27,6 @@ def _reset():
     from app.core import pubsub
     pubsub._local_subs.clear()
     pubsub._listener_tasks.clear()
-    pubsub._redis_pubsubs.clear()
     pubsub._listener_ready.clear()
     pubsub._channel_locks.clear()
     pubsub._local_only_channels.clear()
@@ -464,6 +466,29 @@ def test_unsubscribe_failure_still_closes_pubsub():
     _reset()
 
 
+def test_cancelled_redis_probe_removes_local_subscription(monkeypatch):
+    _reset()
+    from app.core import pubsub
+
+    async def run():
+        probe_started = asyncio.Event()
+
+        async def wait_for_redis():
+            probe_started.set()
+            await asyncio.Event().wait()
+
+        monkeypatch.setattr(pubsub, "_is_redis_available", wait_for_redis)
+        task = asyncio.create_task(pubsub.subscribe("probe_ch", "sub1"))
+        await asyncio.wait_for(probe_started.wait(), timeout=1)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert "probe_ch" not in pubsub._local_subs
+        assert "probe_ch" not in pubsub._listener_tasks
+
+    asyncio.run(run())
+
+
 def test_cancelled_subscribe_removes_local_subscription(monkeypatch):
     _reset()
     from app.core import pubsub
@@ -507,4 +532,53 @@ def test_cancelled_subscribe_removes_local_subscription(monkeypatch):
     has_subs, has_listener = asyncio.run(run())
     assert has_subs is False
     assert has_listener is False
+    _reset()
+
+
+def test_reconnect_during_listener_cleanup_keeps_the_new_subscription():
+    _reset()
+    from app.core import pubsub
+
+    async def run():
+        pubsub._redis_available = True
+        closing = asyncio.Event()
+        allow_close = asyncio.Event()
+        incoming = asyncio.Queue()
+        old = MagicMock()
+        new = MagicMock()
+
+        async def hold_close(_channel):
+            closing.set()
+            await allow_close.wait()
+
+        async def wait_for_message(**_kwargs):
+            return await incoming.get()
+
+        for listener in (old, new):
+            listener.subscribe = AsyncMock()
+            listener.get_message = wait_for_message
+            listener.aclose = AsyncMock()
+        old.unsubscribe = hold_close
+        new.unsubscribe = AsyncMock()
+        redis = MagicMock()
+        redis.pubsub.side_effect = [old, new]
+        cache = SimpleNamespace(cache=SimpleNamespace(get_client=AsyncMock(return_value=redis)))
+
+        with patch.dict("sys.modules", {"app.utils.cache": cache}):
+            await pubsub.subscribe("same_ch", "old")
+            stopping = asyncio.create_task(pubsub.unsubscribe("same_ch", "old"))
+            await asyncio.wait_for(closing.wait(), timeout=1)
+            queue = await pubsub.subscribe("same_ch", "new")
+            new_lock = pubsub._channel_locks["same_ch"]
+            allow_close.set()
+            await stopping
+            try:
+                new.aclose.assert_not_awaited()
+                assert pubsub._channel_locks["same_ch"] is new_lock
+                incoming.put_nowait({"type": "message", "data": '{"type":"next"}'})
+                assert await asyncio.wait_for(queue.get(), timeout=1) == {"type": "next"}
+            finally:
+                await pubsub.unsubscribe("same_ch", "new")
+
+    asyncio.run(run())
     _reset()

@@ -34,6 +34,10 @@ const stripDescriptiveSuffixOnce = (title: string) => {
   return raw;
 };
 
+export function isTruncatedFlowTitle(title?: string): boolean {
+  return title?.trimEnd().endsWith("…") ?? false;
+}
+
 export function normalizeTitleForMapping(title: string) {
   const basic = normalizeBasic(title);
   const strippedPrefix = stripTeachingPrefixOnce(basic);

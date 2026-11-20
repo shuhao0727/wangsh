@@ -1,3 +1,4 @@
+import { parseBlankAnswers } from "@/lib/classroomAnswers";
 import { showMessage } from "@/lib/toast";
 import React, { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -53,6 +54,7 @@ const STEP_TITLES = ["基本信息", "题目内容", "活动设置", "AI分析"]
 type FormValues = {
   activity_type: "vote" | "fill_blank";
   title: string;
+  class_name: string;
   options: OptionItem[];
   blank_answers: string[];
   correct_answer: string;
@@ -65,6 +67,8 @@ type FormValues = {
 const activityFormSchema = z.object({
   activity_type: z.enum(["vote", "fill_blank"]),
   title: z.string().max(200, "活动标题不能超过 200 个字符"),
+  class_name: z.string().trim().min(1, "请输入班级名称")
+    .refine((value) => Array.from(value).length <= 50, "班级名称不能超过 50 个字符"),
   options: z.array(
     z.object({
       key: z.string(),
@@ -82,6 +86,7 @@ const activityFormSchema = z.object({
 const defaultFormValues = (): FormValues => ({
   activity_type: "vote",
   title: "",
+  class_name: "",
   options: [
     { key: "A", text: "" },
     { key: "B", text: "" },
@@ -99,6 +104,7 @@ const toEditFormValues = (record: Activity): FormValues => {
   return {
     activity_type: type,
     title: record.title || "",
+    class_name: record.class_name ?? "",
     options:
       type === "vote" && Array.isArray(record.options) && record.options.length > 0
         ? record.options
@@ -114,27 +120,11 @@ const toEditFormValues = (record: Activity): FormValues => {
       : [""],
     correct_answer: type === "vote" ? String(record.correct_answer || "") : "",
     allow_multiple: Boolean(record.allow_multiple),
-    time_limit: Number(record.time_limit || 60),
+    time_limit: record.time_limit ?? 60,
     analysis_agent_id: record.analysis_agent_id ? String(record.analysis_agent_id) : "",
     analysis_prompt: record.analysis_prompt || "",
   };
 };
-
-function parseBlankAnswers(raw?: string | null): string[] {
-  const text = String(raw || "").trim();
-  if (!text) return [];
-  if (!text.startsWith("[") && !text.startsWith("{")) return [text];
-  try {
-    const parsed = JSON.parse(text);
-    if (Array.isArray(parsed)) return parsed.map((v: any) => String(v ?? "").trim());
-    if (parsed && typeof parsed === "object") {
-      return Object.keys(parsed)
-        .sort((a, b) => Number(a) - Number(b))
-        .map((k) => String((parsed as any)[k] ?? "").trim());
-    }
-  } catch {}
-  return [text];
-}
 
 interface ActivityFormDialogProps {
   open: boolean;
@@ -232,7 +222,7 @@ const ActivityFormDialog: React.FC<ActivityFormDialogProps> = ({
     );
   };
 
-  const nextStep = () => {
+  const nextStep = async () => {
     if (step === 0) {
       if (!formValues.title.trim()) {
         showMessage.warning("请输入活动标题");
@@ -242,6 +232,7 @@ const ActivityFormDialog: React.FC<ActivityFormDialogProps> = ({
         showMessage.warning("活动标题不能超过 200 个字符");
         return;
       }
+      if (!(await form.trigger("class_name", { shouldFocus: true }))) return;
     }
     if (step === 1) {
       if (formValues.activity_type === "vote") {
@@ -284,7 +275,8 @@ const ActivityFormDialog: React.FC<ActivityFormDialogProps> = ({
       const payload: ActivityCreateRequest = {
         activity_type: values.activity_type,
         title: values.title.trim(),
-        time_limit: Number(values.time_limit || 60),
+        class_name: values.class_name,
+        time_limit: values.time_limit,
         correct_answer:
           values.activity_type === "fill_blank"
             ? toFillBlankPayload(values)
@@ -400,6 +392,19 @@ const ActivityFormDialog: React.FC<ActivityFormDialogProps> = ({
                         maxLength={200}
                         placeholder="活动标题，填空题中可用（1）（2）标记空位"
                       />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="class_name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>班级</FormLabel>
+                    <FormControl>
+                      <Input {...field} required placeholder="与学生账号的班级名称一致" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

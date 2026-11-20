@@ -30,6 +30,10 @@ DEFAULT_MAX_EDGES: Final[int] = 4000
 DEFAULT_MAX_AST_NODES: Final[int] = 50000
 DEFAULT_MAX_DEPTH: Final[int] = 8
 
+# 单节点展示文本上限：复合语句的切片覆盖整段子树，不设上限时响应可放大上百倍
+MAX_NODE_TITLE_CHARS: Final[int] = 512
+MAX_NODE_FULL_TITLE_CHARS: Final[int] = 2048
+
 # WebSocket Limits
 WS_MAX_STDOUT_KB: Final[int] = 256
 WS_MAX_DAP_MSG_BYTES: Final[int] = 1024 * 1024

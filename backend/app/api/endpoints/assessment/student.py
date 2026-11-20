@@ -19,6 +19,7 @@ from app.schemas.assessment import (
 from app.services.assessment import (
     get_available_configs,
     start_session,
+    resume_session,
     get_session_questions,
     submit_answer,
     submit_session,
@@ -35,10 +36,11 @@ router = APIRouter()
 async def api_available(
     db: AsyncSession = Depends(get_db),
     current_user: UserInfo = Depends(require_student_or_staff),
+    include_in_progress: bool = False,
 ):
-    """获取学生可用的测评列表"""
+    """获取开放测评，可额外包含启用配置下本人的进行中会话。"""
     try:
-        return await get_available_configs(db, current_user.get("id"))
+        return await get_available_configs(db, current_user.get("id"), include_in_progress=include_in_progress)
     except Exception:
         logger.exception("获取可用测评列表失败")
         raise HTTPException(status_code=500, detail="获取可用测评列表失败")
@@ -58,6 +60,22 @@ async def api_start_session(
     except Exception:
         logger.exception("开始检测失败")
         raise HTTPException(status_code=500, detail="开始检测失败")
+
+
+@router.get("/sessions/{session_id}/resume")
+async def api_resume_session(
+    session_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserInfo = Depends(require_student_or_staff),
+):
+    """恢复本人会话，或返回已交卷状态供前端打开结果。"""
+    try:
+        return await resume_session(db, session_id, current_user.get("id"))
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except Exception:
+        logger.exception("续答检测失败")
+        raise HTTPException(status_code=500, detail="续答检测失败")
 
 
 @router.get("/sessions/{session_id}/questions")

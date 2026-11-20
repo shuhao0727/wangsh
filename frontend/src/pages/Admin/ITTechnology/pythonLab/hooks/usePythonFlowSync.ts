@@ -81,6 +81,12 @@ export function usePythonFlowSync(params: {
   const hasUserClearedCodeRef = useRef(false);
 
   const generated = useMemo(() => generatePythonFromFlow(nodes, edges), [nodes, edges]);
+  const canSyncCodeFromFlow = !nodes.some((node) => node.writebackBlocked);
+  const syncCodeFromFlow = useCallback(() => {
+    if (!canSyncCodeFromFlow) return;
+    setCodeMode("auto");
+    setCode(generated.python);
+  }, [canSyncCodeFromFlow, generated.python]);
   const debugMap = useMemo(() => {
     const built = buildDebugMapFromNodes(nodes, debugForRanges, debugForIns);
     if (debugMapCodeSha) return { ...built, codeSha256: debugMapCodeSha };
@@ -309,7 +315,7 @@ export function usePythonFlowSync(params: {
   }, [code, codeMode]);
 
   useEffect(() => {
-    if (codeMode === "auto") {
+    if (codeMode === "auto" && canSyncCodeFromFlow) {
       const nextCode = generated.python;
       // 防止“有流程图但生成代码临时为空”时把现有代码清空
       if (nodes.length > 0 && !nextCode.trim() && lastNonEmptyCodeRef.current.trim()) {
@@ -336,10 +342,13 @@ export function usePythonFlowSync(params: {
         });
       }
     }
-  }, [codeMode, generated.ir, generated.nodeLineMap, generated.python, nodes.length, setNodes]);
+  }, [canSyncCodeFromFlow, codeMode, generated.ir, generated.nodeLineMap, generated.python, nodes.length, setNodes]);
 
   useEffect(() => {
-    if (codeMode !== "auto") return;
+    if (codeMode !== "auto" || !canSyncCodeFromFlow) {
+      aiCodeTokenRef.current += 1;
+      return;
+    }
     if (!nodes.length) return;
     if (lastAiSemanticKeyRef.current === semanticKey) return;
     const localCode = generated.python || "";
@@ -400,6 +409,7 @@ export function usePythonFlowSync(params: {
               }
             } catch {}
           }
+          if (aiCodeTokenRef.current !== token) return;
           setCode(`${nextCode}\n`);
           lastAiSemanticKeyRef.current = semanticKey;
         } catch (e) {
@@ -419,7 +429,7 @@ export function usePythonFlowSync(params: {
       })();
     }, 450);
     return () => window.clearTimeout(timer);
-  }, [autoOptimizeCode, codeMode, edges, generated.python, generated.warnings, nodes, semanticKey]);
+  }, [autoOptimizeCode, canSyncCodeFromFlow, codeMode, edges, generated.python, generated.warnings, nodes, semanticKey]);
 
   useEffect(() => {
     if (codeMode !== "manual") return;
@@ -584,5 +594,8 @@ export function usePythonFlowSync(params: {
     return () => window.clearTimeout(t);
   }, [applyLayout, autoLayout, codeMode, edges, interacting, nodes, semanticKey]);
 
-  return { code, setCode, codeMode, setCodeMode, codeIr, setCodeIr, generated, debugMap, flowDiagnostics, flowExpandFunctions, setFlowExpandFunctions, rebuildFlowFromCode };
+  return {
+    code, setCode, codeMode, setCodeMode, codeIr, setCodeIr, generated, canSyncCodeFromFlow, syncCodeFromFlow,
+    debugMap, flowDiagnostics, flowExpandFunctions, setFlowExpandFunctions, rebuildFlowFromCode,
+  };
 }

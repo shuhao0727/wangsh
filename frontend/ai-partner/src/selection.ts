@@ -32,6 +32,7 @@ const functions: { id: string; label: string; cat: string[]; summary: string }[]
 const functionText = (id: string) => functions.find(f => f.id === id)?.label || id;
 const plainFunction = (id: string) => functionText(id).replace(/^\S+\s/, '');
 const extensionCategories = ['行动部件', '供电与安全'];
+const EXPIRED_SCORE_DRAFT_KEY = 'ws-ai-partner-expired-score-draft';
 export function mountSelection(highlight: (key: Concept | null) => void) {
   const left = document.querySelector<HTMLElement>('.left-panel')!;
   const right = document.querySelector<HTMLElement>('.right-panel')!;
@@ -97,6 +98,11 @@ export function mountSelection(highlight: (key: Concept | null) => void) {
   const currentEvaluation = () => evaluateTask(catalog, selected, primaryFeature, budget, budgetValid);
   const notesRecorded = () => paperRecorded || Boolean(reason.trim() && testPlan.trim());
   const snapshot = () => ({ version: 3, savedAt: new Date().toISOString(), name, primaryFeature, features, budget, reason, testPlan, risk, paperRecorded, ...selectionSnapshot(catalog, selected), source, validation: currentEvaluation(), completion: canComplete(currentEvaluation(), primaryTest) && notesRecorded(), priceNote: '课堂参考价，未重新核价；真实型号标记不代表已核实性能或可采购。' });
+  let expiredScoreDraft: { userId: number; design: ReturnType<typeof snapshot>; hadCoreTest: boolean } | null = null;
+  try {
+    const saved = sessionStorage.getItem(EXPIRED_SCORE_DRAFT_KEY);
+    if (saved) expiredScoreDraft = JSON.parse(saved);
+  } catch { /* Keep this tab usable if storage is unavailable. */ }
   const markDirty = (configurationChanged = true) => {
     dirty = true;
     invalidateScore();
@@ -338,8 +344,11 @@ export function mountSelection(highlight: (key: Concept | null) => void) {
     } catch (error) {
       if (version !== scoreVersion || abort.signal.aborted) return;
       const status = (error as {response?: {status?: number}})?.response?.status;
+      if (status === 401 || status === 403) {
+        boardController?.expireIdentity();
+        return;
+      }
       scoreError = status === 503 ? 'AI 评分暂不可用，请检查后台评分模型配置与服务状态。'
-        : status === 401 || status === 403 ? '请重新登录后使用 AI 评分。'
         : status === 429 ? '评分请求较多，请稍后再试。'
         : status === 409 || status === 410 ? '身份或课堂轮次已变化，请刷新后重新评分。'
         : status === 422 ? '方案信息不完整或已失效，请检查后重试。'
@@ -490,23 +499,55 @@ export function mountSelection(highlight: (key: Concept | null) => void) {
     if (dirty && !window.confirm('恢复将替换当前未保存配置，是否继续？')) return;
     try {
       const text = localStorage.getItem(draftKeyFor(user.id)); if (!text) return notify('尚无本机存档，请先保存一份方案。');
-      const saved = JSON.parse(text);
-      if (!saved || !saved.selected || typeof saved.selected !== 'object') throw new Error();
-      if (saved.budget !== null && saved.budget !== undefined && (!Number.isFinite(Number(saved.budget)) || Number(saved.budget) < 0 || Number(saved.budget) > 1e9)) throw new Error();
-      const restored = restoreSelection(saved.selected, catalog);
-      const removed = restored.skipped;
-      selected = restored.selected; budget = saved.budget === null || saved.budget === undefined || saved.budget === '' ? null : Number(saved.budget); budgetValid = true; name = typeof saved.name === 'string' ? saved.name.slice(0, 20) : '';
-      const restoredFeatures = Array.isArray(saved.features) ? saved.features.filter((id: unknown): id is string => typeof id === 'string' && functions.some(f => f.id === id)) : [];
-      primaryFeature = typeof saved.primaryFeature === 'string' && functions.some(f => f.id === saved.primaryFeature) ? saved.primaryFeature : restoredFeatures[0] || '';
-      features = [...new Set(restoredFeatures.filter((id: string) => id !== primaryFeature))] as string[]; reason = typeof saved.reason === 'string' ? saved.reason.slice(0, 4000) : ''; testPlan = typeof saved.testPlan === 'string' ? saved.testPlan.slice(0, 1000) : ''; risk = typeof saved.risk === 'string' ? saved.risk : ''; paperRecorded = saved.paperRecorded === true; dirty = false; tested = false; lastTest = null; primaryTest = null; invalidateScore();
-      (document.querySelector('#selection-name') as HTMLInputElement).value = name; const budgetInput = document.querySelector<HTMLInputElement>('#selection-budget')!; budgetInput.value = budget === null ? '' : String(budget); budgetInput.setAttribute('aria-invalid', 'false'); (document.querySelector('#selection-reason') as HTMLTextAreaElement).value = reason; (document.querySelector('#test-plan') as HTMLTextAreaElement).value = testPlan; (document.querySelector('#risk-select') as HTMLSelectElement).value = risk; (document.querySelector('#paper-recorded') as HTMLInputElement).checked = paperRecorded;
-      renderFeatures(); renderLibrary(); renderConfiguration(); assemblyFeedback(`已恢复 ${selectedEntries().length} 项选型；型号与总价按当前目录更新。`); notify(`已恢复方案${removed ? `，已跳过 ${removed} 项失效或重复型号` : ''}；组合按现行规则重新检查，需重新测试和评分。`);
+      const removed = restoreDesign(JSON.parse(text));
+      notify(`已恢复方案${removed ? `，已跳过 ${removed} 项失效或重复型号` : ''}；组合按现行规则重新检查，需重新测试和评分。`);
     } catch { notify('存档无法读取或格式不符；当前配置未替换。'); }
   });
+
+  function restoreDesign(saved: Record<string, unknown>, recovery?: { hadCoreTest: boolean }) {
+    const restored = restoreSelection(saved?.selected, catalog);
+    const restoredBudget = saved.budget == null || saved.budget === '' ? null : Number(saved.budget);
+    if (restoredBudget !== null && (!Number.isFinite(restoredBudget) || restoredBudget < 0 || restoredBudget > 1e9)) throw new Error();
+    const restoredFeatures = Array.isArray(saved.features)
+      ? saved.features.filter((id: unknown): id is string => typeof id === 'string' && functions.some(f => f.id === id))
+      : [];
+    selected = restored.selected;
+    budget = restoredBudget;
+    budgetValid = true;
+    name = typeof saved.name === 'string' ? saved.name.slice(0, recovery ? 80 : 20) : '';
+    primaryFeature = typeof saved.primaryFeature === 'string' && functions.some(f => f.id === saved.primaryFeature) ? saved.primaryFeature : restoredFeatures[0] || '';
+    features = [...new Set(restoredFeatures.filter(id => id !== primaryFeature))];
+    reason = typeof saved.reason === 'string' ? saved.reason.slice(0, 4000) : '';
+    testPlan = typeof saved.testPlan === 'string' ? saved.testPlan.slice(0, 1000) : '';
+    risk = typeof saved.risk === 'string' ? saved.risk : '';
+    paperRecorded = saved.paperRecorded === true;
+    dirty = !!recovery;
+    tested = recovery?.hadCoreTest === true && !!primaryFeature;
+    lastTest = primaryTest = tested ? currentEvaluation() : null;
+    invalidateScore();
+    (document.querySelector('#selection-name') as HTMLInputElement).value = name;
+    const budgetInput = document.querySelector<HTMLInputElement>('#selection-budget')!;
+    budgetInput.value = budget === null ? '' : String(budget);
+    budgetInput.setAttribute('aria-invalid', 'false');
+    (document.querySelector('#selection-reason') as HTMLTextAreaElement).value = reason;
+    (document.querySelector('#test-plan') as HTMLTextAreaElement).value = testPlan;
+    (document.querySelector('#risk-select') as HTMLSelectElement).value = risk;
+    (document.querySelector('#paper-recorded') as HTMLInputElement).checked = paperRecorded;
+    renderFeatures(); renderLibrary(); renderConfiguration();
+    assemblyFeedback(`已恢复 ${selectedEntries().length} 项选型；型号与总价按当前目录更新。`);
+    return restored.skipped;
+  }
   document.querySelector('#export-report')!.addEventListener('click', () => { if (!budgetValid) return notify('请先修正预算，再导出。'); download('AI同学-课堂方案.txt', reportText(), 'text/plain;charset=utf-8'); notify('课堂报告已导出。'); });
   document.querySelector('#export-selection')!.addEventListener('click', () => { if (!budgetValid) return notify('请先修正预算，再导出。'); const payload = { ...snapshot(), total: totals().price, accounting: totals(), checks: getChecks(), limitations: '类别覆盖不等于功能可实现；不作性能、容量、功耗与兼容性保证。' }; download('AI同学-选型方案.json', JSON.stringify(payload, null, 2), 'application/json'); notify('已导出完整配置、任务链、理由与检查结果。'); });
 
-  function resetIdentityDesign() {
+  function resetIdentityDesign(expiredUserId?: number) {
+    const recoverable = expiredUserId !== undefined && scoring;
+    if (recoverable) {
+      expiredScoreDraft = { userId: expiredUserId, design: snapshot(), hadCoreTest: primaryTest !== null };
+      // The login link leaves the game. Keep this recovery only in the current tab.
+      try { sessionStorage.setItem(EXPIRED_SCORE_DRAFT_KEY, JSON.stringify(expiredScoreDraft)); }
+      catch { /* In-page re-verification can still recover the draft. */ }
+    }
     selected = {}; compared = []; category = '全部'; query = ''; filter = 'all';
     budget = null; budgetValid = true; name = ''; primaryFeature = ''; features = [];
     reason = ''; testPlan = ''; risk = ''; paperRecorded = false;
@@ -521,12 +562,25 @@ export function mountSelection(highlight: (key: Concept | null) => void) {
     highlight(null);
     renderFeatures(); renderLibrary(); renderConfiguration(); renderTestResult();
     assemblyFeedback('身份待确认或已变化；已清空上一身份的设计、记录和分数。');
+    if (recoverable) scoreError = '请重新登录；同一账号可恢复方案并重新评分。';
     notify('可恢复本账号草稿，不自动载入匿名设计。');
   }
   renderFeatures(); renderLibrary(); renderConfiguration();
   boardController = new LeaderboardController(aiPartnerService, resetIdentityDesign);
   const leaderboardView = mountLeaderboard(boardController, document.getElementById('partner-auth-status')!);
   boardController.subscribe(state => {
+    if (state.user && expiredScoreDraft) {
+      const recovery = expiredScoreDraft;
+      expiredScoreDraft = null;
+      try { sessionStorage.removeItem(EXPIRED_SCORE_DRAFT_KEY); }
+      catch { /* The in-memory recovery is still consumed. */ }
+      if (state.user.id === recovery.userId && !dataError) {
+        try {
+          restoreDesign(recovery.design, recovery);
+          notify('已恢复评分前的未保存方案，可以重新评分。');
+        } catch { notify('评分前的临时草稿无法读取。'); }
+      }
+    }
     renderScore();
     for (const id of ['save-selection', 'restore-selection']) {
       (document.getElementById(id) as HTMLButtonElement).disabled = !state.user || !!dataError;

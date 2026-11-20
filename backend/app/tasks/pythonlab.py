@@ -27,6 +27,17 @@ from app.api.pythonlab.constants import (
     SESSION_STATUS_RUNNING,
     SESSION_STATUS_STOPPED,
 )
+from app.api.pythonlab.session_state import (
+    StopDispatchError,
+    dispatch_session_stop,
+    encode_session_meta,
+    is_stop_confirmed,
+    publish_confirmed_stop,
+    publish_failed_stop,
+    read_session_snapshot,
+    replace_session_snapshot,
+)
+from app.api.pythonlab.utils import now_iso
 
 # ---------------------------------------------------------------------------
 # Shared event loop for Celery tasks — avoids creating/destroying a loop per
@@ -56,40 +67,6 @@ def _run_async(coro):
 
 async def _get_session_meta(session_id: str) -> Optional[Dict[str, Any]]:
     return await cache.get(f"{CACHE_KEY_SESSION_PREFIX}:{session_id}")
-
-
-async def _set_session_meta(session_id: str, meta: Dict[str, Any]) -> None:
-    ttl = int(meta.get("ttl_seconds") or getattr(settings, "PYTHONLAB_SESSION_TTL_SECONDS", DEFAULT_SESSION_TTL) or DEFAULT_SESSION_TTL)
-    await cache.set(f"{CACHE_KEY_SESSION_PREFIX}:{session_id}", meta, expire_seconds=ttl)
-
-
-async def _owner_has_other_active_session(owner_user_id: int, excluding_session_id: str) -> bool:
-    if owner_user_id <= 0:
-        return False
-    try:
-        client = await cache.get_client()
-        user_sessions_key = f"{CACHE_KEY_USER_SESSIONS_PREFIX}:{owner_user_id}:sessions"
-        raw_ids = await client.smembers(user_sessions_key)  # type: ignore[misc]
-    except Exception:
-        # stop_session already treats an ownership-query failure conservatively.
-        # Do not turn an unavailable membership index into permission to delete.
-        logger.exception("_owner_has_other_active_session 获取用户活跃会话失败")
-        raise
-
-    for raw in raw_ids or []:
-        sid = raw.decode("utf-8", errors="ignore") if isinstance(raw, (bytes, bytearray)) else str(raw)
-        sid = sid.strip()
-        if not sid or sid == excluding_session_id:
-            continue
-        # Bypass cache.get's error-to-miss downgrade for destructive decisions.
-        meta = await _get_start_meta(sid)
-        if not isinstance(meta, dict):
-            return True
-        st = str(meta.get("status") or "").upper()
-        # Missing/unknown/terminating metadata cannot prove the resource is idle.
-        if st not in {SESSION_STATUS_TERMINATED, SESSION_STATUS_FAILED}:
-            return True
-    return False
 
 
 async def _get_start_value(key: str):
@@ -135,24 +112,13 @@ async def _cas_start_meta(session_id: str, expected: str, meta: Dict[str, Any]) 
     """
     ttl = int(meta.get("ttl_seconds") or getattr(settings, "PYTHONLAB_SESSION_TTL_SECONDS", DEFAULT_SESSION_TTL) or DEFAULT_SESSION_TTL)
     client = await cache.get_client()
-    return bool(await client.eval(
-        """if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 0 end
-        redis.call('SET', KEYS[1], ARGV[2], 'EX', ARGV[3])
-        return 1""",
-        1, f"{CACHE_KEY_SESSION_PREFIX}:{session_id}", expected,
-        json.dumps(meta, ensure_ascii=False), ttl,
-    ))
+    key = f"{CACHE_KEY_SESSION_PREFIX}:{session_id}"
+    return await replace_session_snapshot(client, key, expected, encode_session_meta(meta), ttl)
 
 
 async def _read_start_snapshot(session_id: str):
     client = await cache.get_client()
-    raw = await client.get(f"{CACHE_KEY_SESSION_PREFIX}:{session_id}")
-    if raw is None:
-        return None, None
-    meta = json.loads(raw)
-    if not isinstance(meta, dict):
-        raise RuntimeError("Invalid session metadata")
-    return raw, meta
+    return await read_session_snapshot(client, f"{CACHE_KEY_SESSION_PREFIX}:{session_id}")
 
 
 async def _save_start_outcome(
@@ -216,7 +182,6 @@ def _start_allowed(meta: Dict[str, Any], task_id: str, retries: int, redelivered
     return meta.get("status") == SESSION_STATUS_PENDING or (
         meta.get("status") == SESSION_STATUS_STARTING and same_task and (retries > 0 or redelivered)
     )
-
 
 
 @asynccontextmanager
@@ -533,15 +498,14 @@ def _cleanup_should_stop(status, age, unattached_ttl, heartbeat_timeout, idle_ti
     return age > heartbeat_timeout
 
 
-async def _cleanup_terminate(client, k, meta, sid):
-    """Mark terminating and dispatch a forced stop for one stale session."""
+async def _cleanup_terminate(client, session_id, raw, meta):
     try:
-        # Force terminate for stale sessions
-        celery_app.send_task("app.tasks.pythonlab.stop_session", args=[sid, True])
-    except Exception:
+        await dispatch_session_stop(
+            client, session_id, raw, meta, int(meta.get("ttl_seconds") or 300),
+            now_iso(), celery_app.send_task, force=True,
+        )
+    except StopDispatchError:
         logger.exception("cleanup_stale_sessions 发送 stop_session 任务失败")
-    meta["status"] = SESSION_STATUS_TERMINATING
-    await cache.set(str(k), meta, expire_seconds=int(meta.get("ttl_seconds") or 300))
 
 
 @celery_app.task(name="app.tasks.pythonlab.cleanup_stale_sessions")
@@ -552,23 +516,24 @@ def cleanup_stale_sessions():
         unattached_ttl, heartbeat_timeout, idle_timeout = _cleanup_ttl_settings()
 
         cursor: int = 0
+        prefix = f"{CACHE_KEY_SESSION_PREFIX}:"
         while True:
-            cursor, keys = await client.scan(cursor=cursor, match=f"{CACHE_KEY_SESSION_PREFIX}:dbg_*", count=200)
-            for k in keys or []:
-                meta = await cache.get(str(k))
-                if not isinstance(meta, dict):
+            cursor, keys = await client.scan(cursor=cursor, match=f"{prefix}dbg_*", count=200)
+            for key in keys or []:
+                session_id = key.removeprefix(prefix)
+                if ":" in session_id:  # Source code and connection keys also match the scan.
+                    continue
+                raw, meta = await read_session_snapshot(client, key)
+                if not meta or meta.get("session_id") != session_id:
                     continue
                 st = str(meta.get("status") or "").upper()
                 if st in {SESSION_STATUS_TERMINATED, SESSION_STATUS_FAILED, SESSION_STATUS_TERMINATING}:
-                    continue
-                sid = str(meta.get("session_id") or "")
-                if not sid:
                     continue
                 age = _cleanup_age_seconds(meta, now)
                 if age is None:
                     continue
                 if _cleanup_should_stop(st, age, unattached_ttl, heartbeat_timeout, idle_timeout):
-                    await _cleanup_terminate(client, k, meta, sid)
+                    await _cleanup_terminate(client, session_id, raw, meta)
 
             if cursor == 0:
                 break
@@ -576,69 +541,91 @@ def cleanup_stale_sessions():
     _run_async(run())
 
 
-@celery_app.task(name="app.tasks.pythonlab.stop_session")
-def stop_session(session_id: str, force: bool = False):
-    async def run():
-        meta = await _get_session_meta(session_id)
-        provider = get_sandbox_provider()
-        provider_meta = meta if isinstance(meta, dict) else {"session_id": session_id}
-        owner = int(provider_meta.get("owner_user_id") or 0)
-        runtime_mode = str(provider_meta.get("runtime_mode") or "debug").lower()
-        skip_provider_stop = False
-        has_other_active = False
+async def _other_session_owns_live_sandbox(run_docker, name, record, session_id):
+    from app.core.sandbox.docker_runtime import inspect_container
 
-        # User-scoped container reuse means stopping an old session can kill
-        # debugpy for a newer active session of the same owner.
-        if owner > 0:
-            try:
-                has_other_active = await _owner_has_other_active_session(owner, session_id)
-                # IMPORTANT:
-                # Even for force=True (e.g. stale cleanup), do not kill the shared
-                # owner container when another active session exists for that owner.
-                # Otherwise a stale session cleanup can terminate the currently
-                # running/paused debugging session of the same user.
-                if has_other_active:
-                    skip_provider_stop = True
-            except Exception:
-                # 保守处理：查询其它活跃会话时抛异常，无法确认该 owner 是否还有
-                # 其它活跃会话。此时宁可保留共享容器，也绝不误杀可能正在运行的
-                # 同 owner 调试会话（debugpy 共用同一容器）。
-                skip_provider_stop = True
+    if record.get("phase") != "live" or record.get("container_name") != name:
+        return False
+    other_session_id = record.get("session_id")
+    container_id = record.get("container_id")
+    if not other_session_id or other_session_id == session_id or not container_id:
+        return False
+    actual = await inspect_container(run_docker, name)
+    return bool(actual and actual.get("Id") == container_id)
 
-        logger.info(
-            "pythonlab.stop_session decision session_id={} force={} owner={} has_other_active={} skip_provider_stop={}",
-            session_id,
-            force,
-            owner,
-            has_other_active,
-            skip_provider_stop,
+
+async def _confirm_stopped_resource(provider, session_id, meta):
+    from app.core.sandbox.docker import _run_async as run_docker, _workspace_root
+    from app.core.sandbox.docker_runtime import WorkspaceOwnership, inspect_container
+
+    name = provider._container_name(meta)
+    workspace = provider._ws_path_for_session(meta)
+    async with WorkspaceOwnership(_workspace_root(), workspace) as ownership:
+        record = ownership.read()
+        container_id = meta.get("docker_container_id")
+        token = meta.get("sandbox_owner_token")
+        removed = record and record.get("phase") == "removed"
+        if container_id or token:
+            return bool(
+                removed and container_id and token
+                and (record.get("container_name"), record.get("session_id"), record.get("token"), record.get("container_id"))
+                == (name, session_id, token, container_id)
+            )
+        if removed and record.get("session_id") == session_id:
+            # An in-flight STARTING task may have compensated before publishing IDs.
+            return bool(
+                record.get("container_name") == name and record.get("container_id")
+                and meta.get("startup_task_id") and record.get("startup_task_id") == meta["startup_task_id"]
+            )
+        if record is None or removed:
+            return await inspect_container(run_docker, name) is None
+        # A session that never began startup has no claim on a verified sibling sandbox.
+        return not meta.get("startup_task_id") and await _other_session_owns_live_sandbox(
+            run_docker, name, record, session_id,
         )
 
-        # Stop Sandbox Resource
-        try:
-            if not skip_provider_stop:
-                if force or runtime_mode == "debug":
-                    await provider.terminate_session(session_id, provider_meta)
-                else:
-                    await provider.stop_session(session_id, provider_meta)
-        except Exception:
-            logger.exception("stop_session 停止/终止沙箱资源失败")
 
-        if meta:
-            try:
-                client = await cache.get_client()
-                if owner > 0:
-                    # Only remove from active set if forced termination?
-                    # No, if we stop the session, it's effectively gone from UI.
-                    # But we want to keep container alive.
-                    # The set tracks "Sessions the user sees in UI".
-                    # If we remove it, UI won't show it.
-                    # So yes, remove it.
-                    await client.srem(f"{CACHE_KEY_USER_SESSIONS_PREFIX}:{owner}:sessions", session_id)  # type: ignore[misc]
-            except Exception:
-                pass
+async def _finish_session_stop(provider, client, key, raw, meta, session_id, force):
+    owner = int(meta.get("owner_user_id") or 0)
+    ttl = int(meta.get("ttl_seconds") or settings.PYTHONLAB_SESSION_TTL_SECONDS or DEFAULT_SESSION_TTL)
+    try:
+        # The provider checks the current session, token and exact ID under the
+        # resource fence. Sibling session states carry no ownership authority.
+        if meta.get("docker_container_id") and meta.get("sandbox_owner_token"):
+            if force or str(meta.get("runtime_mode") or "debug").lower() == "debug":
+                await provider.terminate_session(session_id, meta)
+            else:
+                await provider.stop_session(session_id, meta)
+        if not await _confirm_stopped_resource(provider, session_id, meta):
+            raise RuntimeError("PythonLab could not confirm removal of the session's sandbox")
+    except Exception:
+        await publish_failed_stop(client, key, raw, meta, ttl, now_iso())
+        raise
 
-            meta["status"] = SESSION_STATUS_TERMINATED
-            await _set_session_meta(session_id, meta)
-            
+    await publish_confirmed_stop(client, key, meta, ttl, now_iso())
+    if owner > 0:
+        await client.srem(f"{CACHE_KEY_USER_SESSIONS_PREFIX}:{owner}:sessions", session_id)
+
+
+@celery_app.task(name="app.tasks.pythonlab.stop_session")
+def stop_session(session_id: str, force: bool = False, *, stop_task_id: str | None = None):
+    async def run():
+        client = await cache.get_client()
+        key = f"{CACHE_KEY_SESSION_PREFIX}:{session_id}"
+        _, initial = await read_session_snapshot(client, key)
+        provider = get_sandbox_provider()
+        if not initial:
+            if stop_task_id is None:
+                await provider.terminate_session(session_id, {"session_id": session_id})
+            return
+        async with _startup_execution_fence(provider, initial):
+            raw, meta = await read_session_snapshot(client, key)
+            if not meta or is_stop_confirmed(meta):
+                return
+            if stop_task_id is not None and meta.get("stop_task_id") != stop_task_id:
+                return
+            if meta.get("owner_user_id") != initial.get("owner_user_id"):
+                raise RuntimeError("PythonLab session owner changed while awaiting stop fence")
+            await _finish_session_stop(provider, client, key, raw, meta, session_id, force)
+
     _run_async(run())

@@ -42,6 +42,8 @@ import { useUsersStats } from "@hooks/queries/useUsersQuery";
 import { getUserColumns } from "./columns";
 import UserForm from "./components/UserForm";
 import UserDetailModal from "./components/UserDetailModal";
+import ImportResultDialog from "./components/ImportResultDialog";
+import type { UserImportResult } from "@services/users";
 import { roleOptions, statusOptions } from "./data";
 import type { User } from "./types";
 import { AdminPage, AdminTablePanel, AdminFilterBar } from "@components/Admin";
@@ -56,9 +58,8 @@ const AdminUsers: React.FC = () => {
   const compact = !screens.lg;
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
-  // 批量删除是破坏性且不可撤销的：点击后直接删掉选中的全部用户，
-  // 与单条删除相比影响面更大，必须同样先确认。
-  const [batchDeleteOpen, setBatchDeleteOpen] = useState(false);
+  const [batchDeleteTargets, setBatchDeleteTargets] = useState<User[]>([]);
+  const [importResult, setImportResult] = useState<UserImportResult | null>(null);
   const {
     handleEdit,
     handleView,
@@ -77,16 +78,14 @@ const AdminUsers: React.FC = () => {
     [handleEdit, handleView, handleDeleteRequest],
   );
 
-  const rowSelection = useMemo<RowSelectionState>(() => {
-    const selectedIds = new Set(state.selectedRowKeys.map((id) => String(id)));
-    return state.users.reduce<RowSelectionState>((acc, user) => {
-      const id = String(user.id);
-      if (selectedIds.has(id)) {
-        acc[id] = true;
-      }
-      return acc;
-    }, {});
+  const selectedUsers = useMemo(() => {
+    const selectedIds = new Set(state.selectedRowKeys);
+    return state.users.filter((user) => selectedIds.has(user.id));
   }, [state.selectedRowKeys, state.users]);
+  const rowSelection = useMemo<RowSelectionState>(() =>
+    Object.fromEntries(selectedUsers.map((user) => [String(user.id), true])),
+    [selectedUsers],
+  );
 
   const handleRowSelectionChange = useCallback(
     (updater: Updater<RowSelectionState>) => {
@@ -108,6 +107,7 @@ const AdminUsers: React.FC = () => {
           <div className="flex items-center justify-center">
             <Checkbox
               aria-label="选择当前页全部用户"
+              disabled={state.loading}
               checked={
                 table.getIsAllPageRowsSelected() ||
                 (table.getIsSomePageRowsSelected() ? "indeterminate" : false)
@@ -122,6 +122,7 @@ const AdminUsers: React.FC = () => {
           <div className="flex items-center justify-center">
             <Checkbox
               aria-label={`选择用户 ${row.original.full_name}`}
+              disabled={state.loading}
               checked={row.getIsSelected()}
               onCheckedChange={(checked) => row.toggleSelected(checked === true)}
             />
@@ -134,7 +135,7 @@ const AdminUsers: React.FC = () => {
       },
       ...baseColumns,
     ],
-    [baseColumns],
+    [baseColumns, state.loading],
   );
 
   const table = useReactTable({
@@ -194,7 +195,8 @@ const AdminUsers: React.FC = () => {
             const file = input.files?.[0];
             if (!file) return;
             try {
-              await actions.handleFileUpload(file);
+              const result = await actions.handleFileUpload(file);
+              if (result?.error_count) setImportResult(result);
             } finally {
               input.value = "";
             }
@@ -295,15 +297,15 @@ const AdminUsers: React.FC = () => {
               <Upload className="h-4 w-4" />
             </Button>
 
-            {state.selectedRowKeys.length > 0 ? (
+            {selectedUsers.length > 0 ? (
               <Button
                 variant="ghost"
-                onClick={() => setBatchDeleteOpen(true)}
+                onClick={() => setBatchDeleteTargets(selectedUsers)}
                 className="text-destructive"
                 disabled={state.loading}
               >
                 <Trash2 className="h-4 w-4" />
-                删除 ({state.selectedRowKeys.length})
+                删除 ({selectedUsers.length})
               </Button>
             ) : null}
 
@@ -370,18 +372,22 @@ const AdminUsers: React.FC = () => {
         }}
       />
       <ConfirmDialog
-        open={batchDeleteOpen}
-        onOpenChange={setBatchDeleteOpen}
+        open={batchDeleteTargets.length > 0}
+        onOpenChange={(open) => { if (!open) setBatchDeleteTargets([]); }}
         title="确认批量删除"
-        description={`确定要删除选中的 ${state.selectedRowKeys.length} 个用户吗？此操作不可撤销。`}
+        description={`确定要删除以下 ${batchDeleteTargets.length} 个用户吗？此操作不可撤销。`}
         confirmText="删除"
         variant="destructive"
         loading={state.loading}
-        onConfirm={async () => {
-          await actions.handleBatchDelete();
-          setBatchDeleteOpen(false);
-        }}
-      />
+        onConfirm={() => actions.handleBatchDelete(batchDeleteTargets.map((user) => user.id))}
+      >
+        <ul className="max-h-48 space-y-1 overflow-y-auto break-words text-sm">
+          {batchDeleteTargets.map((user) => (
+            <li key={user.id}>{user.full_name} · {user.student_id || user.username || `ID ${user.id}`}</li>
+          ))}
+        </ul>
+      </ConfirmDialog>
+      {importResult && <ImportResultDialog result={importResult} onClose={() => setImportResult(null)} />}
     </AdminPage>
   );
 };

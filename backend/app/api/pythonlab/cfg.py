@@ -15,6 +15,7 @@ from app.api.pythonlab.constants import (
 from app.api.pythonlab.cpu_limits import run_cpu
 from app.utils.rate_limit import rate_limiter
 from app.api.pythonlab.utils import (
+    SourceText,
     is_elif_if,
     make_edge,
     mark_elif_chain,
@@ -110,6 +111,8 @@ def _build_block(
 
 
 def _generate_cfg_data(code: str) -> Dict[str, Any]:
+    # 一次建好行索引：复合语句标题要按节点切片，逐节点重新切分源码是 O(节点×源码)。
+    code = SourceText(code)
     nodes: List[Dict[str, Any]] = []
     edges: List[Dict[str, Any]] = []
     diagnostics: List[Dict[str, Any]] = []

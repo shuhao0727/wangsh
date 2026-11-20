@@ -4,7 +4,7 @@
 
 from datetime import datetime
 from typing import Optional, List
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 
 
 class SessionStartRequest(BaseModel):
@@ -26,6 +26,13 @@ class AnswerSubmitRequest(BaseModel):
     """提交单题答案"""
     answer_id: int = Field(..., description="答题记录 ID")
     student_answer: str = Field(..., description="学生答案")
+
+    @field_validator("student_answer")
+    @classmethod
+    def reject_blank_answer(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("请输入答案")
+        return value
 
 
 class AnswerResult(BaseModel):

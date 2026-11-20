@@ -71,6 +71,33 @@ test("normalizeFlowImport drops invalid points but keeps edge", () => {
   expect(e.labelPosition).toEqual({ x: 4, y: 5 });
 });
 
+test.each([
+  ["限长标题", `text = '${"x".repeat(504)}…`],
+  ["超时占位", "解析超时，已回退到稳定展示"],
+])("旧版%s导入后禁用整图回写", (_label: string, title: string) => {
+  const restored = normalizeFlowImport({
+    format: "pythonlab-flow-v1",
+    nodes: [
+      { id: "__cfg_start__", shape: "start_end", title: "开始", x: 0, y: 0 },
+      { id: "legacy-display", shape: "process", title, x: 0, y: 80 },
+    ],
+    edges: [{ id: "edge", from: "__cfg_start__", to: "legacy-display" }],
+  });
+  expect(restored?.nodes.map(node => node.title)).toEqual(["开始", title]);
+  expect(restored?.nodes.map(node => node.writebackBlocked)).toEqual([true, true]);
+});
+
+test("旧图的普通说明和 Python 省略号仍可回写", () => {
+  const restored = normalizeFlowImport({
+    nodes: [
+      { id: "code", shape: "process", title: "items = ...", x: 0, y: 0 },
+      { id: "note", shape: "note", title: "请思考…", x: 120, y: 0 },
+    ],
+    edges: [],
+  });
+  expect(restored?.nodes.map(node => node.writebackBlocked)).toEqual([undefined, undefined]);
+});
+
 test("normalizeFlowImport migrates legacy collection shape to list_op/dict_op", () => {
   const input: any = {
     nodes: [

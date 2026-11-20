@@ -257,7 +257,8 @@
 }
 
 .basic-layout.home-page .nav-trigger:hover + .top-header,
-.basic-layout.home-page .top-header:hover {
+.basic-layout.home-page .top-header:hover,
+.basic-layout.home-page .top-header:focus-within {
   transform: translateY(0);
 }
 

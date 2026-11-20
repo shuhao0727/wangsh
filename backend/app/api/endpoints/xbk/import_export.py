@@ -207,7 +207,7 @@ async def _prepare_import(
     file: UploadFile,
     db: AsyncSession,
     *, lock_references: bool = False,
-) -> Tuple[int, List[str], List[Tuple[Dict[str, Any], Dict[str, Any]]], List[Dict[str, Any]]]:
+) -> Tuple[int, List[str], List[Tuple[Dict[str, Any], Dict[str, Any]]], List[Dict[str, Any]], List[int]]:
     """One validation path for preview and execute; no database writes here.
 
     Preserve optional snapshots and blank selection code -> 未选. Reject file-wide
@@ -224,8 +224,7 @@ async def _prepare_import(
     periods = set()
     grade_flags = []
     for index, row in df.iterrows():
-        row_number = int(index) + 2
-        grade_flags.append(_normalize_str(row.get("年级")) is not None)
+        row_number = int(index) + 1
         values, preview, messages, period, _quota_missing = prepare_import_row(
             row, scope, (year, term, grade), fields, required,
         )
@@ -237,6 +236,7 @@ async def _prepare_import(
         else:
             valid.append((values, preview))
             valid_row_numbers.append(row_number)
+            grade_flags.append(_normalize_str(row.get("年级")) is not None)
     if len(periods) > 1:
         raise HTTPException(status_code=422, detail=(
             f"文件包含{len(periods)}个不同的学年/学期组合，已阻止整份文件导入。"

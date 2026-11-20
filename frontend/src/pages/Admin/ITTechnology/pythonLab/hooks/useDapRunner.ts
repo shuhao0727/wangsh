@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useReducer, useRef } from "react";
-import { pythonlabSessionApi } from "../services/pythonlabSessionApi";
+import { pythonlabSessionApi, trackPythonlabSession } from "../services/pythonlabSessionApi";
 import type { DebugMap } from "../flow/debugMap";
 import { summarizeDapBreakpointReport, type DapBreakpointReport } from "./dapBreakpointReport";
 import { detectSourceMismatch } from "./sourceSync";
@@ -288,8 +288,9 @@ function reducer(state: InternalRunnerState, action: Action): InternalRunnerStat
 
 // --- Hook ---
 
-export function useDapRunner(params: { code: string; debugMap: DebugMap | null }) {
-  const { code, debugMap } = params;
+export function useDapRunner(params: { code: string; debugMap: DebugMap | null; recoveryScope?: string }) {
+  const { code, debugMap, recoveryScope } = params;
+  const trackedScopeRef = useRef<string | undefined>(undefined);
   const [state, dispatch] = useReducer(reducer, initialState);
   const clientRef = useRef<DebugController>(new DebugController());
   const sessionIdRef = useRef<string | null>(null);
@@ -817,6 +818,8 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
         isCurrent: () => startTokenRef.current === myToken,
         traceLifecycle,
         onSessionCreated: (session) => {
+          trackedScopeRef.current = recoveryScope;
+          if (recoveryScope) trackPythonlabSession(recoveryScope, session.session_id);
           sessionIdRef.current = session.session_id;
           terminalReadinessRef.current.select(session.session_id);
         },
@@ -1012,6 +1015,7 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
     fetchStack,
     handleStartFailure,
     reconnectCurrentDebugSession,
+    recoveryScope,
     refreshBreakpoints,
     resetLaunchTransientRefs,
     resetReconnectState,
@@ -1031,6 +1035,7 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
     await stopPythonlabDebugSession({
       client: clientRef.current,
       sessionId: sessionIdRef.current,
+      recoveryScope: trackedScopeRef.current,
       shouldDisconnect: modeRef.current === "debug" && stateRef.current.status !== "idle" && stateRef.current.status !== "stopped",
       cleanup: () => cleanup({ preserveSession: true }),
       clearTrackedSessionId,

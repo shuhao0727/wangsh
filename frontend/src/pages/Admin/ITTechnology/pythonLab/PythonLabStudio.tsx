@@ -24,6 +24,7 @@ import { useAnnotationInteractions } from "./hooks/useAnnotationInteractions";
 import { CanvasToolbar } from "./components/CanvasToolbar";
 import { usePythonFlowSync } from "./hooks/usePythonFlowSync";
 import { useDebugSession } from "./hooks/useDebugSession";
+import { usePriorPythonlabSession } from "./hooks/usePriorPythonlabSession";
 import { usePythonLabActions } from "./hooks/usePythonLabActions";
 import { useBeautifyFlow } from "./hooks/useBeautifyFlow";
 import { useArrangeLayout } from "./hooks/useArrangeLayout";
@@ -53,6 +54,8 @@ const PythonLabStudioInner: React.FC<{
 }> = ({ experiment }) => {
   const screens = useBreakpoint();
   const auth = useAuth();
+  const recoveryScope = auth.user?.id && experiment?.id ? `${auth.user.id}:${experiment.id}` : undefined;
+  const priorSession = usePriorPythonlabSession(recoveryScope);
   const isCompactViewport = !screens.sm;
   const prewarmOnceRef = useRef(false);
   const readyMsgShownRef = useRef(false);
@@ -89,7 +92,7 @@ const PythonLabStudioInner: React.FC<{
 
   const pythonlabRuntime = ((process.env.REACT_APP_PYTHONLAB_RUNTIME || "pyodide") + "").toLowerCase();
   useEffect(() => {
-    if (prewarmOnceRef.current) return;
+    if (prewarmOnceRef.current || !recoveryScope || priorSession.sessionId) return;
     prewarmOnceRef.current = true;
     let cancelled = false;
     const timer = window.setTimeout(() => {
@@ -130,7 +133,7 @@ const PythonLabStudioInner: React.FC<{
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [pythonlabRuntime]);
+  }, [priorSession.sessionId, pythonlabRuntime, recoveryScope]);
 
   const arrangeLayoutRef = useRef<null | (() => Promise<void>)>(null);
 
@@ -298,7 +301,7 @@ const PythonLabStudioInner: React.FC<{
     };
   }, []);
 
-  const { code, setCode, codeMode, setCodeMode, codeIr, generated, debugMap, flowDiagnostics, flowExpandFunctions, setFlowExpandFunctions, rebuildFlowFromCode } = usePythonFlowSync({
+  const { code, setCode, codeMode, setCodeMode, codeIr, generated, canSyncCodeFromFlow, syncCodeFromFlow, debugMap, flowDiagnostics, flowExpandFunctions, setFlowExpandFunctions, rebuildFlowFromCode } = usePythonFlowSync({
     starterCode: experiment?.starterCode,
     preferBackendCfg: auth.isLoggedIn() || Boolean(auth.getToken()),
     beautifyParams: ruleSet.beautify.params,
@@ -491,6 +494,8 @@ const PythonLabStudioInner: React.FC<{
     code,
     debugMap,
     pythonlabRuntime,
+    recoveryScope,
+    hasPriorSession: Boolean(priorSession.sessionId),
   });
   const {
     debugMode,
@@ -858,8 +863,8 @@ const PythonLabStudioInner: React.FC<{
   }, [addNode, ensureAuto, nodes, offsetX, offsetY, scale, selectedNodeId, setNodes, setSelectedEdgeId, setSelectedNodeId]);
 
   const codeApi = useMemo(() => ({
-    code, setCode, codeMode, setCodeMode, codeIr, generated, debugMap, flowDiagnostics, flowExpandFunctions, setFlowExpandFunctions, rebuildFlowFromCode,
-  }), [code, setCode, codeMode, setCodeMode, codeIr, generated, debugMap, flowDiagnostics, flowExpandFunctions, setFlowExpandFunctions, rebuildFlowFromCode]);
+    code, setCode, codeMode, setCodeMode, codeIr, generated, canSyncCodeFromFlow, syncCodeFromFlow, debugMap, flowDiagnostics, flowExpandFunctions, setFlowExpandFunctions, rebuildFlowFromCode,
+  }), [code, setCode, codeMode, setCodeMode, codeIr, generated, canSyncCodeFromFlow, syncCodeFromFlow, debugMap, flowDiagnostics, flowExpandFunctions, setFlowExpandFunctions, rebuildFlowFromCode]);
 
   const runnerActionsApi = useMemo(() => ({
     runner: runnerView,
@@ -902,6 +907,14 @@ const PythonLabStudioInner: React.FC<{
     <CodeCtxProvider value={codeApi}>
     <RunnerActionsProvider value={runnerActionsApi}>
     <div className="flex-1 flex flex-col overflow-hidden">
+      {priorSession.sessionId && (
+        <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border-secondary bg-surface-2 px-3 py-2 text-sm" role="status">
+          <span>{priorSession.error ?? "检测到刷新前的调试会话。请先停止旧会话再启动。"}</span>
+          <Button size="sm" variant="outline" disabled={priorSession.stopping} onClick={() => void priorSession.stop()}>
+            {priorSession.stopping ? "正在确认停止…" : "停止旧会话"}
+          </Button>
+        </div>
+      )}
       <div
         style={{
           background: "transparent",

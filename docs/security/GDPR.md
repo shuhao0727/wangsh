@@ -77,7 +77,7 @@ curl --fail-with-body "$WANGSH_API_BASE/api/v1/users/privacy/me/export" \
 
 ## 审计与同意管理
 
-沿用 `sys_audit_logs`：`EXPORT_DATA_REQUESTED` / `DELETE_DATA_REQUESTED` 先提交，保留请求尝试；同次操作以 `resource_type=privacy_operation` 与相同 `resource_id` 关联。删除与 `DELETE_DATA_COMPLETED` 同事务提交，失败回滚并尽力写 `DELETE_DATA_FAILED`。导出完整文件准备后才写 `EXPORT_DATA_COMPLETED`，准备失败写 `EXPORT_DATA_FAILED`；导出完成只证明服务端文件准备完成，不能证明客户端完整接收。历史 `EXPORT_DATA` / `DELETE_DATA` 仍只代表旧请求尝试。审计故障不伪造完成，日志不记录消息内容或异常原文。
+沿用 `sys_audit_logs`：`EXPORT_DATA_REQUESTED` / `DELETE_DATA_REQUESTED` 先提交，保留请求尝试；同次操作以 `resource_type=privacy_operation` 与相同 `resource_id` 关联。删除与 `DELETE_DATA_COMPLETED` 同事务提交，失败回滚并尽力写 `DELETE_DATA_FAILED`。导出完整文件准备后才写 `EXPORT_DATA_COMPLETED`，准备失败先回滚读取事务，再用同一操作 ID 写入 `EXPORT_DATA_FAILED`，对外返回通用错误，不记录 SQL 或异常原文；导出完成只证明服务端文件准备完成，不能证明客户端完整接收。历史 `EXPORT_DATA` / `DELETE_DATA` 仍只代表旧请求尝试。审计故障不伪造完成，日志不记录消息内容或异常原文。
 
 同意管理当前提供 `GET/PUT/DELETE /api/v1/users/privacy/me/consents`，支持 `AI_USAGE`、`DATA_ANALYSIS` 两类；写入/撤回记录 `CONSENT_GRANTED` / `CONSENT_WITHDRAWN` 审计，前端入口为 `/privacy`（登录用户菜单）。接口只记录同意意愿，不删除历史数据；**尚未在所有 AI 调用前强制校验同意，也没有同意版本文本字段**，不能宣称完整合规闭环。告知文本、运营地区、责任人、保留期限和撤回渠道仍由运营方确认（PRIV-04）。
 

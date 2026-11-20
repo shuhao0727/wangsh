@@ -1,5 +1,5 @@
-import { api, type ApiResponse } from "@services";
-import type { LearningContentItem, LearningModuleKey, LearningProgressState, LearningStageStatus } from "@/features/it-technology/learning/types";
+import { api } from "@services";
+import type { LearningBook, LearningBookChapter, LearningContentItem, LearningModuleKey, LearningProgressState, LearningStageStatus } from "@/features/it-technology/learning/types";
 import { createEmptyLearningProgress } from "@/features/it-technology/learning/types";
 
 export const normalizeLearningProgress = (value: unknown): LearningProgressState => {
@@ -63,6 +63,49 @@ export const fetchLearningContentPayload = async <T>(moduleKey: LearningModuleKe
       [item.section_key]: { ...(sectionData as Record<string, unknown>), [item.item_key]: entryValue },
     } as Partial<T>;
   }, {});
+};
+
+type SavedChapterMarkdown = Pick<LearningBookChapter, "slug"> & { markdown: string | null };
+
+const chaptersPath = (moduleKey: LearningModuleKey) => `/learning/chapters/${moduleKey}`;
+
+export const fetchLearningBookContent = async <T extends { book?: LearningBook }>(
+  fallback: LearningBook,
+  { requireSavedChapters = false } = {},
+): Promise<Omit<Partial<T>, "book"> & { book: LearningBook }> => {
+  const [payload, savedChapters] = await Promise.all([
+    fetchLearningContentPayload<T>(fallback.moduleKey),
+    api.client.get<SavedChapterMarkdown[]>(chaptersPath(fallback.moduleKey))
+      .then(({ data }) => data)
+      .catch((error: unknown) => {
+        if (requireSavedChapters) throw error;
+        return [];
+      }),
+  ]);
+  const { book: remoteBook, ...content } = payload ?? ({} as Partial<T>);
+  const book = remoteBook ?? fallback;
+  const markdownBySlug = new Map(savedChapters.map(({ slug, markdown }) => [slug, markdown]));
+  const chapters = book.chapters.map((chapter) => {
+    const markdown = markdownBySlug.get(chapter.slug);
+    return typeof markdown === "string" ? { ...chapter, markdown } : chapter;
+  });
+  return { ...content, book: { ...book, chapters } };
+};
+
+export const saveLearningChapterMarkdown = async (
+  moduleKey: LearningModuleKey,
+  chapter: LearningBookChapter,
+  markdown: string,
+) => {
+  const { data } = await api.client.put<SavedChapterMarkdown>(`${chaptersPath(moduleKey)}/${encodeURIComponent(chapter.slug)}`, {
+    title: chapter.title,
+    summary: chapter.summary,
+    estimated_minutes: chapter.estimatedMinutes,
+    difficulty: chapter.difficulty,
+    group_name: chapter.group,
+    markdown,
+  });
+  return data;
 };
 
 export const filterByKeyword = <T extends { title?: string; name?: string; summary?: string; description?: string; desc?: string; tags?: string[] }>(items: T[], keyword: string): T[] => {

@@ -1,11 +1,15 @@
 import { useEffect, useRef } from 'react';
 import { config } from '@services';
+import useAuth from '@hooks/useAuth';
+import { ADMIN_ROLES, canAccessRoles } from '@/components/Auth/roleAccess';
 
 export function useAdminSSE(
   eventType: string,
   onEvent: () => void,
   enabled = true
 ) {
+  const { isAuthenticated, user } = useAuth();
+  const maySubscribe = enabled && isAuthenticated && canAccessRoles(user?.role_code, ADMIN_ROLES);
   const onEventRef = useRef(onEvent);
 
   useEffect(() => {
@@ -13,7 +17,7 @@ export function useAdminSSE(
   }, [onEvent]);
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!maySubscribe) return;
     let stopped = false;
     let stream: EventSource | null = null;
     let retryTimer: NodeJS.Timeout | null = null;
@@ -90,5 +94,5 @@ export function useAdminSSE(
         debounceTimer = null;
       }
     };
-  }, [eventType, enabled]);
+  }, [eventType, maySubscribe]);
 }

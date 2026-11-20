@@ -19,7 +19,7 @@ import { groupDiscussionApi } from "@services/agents";
 import { config as appConfig } from "@services";
 import { userApi } from "@services";
 import { getStoredAccessToken } from "@services/api";
-import type { GroupDiscussionGroup, GroupDiscussionMember, GroupDiscussionPublicConfig } from "@services/znt/api/group-discussion-api";
+import type { GroupDiscussionGroup, GroupDiscussionMember, GroupDiscussionMessage, GroupDiscussionMessageListResponse, GroupDiscussionPublicConfig } from "@services/znt/api/group-discussion-api";
 import type { User } from "@services/users";
 import { logger } from "@services/logger";
 import { getJoinLockRemainingSeconds, parseJoinLockHint, type JoinLockHint } from "./groupDiscussionJoinLock";
@@ -73,6 +73,22 @@ const ReloadOutlined = RefreshCw;
 const UserAddOutlined = UserPlus;
 const DeleteOutlined = Trash2;
 const CloseOutlined = X;
+
+// SSE 断开后的兜底轮询：3 秒起，连续失败退避到 30 秒。
+const POLL_BASE_MS = 3000;
+const POLL_MAX_MS = 30000;
+const MESSAGE_PAGE_LIMIT = 200;
+
+type DiscussionMessage = GroupDiscussionMessage & { is_mine: boolean };
+type MessageLoadResult = "ok" | "forbidden" | "missing" | "error";
+
+function mergeMessages(previous: DiscussionMessage[], items: GroupDiscussionMessage[], userId?: number) {
+  const byId = new Map(previous.map(message => [message.id, message]));
+  for (const item of items) {
+    byId.set(item.id, { ...item, is_mine: item.user_id === userId });
+  }
+  return [...byId.values()].sort((a, b) => a.id - b.id);
+}
 
 const STORAGE_KEYS = {
   SESSION_ID: "gd_session_id",
@@ -144,15 +160,15 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
   const [joinLockHint, setJoinLockHint] = useState<JoinLockHint | null>(null);
   const [joinLockRemaining, setJoinLockRemaining] = useState(0);
   
-  const [messages, setMessages] = useState<any[]>([]);
-  const [_polling, _setPolling] = useState(false);
+  const [messages, setMessages] = useState<DiscussionMessage[]>([]);
+  const readMessagesRef = useRef<(() => Promise<MessageLoadResult>) | null>(null);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [chatRefreshing, setChatRefreshing] = useState(false);
   const [lastSendTime, setLastSendTime] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
   const afterIdRef = useRef(0);
-  const sendingRef = useRef(false);
+  const sendingRef = useRef<symbol | null>(null);
   const chatRefreshingRef = useRef(false);
 
   // --- 成员管理状态 ---
@@ -185,6 +201,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
     setView("intro");
     setMessages([]);
     setDraft("");
+    sendingRef.current = null;
     setSending(false);
     setChatRefreshing(false);
     afterIdRef.current = 0;
@@ -466,15 +483,6 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
       setMessages([]);
       afterIdRef.current = 0;
       setView("chat");
-
-      // 主动加载历史消息（防止 sessionId 未变时 useEffect 不重新触发）
-      try {
-        const msgRes = await groupDiscussionApi.listMessages({ sessionId: session_id, afterId: 0, limit: 50 });
-        if (msgRes.success && msgRes.data.items.length > 0) {
-          setMessages(msgRes.data.items.map((m: any) => ({ ...m, is_mine: userId ? m.user_id === userId : false })));
-          afterIdRef.current = msgRes.data.next_after_id;
-        }
-      } catch {}
     } catch (err) {
       logger.error(err);
     }
@@ -520,29 +528,26 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
       return;
     }
 
-    sendingRef.current = true;
+    const request = Symbol();
+    sendingRef.current = request;
     setSending(true);
     try {
       const res = await groupDiscussionApi.sendMessage({ sessionId, content: text });
+      if (sendingRef.current !== request) return;
       if (res.success) {
         setDraft("");
         setLastSendTime(Date.now());
-        // 乐观更新消息列表
-        setMessages(prev => [...prev, {
-          id: res.data.id,
-          user_display_name: res.data.user_display_name,
-          content: res.data.content,
-          created_at: res.data.created_at,
-          is_mine: true
-        }]);
-        afterIdRef.current = Math.max(afterIdRef.current, res.data.id);
+        // 先显示自己的消息，读取游标由连续的 REST/SSE 消息页推进。
+        setMessages(prev => mergeMessages(prev, [res.data], userId));
         scrollToBottom();
       } else {
         showMessage.error(res.message);
       }
     } finally {
-      sendingRef.current = false;
-      setSending(false);
+      if (sendingRef.current === request) {
+        sendingRef.current = null;
+        setSending(false);
+      }
     }
   };
 
@@ -553,31 +558,39 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
   }, [clearDiscussionSessionState, fetchGroups]);
 
   // --- 消息加载与轮询 ---
-  const loadMessages = useCallback(async (sid: number): Promise<"ok" | "forbidden" | "error"> => {
-    const res = await groupDiscussionApi.listMessages({
-      sessionId: sid,
-      afterId: afterIdRef.current,
-      limit: 50
-    });
-    if (!res.success) {
-      if (res.forbidden) {
-        showMessage.warning("你已不在该讨论组");
-        handleExit();
-        return "forbidden";
-      }
-      return "error";
-    }
-    if (res.data.items.length > 0) {
-      setMessages(prev => {
-        const ids = new Set(prev.map(m => m.id));
-        const newItems = res.data.items.filter(m => !ids.has(m.id)).map(m => ({ ...m, is_mine: userId ? m.user_id === userId : false }));
-        return [...prev, ...newItems].sort((a, b) => a.id - b.id);
+  // "forbidden"/"missing" 是终态：调用方必须停止轮询；"error" 为可重试的临时失败。
+  const loadMessages = useCallback(async (sid: number, signal: AbortSignal): Promise<MessageLoadResult> => {
+    let afterId = afterIdRef.current;
+    for (;;) {
+      const res = await groupDiscussionApi.listMessages({
+        sessionId: sid, afterId, limit: MESSAGE_PAGE_LIMIT, signal,
       });
-      afterIdRef.current = res.data.next_after_id;
+      if (signal.aborted) return "error";
+      if (!res.success) {
+        if (res.forbidden || res.missing) {
+          showMessage.warning(res.forbidden ? "你已不在该讨论组" : "讨论组已被删除");
+          handleExit();
+          return res.forbidden ? "forbidden" : "missing";
+        }
+        return "error";
+      }
+      const { items, next_after_id } = res.data;
+      if (items.length === 0) return "ok";
+      setMessages(prev => mergeMessages(prev, items, userId));
+      afterIdRef.current = Math.max(afterIdRef.current, next_after_id);
       scrollToBottom();
+      if (items.length < MESSAGE_PAGE_LIMIT) return "ok";
+      afterId = next_after_id;
     }
-    return "ok";
   }, [userId, handleExit]);
+
+  // 订阅/轮询副作用经 ref 读取最新回调，避免筛选或面板开关变化引起 SSE 重连。
+  const handleExitRef = useRef(handleExit);
+  const loadMessagesRef = useRef(loadMessages);
+  useEffect(() => {
+    handleExitRef.current = handleExit;
+    loadMessagesRef.current = loadMessages;
+  }, [handleExit, loadMessages]);
 
   useEffect(() => {
     if (isAuthenticated) return;
@@ -592,72 +605,73 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
       await fetchGroups();
       return;
     }
-    if (!sessionId) {
-      showMessage.warning("当前未加入小组");
-      return;
-    }
-    if (chatRefreshingRef.current) return;
+    const readMessages = readMessagesRef.current;
+    if (!readMessages || chatRefreshingRef.current) return;
     chatRefreshingRef.current = true;
     setChatRefreshing(true);
     try {
-      const res = await groupDiscussionApi.listMessages({
-        sessionId,
-        afterId: 0,
-        limit: 200,
-      });
-      if (!res.success) {
-        showMessage.error(res.message || "刷新失败");
-        return;
+      if (await readMessages() === "error" && readMessagesRef.current === readMessages) {
+        showMessage.error("刷新失败，请稍后重试");
       }
-      const fullItems = (res.data.items || [])
-        .map((m: any) => ({ ...m, is_mine: userId ? m.user_id === userId : false }))
-        .sort((a: any, b: any) => a.id - b.id);
-      setMessages(fullItems);
-      afterIdRef.current = res.data.next_after_id || (fullItems.length > 0 ? fullItems[fullItems.length - 1].id : 0);
-      scrollToBottom();
-    } catch (err) {
-      logger.error(err);
-      showMessage.error("刷新失败，请稍后重试");
     } finally {
       chatRefreshingRef.current = false;
       setChatRefreshing(false);
     }
-  }, [view, fetchGroups, sessionId, userId]);
+  }, [view, fetchGroups]);
 
   useEffect(() => {
     if (!open || !isAuthenticated) return;
     if (sessionId) {
       setView("chat");
-      // 尝试加载一次消息来验证 Session 有效性
-      loadMessages(sessionId).catch(() => {
-        handleExit(); // 如果加载失败（如404），退出到列表
-      });
       return;
     }
     setView("intro");
     void fetchGroups();
-  }, [open, isAuthenticated, sessionId, loadMessages, handleExit, fetchGroups]);
+  }, [open, isAuthenticated, sessionId, fetchGroups]);
 
   useEffect(() => {
-    if (!isAuthenticated || view !== "chat" || !sessionId) return;
+    // 面板关闭时不该继续占用 SSE/轮询：重开时会带 after_id 续传。
+    if (!open || !isAuthenticated || view !== "chat" || !sessionId) return;
 
     // 使用 SSE 实时接收消息，替代轮询
     const token = getStoredAccessToken() || "";
     const sseUrl = `${appConfig.apiUrl}/ai-agents/group-discussion/stream?session_id=${sessionId}&after_id=${afterIdRef.current}${token ? `&token=${encodeURIComponent(token)}` : ""}`;
     let eventSource: EventSource | null = null;
     let fallbackActive = false;
+    let pollTimer: number | null = null;
+    let pollDelay = POLL_BASE_MS;
+    const controller = new AbortController();
+    let pendingRead: Promise<MessageLoadResult> | null = null;
+    const readMessages = () => {
+      pendingRead ??= loadMessagesRef.current(sessionId, controller.signal).finally(() => { pendingRead = null; });
+      return pendingRead;
+    };
+    // SSE 负责打开时的历史回读；断线和主动刷新走相同的 REST 分页路径。
+    readMessagesRef.current = readMessages;
+
+    const stopPolling = () => {
+      fallbackActive = false;
+      if (pollTimer !== null) {
+        window.clearTimeout(pollTimer);
+        pollTimer = null;
+      }
+    };
 
     const startFallbackPolling = () => {
       if (fallbackActive) return;
       fallbackActive = true;
       const poll = async () => {
         if (!fallbackActive) return;
-        const result = await loadMessages(sessionId);
-        if (result === "forbidden") {
-          fallbackActive = false;
+        const result = await readMessages();
+        if (!fallbackActive) return;
+        // 权限被撤销或讨论组已删除属于终态，继续轮询只会无限 403/404。
+        if (result === "forbidden" || result === "missing") {
+          stopPolling();
           return;
         }
-        if (fallbackActive) setTimeout(poll, 3000);
+        // 临时失败退避到 30 秒封顶，避免后端持续 5xx 时每 3 秒打一次；成功即复位。
+        pollDelay = result === "error" ? Math.min(pollDelay * 2, POLL_MAX_MS) : POLL_BASE_MS;
+        pollTimer = window.setTimeout(poll, pollDelay);
       };
       void poll();
     };
@@ -666,30 +680,22 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
       eventSource = new EventSource(sseUrl, { withCredentials: true });
 
       eventSource.addEventListener("access_revoked", () => {
+        controller.abort();
         showMessage.warning("你已被移出讨论组");
-        fallbackActive = false;
+        stopPolling();
         if (eventSource) {
           eventSource.close();
           eventSource = null;
         }
-        handleExit();
+        handleExitRef.current();
       });
 
       eventSource.onmessage = (event) => {
         try {
-          const data = JSON.parse(event.data);
-          if (data.items && data.items.length > 0) {
-            setMessages(prev => {
-              const ids = new Set(prev.map(m => m.id));
-              const newItems = data.items.filter((m: any) => !ids.has(m.id)).map((m: any) => ({
-                ...m,
-                is_mine: userId ? m.user_id === userId : false,
-              }));
-              return [...prev, ...newItems].sort((a: any, b: any) => a.id - b.id);
-            });
-            if (data.next_after_id) {
-              afterIdRef.current = data.next_after_id;
-            }
+          const { items, next_after_id } = JSON.parse(event.data) as GroupDiscussionMessageListResponse;
+          if (items?.length) {
+            setMessages(prev => mergeMessages(prev, items, userId));
+            afterIdRef.current = Math.max(afterIdRef.current, next_after_id);
             scrollToBottom();
           }
         } catch {}
@@ -709,13 +715,15 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
     }
 
     return () => {
-      fallbackActive = false;
+      controller.abort();
+      readMessagesRef.current = null;
+      stopPolling();
       if (eventSource) {
         eventSource.close();
         eventSource = null;
       }
     };
-  }, [isAuthenticated, view, sessionId, userId, loadMessages, handleExit]);
+  }, [open, isAuthenticated, view, sessionId, userId]);
 
   const scrollToBottom = () => {
     setTimeout(() => {

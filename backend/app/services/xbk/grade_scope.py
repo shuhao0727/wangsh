@@ -41,6 +41,23 @@ def validate_course_grade_scope(
         )
 
 
+def validate_course_grade_change(
+    current_grade: Optional[str],
+    target_grade: Optional[str],
+    occupied_classes: Iterable[tuple[Optional[str], str, int]],
+) -> None:
+    """An existing choice must still qualify if the course restricts its grade."""
+    target = normalize_grade(target_grade)
+    if target is None or target == normalize_grade(current_grade):
+        return
+    for grade, class_name, _ in occupied_classes:
+        if normalize_grade(grade) != target:
+            raise HTTPException(
+                status_code=409,
+                detail=f"不能将课程改为仅面向 {target}：{grade or '未分年级'} {class_name} 已有有效选课",
+            )
+
+
 def validate_student_grade_scope(
     selections, target_grade: Optional[str], courses: Mapping[tuple[str, str, str], XbkCourse],
 ) -> None:

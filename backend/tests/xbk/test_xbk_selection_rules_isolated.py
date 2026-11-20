@@ -525,6 +525,67 @@ def test_grade_scope_guard_runs_before_capacity(db):
     assert "仅面向" in exc.value.detail
 
 
+@pytest.mark.parametrize("operation", [import_export.preview_import, import_export.import_data])
+def test_import_keeps_explicit_grade_with_its_physical_row_after_skips(db, operation):
+    seed(db, roster("S2", "2班", grade="高二"), catalog_with_grade("C1", 5, None))
+    file = csv_upload([
+        {"学号": "", "课程代码": "C1", "年级": ""},
+        {"学号": "未在名册", "课程代码": "C1", "年级": ""},
+        {"学号": "S2", "课程代码": "C1", "年级": "高二"},
+    ])
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(operation(scope="selections", year=YEAR, term=TERM, grade="高一", file=file, db=db, _={}))
+
+    assert exc.value.status_code == 422
+    assert "第4行" in exc.value.detail and "高二" in exc.value.detail
+    assert active(db) == []
+
+
+@pytest.mark.parametrize("operation", [import_export.preview_import, import_export.import_data])
+def test_selection_import_uses_roster_grade_for_course_eligibility(db, operation):
+    seed(db, roster("S2", "2班", grade="高二"), catalog_with_grade("C2", 5, "高二"))
+    file = csv_upload([
+        {"学号": "", "课程代码": "C2", "年级": ""},
+        {"学号": "S2", "课程代码": "C2", "年级": "高一"},
+    ])
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(operation(scope="selections", year=YEAR, term=TERM, grade="高二", file=file, db=db, _={}))
+    assert exc.value.status_code == 422
+    assert "第3行" in exc.value.detail and "本次导入选择" in exc.value.detail
+    assert active(db) == []
+
+
+@pytest.mark.parametrize("operation", [import_export.preview_import, import_export.import_data])
+def test_import_reports_physical_csv_line_after_multiline_field(db, operation):
+    seed(db, roster("S2", "2班", grade="高二"), catalog_with_grade("C1", 5, None))
+    file = csv_upload([
+        {"学号": "", "课程代码": "C1", "年级": "", "姓名": "跨\n行"},
+        {"学号": "S2", "课程代码": "C1", "年级": "高二", "姓名": "S2"},
+    ])
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(operation(scope="selections", year=YEAR, term=TERM, grade="高一", file=file, db=db, _={}))
+    assert exc.value.status_code == 422 and "第4行" in exc.value.detail
+    assert active(db) == []
+
+
+@pytest.mark.parametrize("grade,deleted,expected", [("高二", False, 409), ("高一", False, 200), ("高二", True, 200)])
+def test_course_grade_narrowing_checks_live_roster_of_active_choices(db, grade, deleted, expected):
+    course = catalog_with_grade("C1", 5, None)
+    seed(db, roster("S1", "1班", grade=grade), course, choice("S1", "C1", deleted=deleted))
+    updated = XbkCourseUpsert(year=YEAR, term=TERM, grade="高一", course_code="C1", course_name="C1", quota=5)
+
+    if expected == 409:
+        with pytest.raises(HTTPException) as exc:
+            asyncio.run(courses.update_course(course.id, updated, db, {}))
+        assert exc.value.status_code == 409
+        assert "高二" in exc.value.detail
+        assert course.grade is None and len(active(db)) == 1
+    else:
+        result = asyncio.run(courses.update_course(course.id, updated, db, {}))
+        assert result["grade"] == "高一"
+
+
 def test_student_grade_change_rejected_when_selection_breaks_course_scope(db):
     """学生转年级后已有选课会变成跨年级，必须拒绝而不是留下违规历史。"""
     seed(db, roster("S1", "1班", grade="高一"), catalog_with_grade("C1", 5, "高一"),

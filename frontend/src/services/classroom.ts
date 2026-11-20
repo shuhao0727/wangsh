@@ -16,6 +16,7 @@ export interface Activity {
   id: number;
   activity_type: "vote" | "fill_blank";
   title: string;
+  class_name?: string | null;
   options: OptionItem[] | null;
   correct_answer: string | null;
   allow_multiple: boolean;
@@ -77,6 +78,7 @@ export interface ActivityResult {
 export interface ActivityCreateRequest {
   activity_type: "vote" | "fill_blank";
   title: string;
+  class_name?: string;
   options?: OptionItem[];
   correct_answer?: string;
   allow_multiple?: boolean;

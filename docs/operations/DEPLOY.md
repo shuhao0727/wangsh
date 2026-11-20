@@ -96,7 +96,7 @@ COMPOSE_PROJECT_NAME=wangsh ENV_FILE=.env COMPOSE_FILE=docker-compose.production
 记录构建提交、Dockerfile/context、镜像 ID 及实际运行 ID。缓存命中可接受，旧镜像改标签
 不算新源码构建；网络失败保留日志、有限重试。清理只针对本批资源，不运行全局 prune。
 
-`scripts/deploy.sh simulate` 的 Docker socket 和 PythonLab 专属挂载详见下文。
+`scripts/deploy.sh simulate` 在私有模拟网络内使用 `redis` 服务地址，不沿用正式项目的容器名。Docker socket 和 PythonLab 专属挂载详见下文。
 不需要 PythonLab 的最小应用模拟不挂 Docker socket、正常业务卷或真实名册。
 空库采用既有 bootstrap → Alembic → compatibility bootstrap 流程；模拟通过不代替
 真实数据库恢复、PythonLab 压力、真实供应商或正式发布验收。

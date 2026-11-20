@@ -89,8 +89,12 @@ def parse_csv_rows(content: bytes) -> Tuple[List[str], Iterator[Dict[str, str]]]
             detail="CSV文件为空或格式不正确",
         )
 
-    fieldnames = [str(name).strip() for name in reader.fieldnames if name]
-    return fieldnames, reader
+    reader.fieldnames = [normalize_cell_value(name) for name in reader.fieldnames]
+    rows = (
+        {name: value or "" for name, value in row.items() if name}
+        for row in reader
+    )
+    return [name for name in reader.fieldnames if name], rows
 
 
 def parse_xlsx_rows(content: bytes) -> Tuple[List[str], Iterator[Dict[str, str]]]:
@@ -195,7 +199,7 @@ def build_user_import_template(format: str) -> StreamingResponse:
         writer = csv.writer(output)
         writer.writerow(USER_IMPORT_HEADERS)
         writer.writerow(["# 注意：角色列可选值：student(学生)/teacher(教师)/admin(管理员)/super_admin(超级管理员)"])
-        writer.writerow(["# 状态：true=激活，false=未激活（可选，默认为true）"])
+        writer.writerow(["# 状态：true=激活，false=未激活。角色或状态留空时，更新保留原值，新增默认学生、启用。"])
         writer.writerow(["# 用户名：可选字段，如果不填将使用学号作为登录账号"])
         writer.writerow(["# 示例数据："])
         for sample_row in USER_IMPORT_TEMPLATE_ROWS:
@@ -219,7 +223,7 @@ def build_user_import_template(format: str) -> StreamingResponse:
     notes_sheet = workbook.create_sheet(title="填写说明")
     notes_sheet.append(["说明"])
     notes_sheet.append(["1. 角色列可选值：student(学生)/teacher(教师)/admin(管理员)/super_admin(超级管理员)"])
-    notes_sheet.append(["2. 状态字段可填 true/false（默认为 true）"])
+    notes_sheet.append(["2. 状态可填 true/false。角色或状态留空时，更新保留原值，新增默认学生、启用。"])
     notes_sheet.append(["3. 用户名字段可选，不填将使用学号作为登录账号"])
     notes_sheet.append(["4. 学号、姓名为必填字段"])
 
@@ -239,20 +243,21 @@ def _parse_import_user(row: Dict[str, str]) -> Dict[str, Any]:
     if not student_id or not full_name:
         raise ValueError("学号和姓名为必填字段")
 
-    status_str = row.get("状态", "true").strip().lower()
-    if status_str in ["false", "0", "no", "否"]:
+    status_str = row.get("状态", "").strip().lower()
+    is_active = None
+    if status_str in ("false", "0", "no", "否"):
         is_active = False
-    elif status_str in ["true", "1", "yes", "是", ""]:
+    elif status_str in ("true", "1", "yes", "是"):
         is_active = True
-    else:
+    elif status_str:
         raise ValueError(f"状态值无效: {status_str}")
 
     # 角色值：先做大小写与空白规范化，再严格校验白名单。
     # 旧实现把非法值静默降级成 student，用户以为导入成功、实际角色被改错，
     # 属于数据正确性问题；这里改为抛 ValueError，由 _process_import_rows 记为行级 error，
     # 只回滚该行，其余行照常提交。
-    role_code = (row.get("角色", "") or "").strip().lower() or "student"
-    if role_code not in ("student", "teacher", "admin", "super_admin"):
+    role_code = row.get("角色", "").strip().lower() or None
+    if role_code and role_code not in ("student", "teacher", "admin", "super_admin"):
         raise ValueError(
             f"角色值无效: {role_code}（可选 student/teacher/admin/super_admin）"
         )
@@ -292,8 +297,8 @@ async def _update_import_user(
     row_number: int,
 ) -> ImportUserResponse:
     assert_users_mutable(data["current_user"], [user])
-    final_role = data["role_code"]
-    final_active = data["is_active"]
+    final_role = data["role_code"] or user.role_code
+    final_active = user.is_active if data["is_active"] is None else data["is_active"]
     await assert_last_active_super_admin(
         db, {user.id: (final_role, final_active, bool(user.is_deleted))}
     )
@@ -336,8 +341,8 @@ async def _create_import_user(
         full_name=data["full_name"],
         class_name=data["class_name"],
         study_year=data["study_year"],
-        role_code=data["role_code"],
-        is_active=data["is_active"],
+        role_code=data["role_code"] or "student",
+        is_active=True if data["is_active"] is None else data["is_active"],
     )
     db.add(user)
     await db.flush()
@@ -364,13 +369,22 @@ async def _import_user_row(
         student_id=data["student_id"],
     )
     data["current_user"] = actor
-    assert_role_assignment_allowed(actor, data["role_code"])
+    if data["role_code"] is not None:
+        assert_role_assignment_allowed(actor, data["role_code"])
     if existing_user:
         return await _update_import_user(db, existing_user, data, row_number), False
     return await _create_import_user(db, data, row_number), True
 
 
 def _validate_import_headers(fieldnames: List[str]) -> None:
+    seen = set()
+    for field in fieldnames:
+        if field in seen:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"导入文件包含重复字段: {field}",
+            )
+        seen.add(field)
     for field in USER_IMPORT_REQUIRED_FIELDS:
         if field not in fieldnames:
             raise HTTPException(

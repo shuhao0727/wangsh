@@ -124,12 +124,17 @@ async def submit(db, batch_id, data):
 
 async def allow_refill(db, batch_id, data, user):
     async with writing(db, batch_id, user) as batch:
-        entries = [await find_student(db, batch_id, n) for n in data.student_numbers]
-        if any(e.current_revision == 0 for e in entries):
+        entries = await roster(db, batch_id)
+        requested_keys = {student_key(number) for number in data.student_numbers}
+        targets = [entry for entry in entries if entry.student_key in requested_keys]
+        if len(targets) != len(requested_keys):
+            raise HTTPException(404, "学号不在本次名单中，请向老师确认")
+        if any(entry.current_revision == 0 for entry in targets):
             raise HTTPException(409, "尚未提交的学生可直接填写，无需授权重填")
-        for entry in entries:
+        for entry in targets:
             entry.refill_allowed = data.allowed
-    return await details(db, batch)
+        result = await details(db, batch, entries=entries)
+    return result
 
 
 async def history(db, batch_id, number, user):

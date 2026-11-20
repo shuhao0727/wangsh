@@ -4,20 +4,14 @@ import dayjs from "dayjs";
 import SharedResultLayout from "./SharedResultLayout";
 import { useAnalysisDetail } from "./hooks/useAnalysisDetail";
 import { useNormalizedResult } from "./hooks/useNormalizedResult";
-import { escapeHtml, safeFilePart } from "../normalize";
+import { escapeHtml } from "../normalize";
+import { reportDownloads } from "./reportDownloads";
 import HotQuestionTimeline from "./HotQuestionTimeline";
 import HotPhaseList from "./HotPhaseList";
 import { buildHotPhases, buildHotTimeline, intervalLabel, labelText } from "./hotTimeline";
+import type { TaskAnalysisDetail } from "../types";
 
 const displayCount = (value: number | null, unit: string) => value === null ? "未记录" : `${value} ${unit}`;
-const downloadBlob = (content: string, filename: string, mime: string) => {
-  const url = URL.createObjectURL(new Blob([content], { type: mime }));
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(url);
-};
 // 分阶段导出：每个教师提问后学生的回应与生成性问题原文。
 const phaseMarkdown = (phases: ReturnType<typeof buildHotPhases>, subtypeLabels: Record<string, string>) => phases.flatMap((phase) => [
   `## ${phase.ref ?? "课前提问"}${phase.question ? `：${phase.question}` : ""}`,
@@ -36,7 +30,13 @@ const auditLabels: Record<string, string> = {
 };
 
 const HotAnalysisResultPage: React.FC = () => {
-  const { loading, detail } = useAnalysisDetail();
+  const { loading, detail, error } = useAnalysisDetail();
+  if (loading) return <div className="flex min-h-screen items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+  if (!detail) return <div role="alert" className="flex min-h-screen items-center justify-center text-sm text-text-tertiary">{error ?? "记录不存在"}</div>;
+  return <HotAnalysisResult detail={detail} />;
+};
+
+export const HotAnalysisResult: React.FC<{ detail: TaskAnalysisDetail }> = ({ detail }) => {
   const { resultData } = useNormalizedResult(detail);
   const model = useMemo(() => buildHotTimeline(resultData, detail), [resultData, detail]);
   const phases = useMemo(() => buildHotPhases(model), [model]);
@@ -61,30 +61,22 @@ const HotAnalysisResultPage: React.FC = () => {
     ] : [["其中生成性问题", displayCount(model.generative, "条")]]),
   ];
   const exportOptions = useMemo(() => {
-    if (!detail) return undefined;
     const title = detail.title || "热点问题分析";
-    const filename = `热点分析_${safeFilePart(title)}_${dayjs(detail.created_at).format("YYYYMMDD")}`;
     const value = (number: number | null) => number === null ? "未记录" : String(number);
     const rows = model.points.map((point) => [intervalLabel(point), value(point.total), value(point.generative), value(point.students)]);
     const notes = ["生成性问题为有效学生提问中的迁移、延伸子集，按保存的分类自动识别，不等同于学习效果。", ...model.notices];
     const summary = `班级：${detail.class_name || "全部班级"}；分析时段：${timeRange}；统计粒度：${granularity}；参与学生：${displayCount(model.students, "人")}；有效提问：${displayCount(model.total, "条")}；其中生成性问题：${displayCount(model.generative, "条")}`;
-    return [
-      { label: "HTML 报告", ext: "html", action: () => downloadBlob([
+    return reportDownloads("热点分析", title, detail.created_at, () => [
         "<!doctype html><html lang=\"zh-CN\"><meta charset=\"UTF-8\">",
         `<title>${escapeHtml(title)}</title><body><h1>${escapeHtml(title)}</h1><p>${escapeHtml(summary)}</p>`,
         "<table><thead><tr><th>时间段</th><th>有效提问</th><th>其中生成性</th><th>参与学生</th></tr></thead><tbody>",
         ...rows.map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`),
         "</tbody></table>", ...notes.map((note) => `<p>${escapeHtml(note)}</p>`), "</body></html>",
-      ].join("\n"), `${filename}.html`, "text/html;charset=utf-8") },
-      { label: "Markdown", ext: "md", action: () => downloadBlob([
+      ], () => [
         `# ${title}`, "", summary, "", "| 时间段 | 有效提问 | 其中生成性 | 参与学生 |", "| --- | ---: | ---: | ---: |",
         ...rows.map((row) => `| ${row.join(" | ")} |`), "", ...phaseMarkdown(phases, model.subtypeLabels), ...notes,
-      ].join("\n"), `${filename}.md`, "text/markdown;charset=utf-8") },
-    ];
+      ]);
   }, [detail, model, phases, timeRange, granularity]);
-
-  if (loading) return <div className="flex min-h-screen items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
-  if (!detail) return <div className="flex min-h-screen items-center justify-center text-sm text-text-tertiary">记录不存在</div>;
 
   return (
     <SharedResultLayout detail={detail} exportOptions={exportOptions} showTaskSheet={false}>

@@ -80,8 +80,9 @@ def answer_info(answer):
             "submitted_at": answer.submitted_at}
 
 
-async def details(db, batch, include_rows=True):
-    entries = await roster(db, batch.id)
+async def details(db, batch, include_rows=True, *, entries=None):
+    if entries is None:
+        entries = await roster(db, batch.id)
     submitted = sum(e.current_revision > 0 for e in entries)
     result = {**public_info(batch), "state": batch.state, "created_at": batch.created_at,
               "expected": len(entries), "submitted": submitted, "missing": len(entries) - submitted,

@@ -8,6 +8,11 @@ import ast
 import time
 
 import app.api.pythonlab.flow.utils as flow_utils
+from app.api.pythonlab.utils import SourceText
+from app.api.pythonlab.constants import (
+    MAX_NODE_FULL_TITLE_CHARS,
+    MAX_NODE_TITLE_CHARS,
+)
 
 
 def test_now_ms_returns_integer():
@@ -458,3 +463,56 @@ def test_split_pend():
     return_pends = result["Return"]
     assert len(return_pends) == 1
     assert return_pends[0] == ("node-1", "Return", "返回")
+
+def test_node_title_truncates_oversized_statement():
+    """超长语句标题按上限收敛，并以省略号标记。
+
+    复合语句的源代码段覆盖整段子树，不限长时响应会随嵌套层数成倍放大。
+    """
+    long_line = "x = [" + ", ".join(str(i) for i in range(4000)) + "]"
+    tree = ast.parse(long_line)
+    assert len(long_line) > MAX_NODE_TITLE_CHARS
+
+    title = flow_utils.node_title(long_line, tree.body[0])
+    assert len(title) == MAX_NODE_TITLE_CHARS + 1
+    assert title.endswith("…")
+
+    full = flow_utils._full_title(long_line, tree.body[0])
+    assert len(full) == MAX_NODE_FULL_TITLE_CHARS + 1
+    assert full.endswith("…")
+
+    # 截断点落在换行后的缩进空白处时，仍必须带省略号标记。
+    line1 = "if " + "a == 1 and " * 45 + "b == 2:"  # 505 chars
+    multiline_code = line1 + "\n" + (" " * 20 + "x = 1\n") * 200
+    multiline_tree = ast.parse(multiline_code)
+    multiline_title = flow_utils.node_title(SourceText(multiline_code), multiline_tree.body[0])
+    assert multiline_title.endswith("…")
+    assert len(multiline_title) <= MAX_NODE_TITLE_CHARS + 1
+
+
+def test_node_title_keeps_short_statements_verbatim():
+    code = "x = 1 + 2\nprint(x)\n"
+    tree = ast.parse(code)
+
+    assert flow_utils.node_title(code, tree.body[0]) == "x = 1 + 2"
+    assert flow_utils._full_title(code, tree.body[0]) == "x = 1 + 2"
+
+
+def test_source_text_matches_ast_get_source_segment():
+    """自建行索引必须与 CPython 切片语义一致（含中文 UTF-8 字节列偏移、无尾换行、CRLF），否则标题会错位。"""
+    samples = [
+        "a = 1\r\nb = 2\nif a:\n    c = 3\n",
+        "x = 1",
+        "x = 1\ny = 2",
+        'msg = "你好，世界！🐍"\nprint(msg, "第二行無尾換行")',
+        "def 问候(姓名='同学'):\r\n    return f'你好，{姓名}'\r\nprint(问候())",
+    ]
+    for code in samples:
+        tree = ast.parse(code)
+        src = SourceText(code)
+
+        for node in ast.walk(tree):
+            if not hasattr(node, "lineno"):
+                continue
+            expected = ast.get_source_segment(code, node)
+            assert src.segment(node) == expected

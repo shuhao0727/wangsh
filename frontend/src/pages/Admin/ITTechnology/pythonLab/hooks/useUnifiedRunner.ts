@@ -35,9 +35,10 @@ export function useUnifiedRunner(params: {
   code: string;
   debugMap: DebugMap | null;
   activeKind: RunnerKind;
+  recoveryScope?: string;
 }): UnifiedRunnerApi {
-  const { code, debugMap, activeKind } = params;
-  const dap = useDapRunner({ code, debugMap });
+  const { code, debugMap, activeKind, recoveryScope } = params;
+  const dap = useDapRunner({ code, debugMap, recoveryScope });
   const py = usePyodideRunner({ code });
 
   const active = activeKind === "dap" ? dap : py;
@@ -68,7 +69,7 @@ export function useUnifiedRunner(params: {
   }, [activeKind]);
 
   const resetAll = useCallback(() => {
-    void dapRef.current.reset?.();
+    void dapRef.current.reset?.().catch(() => {});
     void pyRef.current.reset?.();
   }, []);
 

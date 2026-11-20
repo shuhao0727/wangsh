@@ -3,7 +3,11 @@ import asyncio
 from fastapi import HTTPException
 
 import app.api.pythonlab.cfg as cfg_api
-from app.api.pythonlab.constants import DEFAULT_MAX_NODES, MAX_CODE_SIZE_BYTES
+from app.api.pythonlab.constants import (
+    DEFAULT_MAX_NODES,
+    MAX_CODE_SIZE_BYTES,
+    MAX_NODE_TITLE_CHARS,
+)
 
 
 def test_parse_cfg_rejects_invalid_code_payload():
@@ -105,3 +109,23 @@ def test_parse_cfg_rejects_too_many_nodes():
     except HTTPException as exc:
         assert exc.status_code == 413
         assert "节点过多" in str(exc.detail)
+
+
+def test_parse_cfg_bounds_compound_statement_titles():
+    """复合语句标题覆盖整段子树：不设上限时 240KB 代码实测返回 14.6MB。
+
+    这里断言标题与总响应都被收住，防止再次放大。
+    """
+    depth, leaves = 40, 400
+    lines = ["    " * i + f"if x{i} > 0:" for i in range(depth)]
+    body = "    " * depth
+    lines += [body + f"value_{i} = compute_{i}(a_{i}, b_{i}, c_{i}) + d_{i}" for i in range(leaves)]
+    code = "\n".join(lines) + "\n"
+    assert len(code.encode("utf-8")) < MAX_CODE_SIZE_BYTES
+
+    result = asyncio.run(cfg_api.parse_cfg({"code": code}, current_user={"id": 1}))
+
+    titles = [node["title"] for node in result["nodes"]]
+    assert max(len(t) for t in titles) <= MAX_NODE_TITLE_CHARS + 1  # +1 为省略号
+    # 输入约 60KB；未限长时同一形状会放大到数十 MB。
+    assert len(str(result)) < 4 * len(code)

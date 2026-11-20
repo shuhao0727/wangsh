@@ -22,6 +22,7 @@ from app.models.assessment import (
     AssessmentBasicProfile,
     StudentProfile,
 )
+from app.services.assessment.answer_question import answer_question_fields, answer_review, student_question_options
 from app.services.assessment.question_picker import load_fixed_question_pools
 
 
@@ -88,48 +89,37 @@ def _availability_error(config: AssessmentConfig, now: datetime) -> str | None:
     return None
 
 
-async def get_available_configs(db: AsyncSession, user_id: int) -> list[dict]:
-    """获取学生可用的测评列表（enabled=True + 在开放时段内），附带该学生的答题状态"""
+async def get_available_configs(
+    db: AsyncSession, user_id: int, *, include_in_progress: bool = False
+) -> list[dict]:
+    """返回开放测评及本人答题状态，按需包含启用但在窗外的续答项。"""
     now = datetime.now(timezone.utc)
-
-    configs_result = await db.execute(
-        select(AssessmentConfig)
-        .where(AssessmentConfig.enabled == True)  # noqa: E712
+    configs = (await db.scalars(
+        select(AssessmentConfig).where(AssessmentConfig.enabled.is_(True))
         .order_by(AssessmentConfig.created_at.desc())
-    )
-    configs = list(configs_result.scalars().all())
+    )).all()
+    open_ids = {c.id for c in configs if _availability_error(c, now) is None}
+    resume_ids = {c.id for c in configs} - open_ids if include_in_progress else set()
+    if not (open_ids or resume_ids):
+        return []
 
-    # 过滤时间窗口
-    visible_configs = [c for c in configs if _availability_error(c, now) is None]
-
-    # 批量查询该学生在这些配置下的 session
-    config_ids = [c.id for c in visible_configs]
-    sessions_result = await db.execute(
-        select(AssessmentSession)
-        .where(
-            and_(
-                AssessmentSession.user_id == user_id,
-                AssessmentSession.config_id.in_(config_ids) if config_ids else False,
-            )
-        )
-    ) if config_ids else None
-    sessions = list(sessions_result.scalars().all()) if sessions_result else []
-    # 每个 config 取最相关的 session：优先 in_progress，否则取最新的 graded；跳过 archived
+    in_progress = AssessmentSession.status == "in_progress"
+    sessions = (await db.scalars(select(AssessmentSession).where(
+        AssessmentSession.user_id == user_id,
+        AssessmentSession.status != "archived",
+        or_(AssessmentSession.config_id.in_(open_ids), and_(
+            AssessmentSession.config_id.in_(resume_ids), in_progress,
+        )),
+    ).order_by(in_progress.desc(), AssessmentSession.started_at.desc().nulls_last(), AssessmentSession.id.desc()))).all()
     session_map: dict[int, AssessmentSession] = {}
-    for s in sessions:
-        if s.status == "archived":
-            continue
-        existing = session_map.get(s.config_id)
-        if existing is None:
-            session_map[s.config_id] = s
-        elif s.status == "in_progress":
-            session_map[s.config_id] = s
-        elif existing.status != "in_progress" and (s.started_at or s.id) > (existing.started_at or existing.id):
-            session_map[s.config_id] = s
+    for session in sessions:
+        session_map.setdefault(session.config_id, session)
 
     items = []
-    for c in visible_configs:
+    for c in configs:
         s = session_map.get(c.id)
+        if c.id not in open_ids and s is None:
+            continue
         items.append({
             "id": c.id,
             "title": c.title,
@@ -138,6 +128,7 @@ async def get_available_configs(db: AsyncSession, user_id: int) -> list[dict]:
             "available_end": c.available_end.isoformat() if c.available_end else None,
             "session_status": s.status if s else None,
             "session_id": s.id if s else None,
+            "started_at": s.started_at if s and s.status == "in_progress" else None,
             "earned_score": s.earned_score if s else None,
         })
     return items
@@ -363,65 +354,56 @@ async def get_session_questions(
 ) -> list[dict]:
     """获取本次检测的题目列表（不含正确答案）"""
     session = await _load_session(db, session_id, user_id)
+    return await _student_questions(db, session.id)
 
+
+async def resume_session(db: AsyncSession, session_id: int, user_id: int) -> dict:
+    """Recheck the listed session and current time limit without writing."""
+    session = await _load_session(db, session_id, user_id)
+    result = {"session_id": session.id, "status": session.status}
+    if session.status in ("submitted", "graded"):
+        return result
+    if session.status != "in_progress":
+        raise ValueError("该检测无法继续答题")
+    config = await db.get(AssessmentConfig, session.config_id)
+    if not config or not config.enabled:
+        raise ValueError("该测评尚未开放")
+    return {
+        **result,
+        "config_title": config.title,
+        "time_limit_minutes": config.time_limit_minutes,
+        "started_at": session.started_at,
+        "questions": await _student_questions(db, session.id),
+    }
+
+
+async def _student_questions(db: AsyncSession, session_id: int) -> list[dict]:
     answers_result = await db.execute(
         select(AssessmentAnswer)
         .options(selectinload(AssessmentAnswer.question))
-        .where(AssessmentAnswer.session_id == session.id)
+        .where(AssessmentAnswer.session_id == session_id)
         .order_by(AssessmentAnswer.id)
     )
     answers = list(answers_result.scalars().all())
 
     items = []
-    for a in answers:
-        q = a.question
-        # 自适应题用 snapshot，固定题用 question 关联
-        if a.question_snapshot:
-            try:
-                snap = json.loads(a.question_snapshot)
-            except Exception:
-                snap = {}
-            items.append({
-                "answer_id": a.id,
-                "question_type": a.question_type,
-                "content": snap.get("content", ""),
-                "options": snap.get("options"),
-                "score": a.max_score,
-                "student_answer": a.student_answer,
-                "is_answered": a.student_answer is not None,
-                "is_adaptive": True,
-                "knowledge_point": a.knowledge_point,
-                "attempt_seq": a.attempt_seq or 1,
-            })
-        else:
-            items.append({
-                "answer_id": a.id,
-                "question_type": a.question_type,
-                "content": q.content if q else "",
-                "options": q.options if q else None,
-                "score": a.max_score,
-                "student_answer": a.student_answer,
-                "is_answered": a.student_answer is not None,
-                "is_adaptive": False,
-                "knowledge_point": a.knowledge_point or (q.knowledge_point if q else None),
-                "attempt_seq": a.attempt_seq or 1,
-            })
+    for answer in answers:
+        fields = answer_question_fields(answer)
+        adaptive = bool(answer.question_snapshot)
+        question = None if adaptive else answer.question
+        items.append({
+            "answer_id": answer.id,
+            "question_type": answer.question_type,
+            "content": fields["content"],
+            "options": student_question_options(fields["options"]),
+            "score": answer.max_score,
+            "student_answer": answer.student_answer,
+            "is_answered": answer.student_answer is not None,
+            "is_adaptive": adaptive,
+            "knowledge_point": answer.knowledge_point or (question.knowledge_point if question else None),
+            "attempt_seq": answer.attempt_seq or 1,
+        })
     return items
-
-
-async def _resolve_correct_answer(db, answer) -> tuple[str, str]:
-    """取题目的正确答案与解析：优先用答题时保存的快照，避免题库后续改动影响判分。"""
-    snapshot_raw = getattr(answer, "question_snapshot", None)
-    if snapshot_raw:
-        try:
-            snap = json.loads(snapshot_raw)
-            return snap.get("correct_answer", ""), snap.get("explanation", "")
-        except Exception:
-            return "", ""
-    question = answer.question
-    if question:
-        return question.correct_answer or "", question.explanation or ""
-    return "", ""
 
 
 def _text_matches(student_answer: str, correct_answer: str) -> bool:
@@ -429,15 +411,15 @@ def _text_matches(student_answer: str, correct_answer: str) -> bool:
     return student_answer.strip().lower() == correct_answer.strip().lower()
 
 
-async def _grade_fill_answer(db, session, answer, student_answer: str, correct_answer: str) -> dict:
+async def _grade_fill_answer(db, session, answer, student_answer: str, question: dict) -> dict:
     """填空题判分：配置了评分智能体时走 AI，失败或无智能体时文本比对兜底。"""
+    correct_answer = question["correct_answer"] or ""
     result: dict = {"correct_answer": correct_answer}
     config = (await db.execute(
         select(AssessmentConfig).where(AssessmentConfig.id == session.config_id)
     )).scalar_one()
-    question = answer.question
 
-    if question and getattr(config, "agent_id", None):
+    if question["content"] and getattr(config, "agent_id", None):
         try:
             grading = await _ai_grade_answer(db, config, question, student_answer, answer.max_score)
             answer.ai_score = grading["score"]
@@ -455,17 +437,18 @@ async def _grade_fill_answer(db, session, answer, student_answer: str, correct_a
     return {**result, "is_correct": is_correct, "earned_score": answer.ai_score}
 
 
-async def _grade_answer(db, session, answer, student_answer: str, correct_answer: str, explanation: str) -> dict:
+async def _grade_answer(db, session, answer, student_answer: str) -> dict:
     """按题型判分并写回答题记录，返回需要合并进响应的字段。"""
     if answer.question_type == "choice":
-        given = student_answer.strip().upper()
-        is_correct = correct_answer.strip().upper() == given
+        question = answer_question_fields(answer)
+        correct_answer = question["correct_answer"] or ""
+        is_correct = correct_answer.strip().upper() == student_answer.strip().upper()
         answer.is_correct = is_correct
         answer.ai_score = answer.max_score if is_correct else 0
         return {"is_correct": is_correct, "correct_answer": correct_answer,
-                "explanation": explanation, "earned_score": answer.ai_score}
+                "explanation": question["explanation"] or "", "earned_score": answer.ai_score}
     if answer.question_type == "fill":
-        return await _grade_fill_answer(db, session, answer, student_answer, correct_answer)
+        return await _grade_fill_answer(db, session, answer, student_answer, answer_question_fields(answer))
     # short_answer：仅保存，由教师或后续流程评分
     return {}
 
@@ -558,7 +541,7 @@ async def _append_adaptive_question(db, session, answer, result: dict) -> None:
             "answer_id": new_answer.id,
             "question_type": new_answer.question_type,
             "content": snapshot.get("content", ""),
-            "options": snapshot.get("options"),
+            "options": student_question_options(snapshot.get("options")),
             "score": new_answer.max_score,
             "is_adaptive": True,
             "knowledge_point": knowledge_point,
@@ -594,7 +577,6 @@ async def submit_answer(
 
     answer.student_answer = student_answer
     answer.answered_at = datetime.now(timezone.utc)
-    correct_answer, explanation = await _resolve_correct_answer(db, answer)
 
     result = {
         "answer_id": answer.id,
@@ -608,7 +590,7 @@ async def submit_answer(
         "next_question": None,
         "mastery_status": None,
     }
-    result.update(await _grade_answer(db, session, answer, student_answer, correct_answer, explanation))
+    result.update(await _grade_answer(db, session, answer, student_answer))
     await _append_adaptive_question(db, session, answer, result)
 
     await db.commit()
@@ -705,17 +687,11 @@ async def submit_session(
             continue
 
         if answer.question_type == "short_answer" and answer.ai_score is None:
-            q = answer.question
-            if not q:
-                q_result = await db.execute(
-                    select(AssessmentQuestion)
-                    .where(AssessmentQuestion.id == answer.question_id)
-                )
-                q = q_result.scalar_one_or_none()
-            if q:
+            question = answer_question_fields(answer)
+            if question["content"]:
                 try:
                     grading = await _ai_grade_answer(
-                        db, config, q, answer.student_answer, answer.max_score
+                        db, config, question, answer.student_answer, answer.max_score
                     )
                     answer.ai_score = grading["score"]
                     answer.is_correct = grading["is_correct"]
@@ -788,29 +764,6 @@ async def get_session_result(
     )
     bp = bp_result.scalar_one_or_none()
 
-    answers_detail = []
-    for a in session.answers:
-        q = a.question
-        if not q and a.question_id:
-            q_r = await db.execute(
-                select(AssessmentQuestion).where(AssessmentQuestion.id == a.question_id)
-            )
-            q = q_r.scalar_one_or_none()
-
-        answers_detail.append({
-            "id": a.id,
-            "question_type": a.question_type,
-            "content": q.content if q else "",
-            "options": q.options if q else None,
-            "student_answer": a.student_answer,
-            "correct_answer": q.correct_answer if q else "",
-            "is_correct": a.is_correct,
-            "earned_score": a.ai_score,
-            "max_score": a.max_score,
-            "ai_feedback": a.ai_feedback,
-            "explanation": q.explanation if q else None,
-        })
-
     return {
         "session_id": session.id,
         "config_id": config.id,
@@ -820,7 +773,7 @@ async def get_session_result(
         "total_score": session.total_score,
         "started_at": session.started_at,
         "submitted_at": session.submitted_at,
-        "answers": answers_detail,
+        "answers": [answer_review(answer) for answer in session.answers],
         "basic_profile_id": bp.id if bp else None,
     }
 
@@ -1113,7 +1066,9 @@ async def _calc_knowledge_rates(
     base = (
         select(
             AssessmentAnswer.session_id.label("session_id"),
-            question.knowledge_point.label("knowledge_point"),
+            func.coalesce(
+                func.nullif(AssessmentAnswer.knowledge_point, ""), question.knowledge_point,
+            ).label("knowledge_point"),
             AssessmentAnswer.attempt_seq.label("attempt_seq"),
             AssessmentAnswer.is_adaptive.label("is_adaptive"),
             AssessmentAnswer.id.label("id"),
@@ -1231,7 +1186,7 @@ async def _load_session(
 async def _ai_grade_answer(
     db: AsyncSession,
     config: AssessmentConfig,
-    question: AssessmentQuestion,
+    question: dict,
     student_answer: str,
     max_score: int,
 ) -> dict:
@@ -1241,10 +1196,10 @@ async def _ai_grade_answer(
     prompt = f"""你是一位严谨的阅卷教师。
 
 【题目】
-{question.content}
+{question["content"]}
 
 【参考答案】
-{question.correct_answer}
+{question["correct_answer"]}
 
 【学生答案】
 {student_answer}

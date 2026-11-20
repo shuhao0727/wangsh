@@ -16,6 +16,9 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# 版本号（与头部注释保持一致，供 --help 与横幅共用）
+SCRIPT_VERSION='3.1.0'
+
 # 端口配置
 BACKEND_PORT=8000
 FRONTEND_PORT=6608
@@ -361,7 +364,8 @@ show_help() {
     echo ""
     echo "示例:"
     echo "  $0            # 停止所有本地进程"
-    echo "  $0 --all      # 停止所有本地进程和Docker容器（含本机生产 Compose 栈，如存在）"
+    echo "  $0 --all      # 停止所有本地进程和Docker容器；跨目录创建的同项目容器默认拒绝"
+    echo "  $0 --all --include-prod   # 同时停止由其他目录创建的同一项目容器（例如生产）"
     echo "  $0 --status   # 显示当前状态"
     echo ""
 }
@@ -370,7 +374,7 @@ show_help() {
 main() {
     echo ""
     echo "============================================"
-    echo "     WangSh 项目本地开发环境停止器 v3.0"
+    echo "     WangSh 项目本地开发环境停止器 v${SCRIPT_VERSION}"
     echo "      增强端口管理，确保完全释放"
     echo "============================================"
     

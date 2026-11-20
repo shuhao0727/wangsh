@@ -6,28 +6,22 @@ import { ChevronDown, ChevronRight, Hash, Lightbulb, Loader2, Target, Users } fr
 import { echarts } from "@/lib/echarts";
 import dayjs from "dayjs";
 import SharedResultLayout from "./SharedResultLayout";
+import { reportDownloads } from "./reportDownloads";
 import { useAnalysisDetail } from "./hooks/useAnalysisDetail";
 import { useNormalizedResult } from "./hooks/useNormalizedResult";
 import { useBeamData } from "./hooks/useBeamData";
 import {
   escapeHtml,
-  safeFilePart,
   formatTimeRange,
   normalizeTimelineBuckets,
   normalizeTimelineTeacherMarks,
 } from "../normalize";
 import { getAgentChartTheme } from "../components/chartTheme";
 import ChainBeamChart from "../components/ChainBeamChart";
-import type { ChainDeepAnalysis } from "../types";
+import type { ChainDeepAnalysis, TaskAnalysisDetail } from "../types";
 
-/* ─── helpers ─── */
-const downloadBlob = (content: string, filename: string, mime: string) => {
-  const blob = new Blob([content], { type: mime });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = filename; a.click();
-  URL.revokeObjectURL(url);
-};
+const HotAnalysisResult = React.lazy(() => import("./HotAnalysisResultPage")
+  .then((module) => ({ default: module.HotAnalysisResult })));
 
 /* ─────────────────────────────────────────────────────────────────── */
 /* Section 1: Basic Info Bar                                          */
@@ -332,7 +326,14 @@ const ChainLLMSummary: React.FC<{ deep: ChainDeepAnalysis }> = ({ deep }) => {
 /* Main Page Component                                                */
 /* ─────────────────────────────────────────────────────────────────── */
 const ChainAnalysisResultPage: React.FC = () => {
-  const { loading, detail, isBeamView } = useAnalysisDetail();
+  const { loading, detail, error, isBeamView } = useAnalysisDetail();
+  if (loading) return <div className="flex min-h-screen items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+  if (!detail) return <div role="alert" className="flex min-h-screen items-center justify-center text-sm text-text-tertiary">{error ?? "记录不存在"}</div>;
+  // 兼容入口可按 view=beam 分发到此页，但显式类型仍决定报告格式。
+  return isBeamView ? <ChainAnalysisResult detail={detail} /> : <HotAnalysisResult detail={detail} />;
+};
+
+const ChainAnalysisResult: React.FC<{ detail: TaskAnalysisDetail }> = ({ detail }) => {
   const {
     resultData,
     chainCount,
@@ -340,7 +341,7 @@ const ChainAnalysisResultPage: React.FC = () => {
     questionTotal,
     studentTotal,
     savedStudentChains,
-  } = useBeamData(detail, isBeamView);
+  } = useBeamData(detail, true);
   // 保留 hook 引用，后续光束图组件可能需要
   useNormalizedResult(detail);
 
@@ -360,46 +361,27 @@ const ChainAnalysisResultPage: React.FC = () => {
 
   // 导出选项
   const exportOpts = useMemo(() => {
-    if (!detail) return undefined;
     const title = detail.title || "问题链分析";
-    const safe = safeFilePart(title);
-    const ts = dayjs(detail.created_at).format("YYYYMMDD");
-    return [
-      {
-        label: "HTML 报告", ext: "html", action: () => {
-          const summary = chainDeepAnalysis.executive_summary || "暂无摘要";
-          const lines = [
-            `<html><meta charset="UTF-8"><title>${escapeHtml(title)}</title><body>`,
-            `<h1>${escapeHtml(title)}</h1><p>${detail.created_at}</p>`,
-            `<h2>总体摘要</h2><p>${escapeHtml(summary)}</p>`,
-            `<h2>统计</h2><ul><li>学生数: ${studentTotal}</li><li>问题链: ${chainCount}</li><li>教师提问: ${teacherAnchorCount}</li><li>平均链长: ${avgChainLength}</li></ul>`,
-            "</body></html>",
-          ];
-          downloadBlob(lines.join("\n"), `问题链分析_${safe}_${ts}.html`, "text/html;charset=utf-8");
-        },
-      },
-      {
-        label: "Markdown", ext: "md", action: () => {
-          const md = [
-            `# ${title}`, `> ${detail.created_at}`, "",
-            "## 统计",
-            `- 学生数: ${studentTotal}`,
-            `- 问题链: ${chainCount}`,
-            `- 教师提问: ${teacherAnchorCount}`,
-            `- 平均链长: ${avgChainLength}`,
-            "",
-          ];
-          if (chainDeepAnalysis.executive_summary) {
-            md.push("## 总体摘要", chainDeepAnalysis.executive_summary, "");
-          }
-          downloadBlob(md.join("\n"), `问题链分析_${safe}_${ts}.md`, "text/markdown;charset=utf-8");
-        },
-      },
-    ];
+    return reportDownloads("问题链分析", title, detail.created_at, () => {
+      const summary = chainDeepAnalysis.executive_summary || "暂无摘要";
+      return [
+        `<html><meta charset="UTF-8"><title>${escapeHtml(title)}</title><body>`,
+        `<h1>${escapeHtml(title)}</h1><p>${detail.created_at}</p>`,
+        `<h2>总体摘要</h2><p>${escapeHtml(summary)}</p>`,
+        `<h2>统计</h2><ul><li>学生数: ${studentTotal}</li><li>问题链: ${chainCount}</li><li>教师提问: ${teacherAnchorCount}</li><li>平均链长: ${avgChainLength}</li></ul>`,
+        "</body></html>",
+      ];
+    }, () => [
+      `# ${title}`, `> ${detail.created_at}`, "",
+      "## 统计",
+      `- 学生数: ${studentTotal}`,
+      `- 问题链: ${chainCount}`,
+      `- 教师提问: ${teacherAnchorCount}`,
+      `- 平均链长: ${avgChainLength}`,
+      "",
+      ...(chainDeepAnalysis.executive_summary ? ["## 总体摘要", chainDeepAnalysis.executive_summary, ""] : []),
+    ]);
   }, [detail, chainDeepAnalysis, studentTotal, chainCount, teacherAnchorCount, avgChainLength]);
-
-  if (loading) return <div className="flex min-h-screen items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
-  if (!detail) return <div className="flex min-h-screen items-center justify-center text-sm text-text-tertiary">记录不存在</div>;
 
   const summaryCards = (
     <div className="flex items-center gap-6 rounded-xl border border-border/50 bg-surface/80 px-5 py-3">

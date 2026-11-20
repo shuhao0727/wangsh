@@ -38,12 +38,48 @@ export type PythonLabSessionMeta = {
   dap_host?: string | null;
   dap_port?: number | null;
   docker_container_id?: string | null;
+  stop_confirmed?: boolean;
   error_code?: string | null;
   error_detail?: string | null;
 };
 
-// Session recovery: persist last session ID in sessionStorage for browser refresh recovery
-const SESSION_STORAGE_KEY = "pythonlab:last_session_id";
+const recoveryKey = (scope: string) => `pythonlab:session:${scope}`;
+
+export function trackedPythonlabSession(scope: string): string | null {
+  try { return sessionStorage.getItem(recoveryKey(scope)); } catch { return null; }
+}
+
+export function trackPythonlabSession(scope: string, sessionId: string) {
+  try { sessionStorage.setItem(recoveryKey(scope), sessionId); } catch { /* storage unavailable */ }
+}
+
+export function forgetPythonlabSession(scope: string, sessionId: string) {
+  try {
+    if (trackedPythonlabSession(scope) === sessionId) sessionStorage.removeItem(recoveryKey(scope));
+  } catch { /* storage unavailable */ }
+}
+
+export function pythonlabSessionNotFound(error: unknown) {
+  return (error as { response?: { status?: number } })?.response?.status === 404;
+}
+
+export async function stopAndWaitForPythonlabSession(sessionId: string, scope?: string) {
+  const result = await pythonlabSessionApi.stop(sessionId);
+  if (!result.ok) throw new Error("停止请求未确认，请重试");
+  if (result.status !== "TERMINATED") {
+    for (let attempt = 0; attempt < 12; attempt++) {
+      await new Promise((resolve) => window.setTimeout(resolve, 500));
+      const meta = await pythonlabSessionApi.get(sessionId);
+      if (meta.status === "TERMINATED" && meta.stop_confirmed) {
+        if (scope) forgetPythonlabSession(scope, sessionId);
+        return;
+      }
+      if (meta.error_code === "SANDBOX_STOP_FAILED") throw new Error("停止未能确认，请重试");
+    }
+    throw new Error("停止仍在处理，请稍后重试确认");
+  }
+  if (scope) forgetPythonlabSession(scope, sessionId);
+}
 
 export const pythonlabSessionApi = {
   create: async (payload: PythonLabCreateSessionRequest): Promise<PythonLabCreateSessionResponse> => {
@@ -51,49 +87,21 @@ export const pythonlabSessionApi = {
       engine: "remote",
       ...payload,
     });
-    const data = resp.data as PythonLabCreateSessionResponse;
-    // Persist session ID for recovery after browser refresh
-    try {
-      sessionStorage.setItem(SESSION_STORAGE_KEY, data.session_id);
-    } catch {}
-    return data;
+    return resp.data;
   },
   get: async (sessionId: string): Promise<PythonLabSessionMeta> => {
     const resp = await pythonlabV2Client.get<PythonLabSessionMeta>(`/sessions/${sessionId}`, { silent: true });
     return resp.data as PythonLabSessionMeta;
   },
-  stop: async (sessionId: string): Promise<{ ok: boolean }> => {
-    const resp = await pythonlabV2Client.post<{ ok: boolean }>(`/sessions/${sessionId}/stop`);
-    // Clear persisted session on stop
-    try {
-      const stored = sessionStorage.getItem(SESSION_STORAGE_KEY);
-      if (stored === sessionId) sessionStorage.removeItem(SESSION_STORAGE_KEY);
-    } catch {}
-    return resp.data as { ok: boolean };
+  stop: async (sessionId: string) => {
+    const resp = await pythonlabV2Client.post<{ ok: boolean; status: "TERMINATING" | "TERMINATED" }>(
+      `/sessions/${sessionId}/stop`, undefined, { silent: true },
+    );
+    return resp.data;
   },
+  stopAndWait: stopAndWaitForPythonlabSession,
   list: async (): Promise<{ items: PythonLabSessionMeta[]; total: number }> => {
     const resp = await pythonlabV2Client.get<{ items: PythonLabSessionMeta[]; total: number }>("/sessions", { silent: true });
     return resp.data as { items: PythonLabSessionMeta[]; total: number };
-  },
-  /**
-   * Try to recover a session after browser refresh.
-   * Returns the session meta if it's still active, null otherwise.
-   */
-  tryRecover: async (): Promise<PythonLabSessionMeta | null> => {
-    try {
-      const storedId = sessionStorage.getItem(SESSION_STORAGE_KEY);
-      if (!storedId) return null;
-      const meta = await pythonlabSessionApi.get(storedId);
-      const activeStatuses = new Set(["READY", "ATTACHED", "RUNNING", "STOPPED", "PENDING", "STARTING"]);
-      if (activeStatuses.has(meta.status)) {
-        return meta;
-      }
-      // Session is dead, clean up
-      sessionStorage.removeItem(SESSION_STORAGE_KEY);
-      return null;
-    } catch {
-      sessionStorage.removeItem(SESSION_STORAGE_KEY);
-      return null;
-    }
   },
 };

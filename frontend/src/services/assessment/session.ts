@@ -22,6 +22,7 @@ export interface AvailableAssessment {
   time_limit_minutes: number;
   session_status: string | null;
   session_id: number | null;
+  started_at?: string | null;
   earned_score: number | null;
 }
 
@@ -46,6 +47,19 @@ export interface QuestionForStudent {
   knowledge_point?: string | null;
   attempt_seq?: number;
 }
+
+export type SessionResumeResponse = {
+  session_id: number;
+} & (
+  | { status: "submitted" | "graded" }
+  | {
+      status: "in_progress";
+      config_title: string;
+      time_limit_minutes: number;
+      started_at: string | null;
+      questions: QuestionForStudent[];
+    }
+);
 
 export interface AnswerResult {
   answer_id: number;
@@ -174,9 +188,11 @@ export interface SessionListResponse {
 
 export const assessmentSessionApi = {
   // 学生端
-  available: async (): Promise<AvailableAssessment[]> => {
+  available: async ({ includeInProgress = false } = {}): Promise<AvailableAssessment[]> => {
     try {
-      const resp = await api.get(`${BASE}/available`);
+      const resp = await api.get(`${BASE}/available`, {
+        params: { include_in_progress: includeInProgress || undefined },
+      });
       return resp.data as unknown as AvailableAssessment[];
     } catch (error) {
       logger.error("获取可用测评失败:", error);
@@ -191,6 +207,16 @@ export const assessmentSessionApi = {
     } catch (error) {
       logger.error("开始检测失败:", error);
       throw new Error(toDetailMessage(asApiError(error).response?.data?.detail) || "开始检测失败");
+    }
+  },
+
+  resume: async (sessionId: number): Promise<SessionResumeResponse> => {
+    try {
+      const resp = await api.get(`${BASE}/sessions/${sessionId}/resume`);
+      return resp.data as unknown as SessionResumeResponse;
+    } catch (error) {
+      logger.error("续答检测失败:", error);
+      throw new Error(toDetailMessage(asApiError(error).response?.data?.detail) || "续答检测失败");
     }
   },
 

@@ -73,6 +73,25 @@ describe("FE-01 real page history ownership", () => {
     send(); expect(boundary.start).toHaveBeenCalledOnce();
     expect(boundary.start.mock.calls[0][0].body.messages).toEqual([{ role: "user", content: "history-B" }, { role: "user", content: "next" }]);
   });
+  it("sends the newest 19 prior messages and the new question when history already has 20 messages", async () => {
+    const history = messages("A");
+    history.data = Array.from({ length: 20 }, (_, index) => ({
+      ...history.data[0], id: index + 1, content: `history-${index + 1}`,
+      message_type: index % 2 === 0 ? "question" : "answer",
+    }));
+    vi.mocked(agentDataApi.getConversationMessages).mockResolvedValueOnce(history);
+
+    await mount();
+    send();
+
+    expect(boundary.start).toHaveBeenCalledOnce();
+    expect(boundary.start.mock.calls[0][0].body.messages).toEqual([
+      ...Array.from({ length: 19 }, (_, index) => ({
+        role: index % 2 === 0 ? "assistant" : "user", content: `history-${index + 2}`,
+      })),
+      { role: "user", content: "next" },
+    ]);
+  });
   it.each(["older-first", "newer-first"])("keeps B selected and displayed when %s resolves", async order => {
     await mount(); const a = deferred<Messages>(), b = deferred<Messages>();
     vi.mocked(agentDataApi.getConversationMessages).mockReturnValueOnce(a.promise).mockReturnValueOnce(b.promise);

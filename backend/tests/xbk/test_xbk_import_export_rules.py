@@ -30,7 +30,7 @@ class _SelectionParentsDb:
     """Read-only fake parent projection; no schema/endpoint validation is mocked."""
 
     def __init__(self, students=(), selections=()):
-        # Synthetic (year, term, student_no, is_deleted) parent records.
+        # Synthetic (year, term, student_no, grade, is_deleted) roster records.
         self.students = students
         # Synthetic (year, term, student_no, grade) 既有选课快照，用于 P0-3 年级一致性检查。
         self.selections = selections
@@ -48,11 +48,17 @@ class _SelectionParentsDb:
             rows = [row for row in self.selections if row[:3] in keys]
             return SimpleNamespace(all=lambda: rows)
         assert table == "xbk_students"
-        assert tuple(column.key for column in statement.selected_columns) == ("year", "term", "student_no")
+        assert tuple(column.key for column in statement.selected_columns) == (
+            "year", "term", "student_no", "grade",
+        )
         assert "xbk_students.is_deleted IS false" in str(statement)
         keys = next(iter(statement.compile().params.values()))
         self.queries.append(keys)
-        rows = [row[:3] for row in self.students if row[3] is False and row[:3] in keys]
+        rows = [
+            (year, term, student_no, grade)
+            for year, term, student_no, grade, is_deleted in self.students
+            if is_deleted is False and (year, term, student_no) in keys
+        ]
         return SimpleNamespace(all=lambda: rows)
 
 
@@ -194,7 +200,7 @@ def test_preview_import_selections_blank_course_code_maps_to_unselected() -> Non
         ]
     )
 
-    db = _SelectionParentsDb([("2026-2027", "上学期", "20260021", False)])
+    db = _SelectionParentsDb([("2026-2027", "上学期", "20260021", "高一", False)])
     result = asyncio.run(preview_import(scope="selections", file=upload, db=db, _={}))
     assert result["total_rows"] == 1
     assert result["valid_rows"] == 1
@@ -275,9 +281,9 @@ def test_drop_empty_rows_removes_blank_lines() -> None:
 
 @pytest.mark.parametrize("students", [
     [],
-    [("2026-2027", "上学期", "20260021", True)],
-    [("2025-2026", "上学期", "20260021", False)],
-    [("2026-2027", "下学期", "20260021", False)],
+    [("2026-2027", "上学期", "20260021", "高一", True)],
+    [("2025-2026", "上学期", "20260021", "高一", False)],
+    [("2026-2027", "下学期", "20260021", "高一", False)],
 ])
 def test_preview_unselected_rejects_missing_or_inactive_period_student(students):
     upload = _make_upload_file([

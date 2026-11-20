@@ -259,3 +259,49 @@ def test_generate_code_rejects_oversized_flow():
         raise AssertionError("expected SizeLimitError")
     except SizeLimitError as exc:
         assert exc.status_code == 413
+
+
+def test_flow_options_reject_booleans_and_non_finite_numbers():
+    """bool 是 int 子类、JSON 1e400 会变成 inf；两者都必须被拒绝而不是钳制。"""
+    for bad in (True, False):
+        with pytest.raises(ValueError):
+            builder_module._normalize_options({"limits": {"maxNodes": bad}})
+    for bad in (float("inf"), float("-inf")):
+        with pytest.raises(ValueError):
+            builder_module._normalize_options({"limits": {"maxParseMs": bad}})
+
+
+def test_flow_options_drop_unknown_keys_so_cache_keys_stay_bounded():
+    """未知键若能进入缓存键，客户端就能无限制造不同的键。"""
+    with_unknown = builder_module._normalize_options({
+        "limits": {"maxNodes": 100, "evil": 1},
+        "expand": {"maxDepth": 3, "evil": 2},
+        "junk": "x" * 100,
+    })
+    clean = builder_module._normalize_options({
+        "limits": {"maxNodes": 100},
+        "expand": {"maxDepth": 3},
+    })
+    assert with_unknown == clean
+    assert flow_api.options_hash(with_unknown) == flow_api.options_hash(clean)
+
+
+def test_parse_flow_timeout_is_not_cached(monkeypatch):
+    """一次瞬时超时不能在 TTL 内对所有用户固化为权威结果。"""
+    import time
+
+    fake_cache = FakeCache()
+
+    def slow_build(*_args, **_kwargs):
+        time.sleep(0.4)
+        return {"version": "late", "parserVersion": "late", "nodes": [], "edges": []}
+
+    monkeypatch.setattr(builder_module, "cache", fake_cache)
+    monkeypatch.setattr(builder_module, "run_cpu", slow_build)
+
+    result = asyncio.run(builder_module.parse_flow_internal(
+        "print('x')\n", {"limits": {"maxParseMs": 1}}, 1,
+    ))
+
+    assert result["diagnostics"][0]["code"] == "E_PARSE_TIMEOUT"
+    assert fake_cache.store == {}

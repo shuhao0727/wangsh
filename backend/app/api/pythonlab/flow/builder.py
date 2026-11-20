@@ -24,7 +24,7 @@ from app.api.pythonlab.constants import (
 )
 from app.api.pythonlab.cpu_limits import run_cpu
 from app.api.pythonlab.structured_ir import build_ir_functions, build_ir_module
-from app.api.pythonlab.utils import make_edge, options_hash, sha256_text, stable_id
+from app.api.pythonlab.utils import SourceText, make_edge, options_hash, sha256_text, stable_id
 from app.utils.cache import cache
 
 from .ast_transformer import _lower_block
@@ -69,11 +69,15 @@ def _build_fallback_flow_result(code: str, diagnostics: List[Dict[str, Any]], pa
 
 
 def _clamp_int(value: Any, maximum: int) -> int:
+    # bool 是 int 的子类，int(True) == 1 会让 {"maxParseMs": true} 变成 1ms。
+    if isinstance(value, bool):
+        raise ValueError(f"无效的整数配置: {value!r}")
     if value is None or value == "":
         return maximum
     try:
         parsed = int(value)
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, OverflowError) as exc:
+        # JSON 1e400 / Infinity 经 json.loads 变成 inf，int(inf) 抛 OverflowError。
         raise ValueError(f"无效的整数配置: {value!r}") from exc
     if parsed <= 0:
         return maximum
@@ -81,23 +85,29 @@ def _clamp_int(value: Any, maximum: int) -> int:
 
 
 def _normalize_options(options: Dict[str, Any]) -> Dict[str, Any]:
-    """服务端钳制客户端可提交的解析预算，并用同一份 options 计算缓存键。"""
-    normalized = dict(options) if isinstance(options, dict) else {}
-    limits_raw = normalized.get("limits")
-    limits = dict(limits_raw) if isinstance(limits_raw, dict) else {}
-    expand_raw = normalized.get("expand")
-    expand = dict(expand_raw) if isinstance(expand_raw, dict) else {}
+    """服务端钳制客户端可提交的解析预算，并用同一份 options 计算缓存键。
 
-    limits["maxNodes"] = _clamp_int(limits.get("maxNodes"), DEFAULT_MAX_NODES)
-    limits["maxEdges"] = _clamp_int(limits.get("maxEdges"), DEFAULT_MAX_EDGES)
-    limits["maxAstNodes"] = _clamp_int(limits.get("maxAstNodes"), DEFAULT_MAX_AST_NODES)
-    limits["maxParseMs"] = _clamp_int(limits.get("maxParseMs"), DEFAULT_FLOW_MAX_PARSE_MS)
-    expand["maxDepth"] = _clamp_int(expand.get("maxDepth"), DEFAULT_MAX_DEPTH)
-    functions = str(expand.get("functions") or "all").strip().lower()
-    expand["functions"] = functions if functions in {"none", "top", "all"} else "all"
-    normalized["limits"] = limits
-    normalized["expand"] = expand
-    return normalized
+    只保留已知键：请求体里的未知键若进入 options_hash，会让缓存键无限分裂，
+    每个键都缓存一份完整流程图。
+    """
+    source = options if isinstance(options, dict) else {}
+    limits_raw = source.get("limits")
+    limits_in = limits_raw if isinstance(limits_raw, dict) else {}
+    expand_raw = source.get("expand")
+    expand_in = expand_raw if isinstance(expand_raw, dict) else {}
+
+    limits = {
+        "maxNodes": _clamp_int(limits_in.get("maxNodes"), DEFAULT_MAX_NODES),
+        "maxEdges": _clamp_int(limits_in.get("maxEdges"), DEFAULT_MAX_EDGES),
+        "maxAstNodes": _clamp_int(limits_in.get("maxAstNodes"), DEFAULT_MAX_AST_NODES),
+        "maxParseMs": _clamp_int(limits_in.get("maxParseMs"), DEFAULT_FLOW_MAX_PARSE_MS),
+    }
+    functions = str(expand_in.get("functions") or "all").strip().lower()
+    expand = {
+        "maxDepth": _clamp_int(expand_in.get("maxDepth"), DEFAULT_MAX_DEPTH),
+        "functions": functions if functions in {"none", "top", "all"} else "all",
+    }
+    return {"limits": limits, "expand": expand}
 
 
 def _parse_flow_ast(
@@ -135,6 +145,8 @@ def _parse_flow_ast(
 
 def _build_flow(code: str, options: Dict[str, Any]) -> Dict[str, Any]:
     t0 = time.perf_counter()
+    # 一次建好行索引：每个节点都要按 range 切片取标题，逐节点重新切分源码是 O(节点×源码)。
+    code = SourceText(code)
     options = _normalize_options(options)
     limits = options.get("limits") if isinstance(options.get("limits"), dict) else {}
     expand = options.get("expand") if isinstance(options.get("expand"), dict) else {}
@@ -294,7 +306,8 @@ async def parse_flow_internal(code: str, options: Dict[str, Any], user_id: int) 
             timeout=max(0.2, max_parse_ms / 1000.0),
         )
     except asyncio.TimeoutError:
-        built = _build_fallback_flow_result(
+        # 超时是瞬时失败：不写缓存，否则一次超时会在 TTL 内对所有用户固化。
+        return _build_fallback_flow_result(
             code=code,
             diagnostics=[{"level": "error", "code": E_PARSE_TIMEOUT, "message": "解析超时，已中止"}],
             parse_ms=max_parse_ms,

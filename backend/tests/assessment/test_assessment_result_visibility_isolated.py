@@ -7,7 +7,9 @@ Response models are validated explicitly: these routes declare no response_model
 """
 
 import asyncio
+import json
 import socket
+from io import BytesIO
 from contextlib import asynccontextmanager
 
 import pytest
@@ -16,20 +18,24 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import event, select, text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.api.endpoints.assessment import student as student_api
+from openpyxl import load_workbook
+
+from app.api.endpoints.assessment import admin as admin_api, student as student_api
 from app.core.deps import get_current_user
 from app.db.database import Base, get_db
 from app.models import User
 from app.models.agents import AIAgent
 from app.models.assessment import (
-    AssessmentAnswer, AssessmentBasicProfile, AssessmentConfig,
+    AssessmentAnswer, AssessmentBasicProfile, AssessmentConfig, AssessmentConfigAgent,
     AssessmentQuestion, AssessmentSession,
 )
 from app.schemas.assessment.session import (
     AnswerResult, QuestionForStudent, SessionResultResponse, SessionStartResponse,
     SessionSubmitResponse,
 )
+from app.services.agents import chat_blocking
 from app.services.assessment import session_service
+from app.services.assessment.basic_profile_service import generate_basic_profile
 
 PREFIX = "/api/v1/assessment"
 RESULT_ERROR = "该检测尚未提交，无法查看结果"
@@ -110,7 +116,7 @@ def result_visibility_isolated(monkeypatch):
     monkeypatch.setattr(socket.socket, "connect", deny_network)
     monkeypatch.setattr(socket.socket, "connect_ex", deny_network)
     monkeypatch.setattr(socket, "create_connection", deny_network)
-    monkeypatch.setattr(session_service, "_ai_grade_answer", deny_ai)
+    monkeypatch.setattr(chat_blocking, "run_agent_chat_blocking", deny_ai)
     monkeypatch.setattr(session_service, "_ai_generate_realtime_question", deny_ai)
     monkeypatch.setattr(session_service, "_generate_basic_profile_bg", record_background)
     monkeypatch.setattr(session_service, "_generate_advanced_profile_bg", record_background)
@@ -129,7 +135,7 @@ def result_visibility_isolated(monkeypatch):
                 await connection.run_sync(lambda c: Base.metadata.create_all(c, tables=[
                     User.__table__, AIAgent.__table__, AssessmentConfig.__table__,
                     AssessmentQuestion.__table__, AssessmentSession.__table__,
-                    AssessmentAnswer.__table__, AssessmentBasicProfile.__table__,
+                    AssessmentAnswer.__table__, AssessmentBasicProfile.__table__, AssessmentConfigAgent.__table__,
                 ]))
             async with h.db_factory() as db:
                 assert (await db.execute(text("PRAGMA foreign_keys"))).scalar_one() == 1
@@ -162,6 +168,7 @@ def result_visibility_isolated(monkeypatch):
 
             h.app = FastAPI()
             h.app.include_router(student_api.router, prefix=PREFIX)
+            h.app.include_router(admin_api.router, prefix=f"{PREFIX}/admin")
             h.app.dependency_overrides[get_db] = isolated_db
             h.app.dependency_overrides[get_current_user] = synthetic_identity
             yield h
@@ -289,6 +296,13 @@ def test_legal_single_answer_feedback_and_question_redaction(result_visibility_i
     async def scenario():
         async with result_visibility_isolated() as h:
             sid, questions = await h.start()
+            before = await h.state()
+            blank = await h.request("POST", f"/sessions/{sid}/answer", json={
+                "answer_id": questions[0]["answer_id"], "student_answer": " \t ",
+            })
+            assert blank.status_code == 422
+            assert "correct_answer" not in blank.text
+            assert await h.state() == before
             await h.answer(sid, questions[0], value)
             before = await h.state()
             assert sum(row[1] is not None for row in before["answers"]) == 1
@@ -310,6 +324,27 @@ def test_legal_single_answer_feedback_and_question_redaction(result_visibility_i
     asyncio.run(scenario())
 
 
+def test_student_question_options_drop_unrecognized_metadata(result_visibility_isolated):
+    async def scenario():
+        async with result_visibility_isolated() as h:
+            sid, questions = await h.start()
+            async with h.db_factory() as db:
+                answer = await db.get(AssessmentAnswer, questions[0]["answer_id"])
+                answer.question_snapshot = json.dumps({
+                    "content": "Synthetic generated choice",
+                    "options": json.dumps({"A": "One", "B": "Two", "metadata": {"source": "generated"}}),
+                    "correct_answer": "A",
+                })
+                await db.commit()
+            for path in (f"/sessions/{sid}/questions", f"/sessions/{sid}/resume"):
+                response = await h.request("GET", path)
+                assert response.status_code == 200, response.text
+                data = response.json()
+                questions = data["questions"] if isinstance(data, dict) else data
+                assert json.loads(questions[0]["options"]) == {"A": "One", "B": "Two"}
+    asyncio.run(scenario())
+
+
 def test_real_role_guard_with_synthetic_identity(result_visibility_isolated):
     async def scenario():
         async with result_visibility_isolated() as h:
@@ -318,4 +353,122 @@ def test_real_role_guard_with_synthetic_identity(result_visibility_isolated):
             assert response.status_code == 403
             response = await h.request("GET", f"/sessions/{sid}/result", user_id=None)
             assert response.status_code == 401
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("question_type, has_template, valid_reply", [
+    ("fill", True, True), ("fill", False, True), ("short_answer", False, True), ("fill", False, False),
+])
+def test_ai_grades_the_saved_question(result_visibility_isolated, monkeypatch, question_type, has_template, valid_reply):
+    async def scenario():
+        async with result_visibility_isolated() as h:
+            sid, questions = await h.start()
+            answer_id = questions[0]["answer_id"]
+            async with h.db_factory() as db:
+                config = await db.get(AssessmentConfig, 1)
+                answer = await db.get(AssessmentAnswer, answer_id)
+                db.add(AIAgent(id=1, name="Synthetic grader", agent_type="general"))
+                await db.flush()
+                config.agent_id = 1
+                answer.question_type = question_type
+                answer.question_id = answer.question_id if has_template else None
+                answer.question_snapshot = json.dumps({
+                    "content": "Name the result of integer division 7 // 2.",
+                    "correct_answer": "3",
+                })
+                await db.commit()
+
+            prompts = []
+
+            async def grade(_db, *, agent_id, message):
+                prompts.append((agent_id, message))
+                return '{"score": 4, "is_correct": false, "feedback": "Explain the floor rule"}' if valid_reply else "{}"
+
+            monkeypatch.setattr(chat_blocking, "run_agent_chat_blocking", grade)
+            saved = await h.request("POST", f"/sessions/{sid}/answer", json={
+                "answer_id": answer_id, "student_answer": "three" if valid_reply else "3",
+            })
+            assert saved.status_code == 200, saved.text
+            if question_type == "short_answer":
+                assert not prompts
+                submitted = await h.request("POST", f"/sessions/{sid}/submit")
+                assert submitted.status_code == 200, submitted.text
+                assert submitted.json()["earned_score"] == 4
+            else:
+                assert saved.json()["correct_answer"] == "3"
+            assert len(prompts) == 1
+            agent_id, prompt = prompts[0]
+            assert agent_id == 1
+            assert "【题目】\nName the result of integer division 7 // 2." in prompt
+            assert "【参考答案】\n3\n" in prompt
+            assert "Synthetic question" not in prompt
+            async with h.db_factory() as db:
+                answer = await db.get(AssessmentAnswer, answer_id)
+                expected = (4, "Explain the floor rule") if valid_reply else (5, None)
+                assert (answer.ai_score, answer.ai_feedback) == expected
+
+    asyncio.run(scenario())
+
+
+def test_review_and_export_show_the_question_the_student_answered(result_visibility_isolated):
+    async def scenario():
+        async with result_visibility_isolated() as h:
+            sid, questions = await h.start()
+            generated_id, fixed_id = [q["answer_id"] for q in questions]
+            generated = {
+                "content": "Which operator computes a remainder?",
+                "options": '{"A":"//","B":"%"}',
+                "correct_answer": "B",
+                "explanation": "% returns the remainder",
+            }
+            async with h.db_factory() as db:
+                answer = await db.get(AssessmentAnswer, generated_id)
+                answer.question_snapshot = json.dumps(generated)
+                answer.is_adaptive = True
+                answer.knowledge_point = "Integer operators"
+                await db.commit()
+
+            available = await h.request("GET", f"/sessions/{sid}/questions")
+            assert available.status_code == 200, available.text
+            question = next(q for q in available.json() if q["answer_id"] == generated_id)
+            assert question["content"] == generated["content"]
+            assert "correct_answer" not in question
+            saved = await h.request("POST", f"/sessions/{sid}/answer", json={
+                "answer_id": generated_id, "student_answer": "B",
+            })
+            assert saved.status_code == 200, saved.text
+            assert saved.json()["earned_score"] == 5
+            submitted = await h.request("POST", f"/sessions/{sid}/submit")
+            assert submitted.status_code == 200, submitted.text
+            async with h.db_factory() as db:
+                answer = await db.get(AssessmentAnswer, generated_id)
+                template = await db.get(AssessmentQuestion, answer.question_id)
+                await db.delete(template)
+                await db.commit()
+            async with h.db_factory() as db:
+                session = await session_service._load_session(db, sid, 1, load_answers=True)
+                config = await db.get(AssessmentConfig, 1)
+                profile = await generate_basic_profile(db, session, config)
+                assert json.loads(profile.knowledge_scores)["Integer operators"] == {"earned": 5, "total": 5}
+                rates = await session_service._calc_knowledge_rates(db, 1)
+                assert rates["Integer operators"] == 100
+            student = await h.request("GET", f"/sessions/{sid}/result")
+            admin = await h.request("GET", f"/admin/sessions/{sid}", role="admin")
+            assert student.status_code == admin.status_code == 200
+            assert student.json() == admin.json()
+            answers = {a["id"]: a for a in student.json()["answers"]}
+            assert {key: answers[generated_id][key] for key in generated} == generated
+            assert answers[fixed_id]["content"].startswith("Synthetic question")
+            assert answers[fixed_id]["correct_answer"] == "A"
+
+            exported = await h.request("GET", "/admin/configs/1/export", role="admin")
+            assert exported.status_code == 200, exported.text[:200]
+            workbook = load_workbook(BytesIO(exported.content), read_only=True)
+            try:
+                row = next(workbook["答题明细"].iter_rows(min_row=2, values_only=True))
+                i = row.index(generated["content"])
+                assert row[i:i + 3] == (generated["content"], "B", "B")
+            finally:
+                workbook.close()
+
     asyncio.run(scenario())
