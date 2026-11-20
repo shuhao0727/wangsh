@@ -59,6 +59,13 @@ def _session_ws_path(request: Request, session_id: str) -> str:
     return f"{prefix}/sessions/{session_id}/ws"
 
 
+def _can_remove_session_index(meta: Dict[str, Any]) -> bool:
+    state = str(meta.get("status") or "").upper()
+    return state in INACTIVE_STATUSES and (
+        state != SESSION_STATUS_TERMINATED or is_stop_confirmed(meta)
+    )
+
+
 async def _cleanup_and_count_active_sessions(user_id: int) -> int:
     client = await cache.get_client()
     user_sessions_key = f"{CACHE_KEY_USER_SESSIONS_PREFIX}:{user_id}:sessions"
@@ -82,14 +89,9 @@ async def _cleanup_and_count_active_sessions(user_id: int) -> int:
             except Exception:
                 pass
             continue
-        st = str(meta.get("status") or "").upper()
-        if st in INACTIVE_STATUSES:
-            try:
-                await client.srem(user_sessions_key, sid)
-            except Exception:
-                pass
-            continue
-        if st in ACTIVE_STATUSES:
+        if _can_remove_session_index(meta):
+            await _discard_session_member(client, user_sessions_key, sid)
+        elif str(meta.get("status") or "").upper() in ACTIVE_STATUSES:
             active += 1
     return active
 
@@ -280,12 +282,8 @@ async def list_sessions(request: Request, current_user: Dict[str, Any] = Depends
             continue
         if int(meta.get("owner_user_id") or 0) != user_id:
             continue
-        st = str(meta.get("status") or "").upper()
-        if st in INACTIVE_STATUSES:
-            try:
-                await client.srem(user_sessions_key, sid)
-            except Exception:
-                pass
+        if _can_remove_session_index(meta):
+            await _discard_session_member(client, user_sessions_key, sid)
             continue
         items.append(_rewrite_dap_host_for_client(meta, request))
 
@@ -324,8 +322,7 @@ async def cleanup_sessions(current_user: Dict[str, Any] = Depends(require_user))
             continue
         if int(meta.get("owner_user_id") or 0) != user_id:
             continue
-        st = str(meta.get("status") or "").upper()
-        if st in INACTIVE_STATUSES:
+        if _can_remove_session_index(meta):
             if is_stop_confirmed(meta):
                 stopped.append(str(sid))
             await _discard_session_member(client, user_sessions_key, sid)

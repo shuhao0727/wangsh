@@ -396,6 +396,7 @@ HTTP provider 仅对选定的 `NetworkError` / `TimeoutException` 类型进入�
 - `POST /api/v2/pythonlab/sessions` - 创建调试会话（已登录用户）
 - `GET /api/v2/pythonlab/sessions/{session_id}` - 获取会话详情（仅会话所有者）
 - `POST /api/v2/pythonlab/sessions/{session_id}/stop` - 停止会话（仅会话所有者）。`503` 表示派发未确认，可重试；`TERMINATING` 表示尚未确认回收；GET 的 `TERMINATED` 且 `stop_confirmed=true` 才表示 worker 已确认。worker 停止失败时保留会话和错误码 `SANDBOX_STOP_FAILED`，允许重试。
+- `GET /api/v2/pythonlab/sessions` 与 `POST /api/v2/pythonlab/sessions/cleanup` - 列表保留尚未确认回收的会话；批量清理可继续为这些会话派发停止任务。`TERMINATED` 会话的索引在 worker 确认回收后移除。
 - `WS /api/v2/pythonlab/sessions/{session_id}/ws` - 调试 WebSocket（仅会话所有者）
 - `WS /api/v2/pythonlab/sessions/{session_id}/terminal` - 终端 WebSocket（仅会话所有者）
 - `POST /api/v2/pythonlab/flow/parse` - 代码解析流程图（已登录用户）

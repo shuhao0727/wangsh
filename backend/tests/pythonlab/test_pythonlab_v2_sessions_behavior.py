@@ -259,6 +259,7 @@ def test_list_sessions_keeps_owned_active_items_sorted(monkeypatch):
         **fake_cache.store[f"{sessions_api.CACHE_KEY_SESSION_PREFIX}:dbg_old"],
         "session_id": "dbg_inactive",
         "status": sessions_api.SESSION_STATUS_TERMINATED,
+        "stop_confirmed": True,
     }
     fake_cache.store[f"{sessions_api.CACHE_KEY_SESSION_PREFIX}:dbg_other_owner"] = {
         **fake_cache.store[f"{sessions_api.CACHE_KEY_SESSION_PREFIX}:dbg_old"],
@@ -357,6 +358,36 @@ def test_stop_session_cannot_dispatch_without_owned_meta(monkeypatch, owner_id, 
     assert fake_celery.calls == []
 
 
+@pytest.mark.parametrize("entry", ["count", "list", "cleanup"])
+def test_unconfirmed_termination_keeps_session_index(monkeypatch, entry):
+    fake_cache, fake_celery = _patch_session_env(monkeypatch)
+    session_id = "dbg_unconfirmed"
+    user = {"id": 11}
+    sessions_key = f"{sessions_api.CACHE_KEY_USER_SESSIONS_PREFIX}:11:sessions"
+    session_key = f"{sessions_api.CACHE_KEY_SESSION_PREFIX}:{session_id}"
+    fake_cache.client.sets[sessions_key] = {session_id}
+    fake_cache.store[session_key] = {
+        "session_id": session_id, "owner_user_id": 11, "status": "TERMINATED",
+    }
+
+    async def run():
+        if entry == "count":
+            assert await sessions_api._cleanup_and_count_active_sessions(11) == 0
+        elif entry == "list":
+            request = _make_request("/api/v2/pythonlab/sessions", method="GET")
+            listed = await sessions_api.list_sessions(request, current_user=user)
+            assert [item["session_id"] for item in listed["items"]] == [session_id]
+        else:
+            cleaned = await sessions_api.cleanup_sessions(current_user=user)
+            assert cleaned["accepted"] == [session_id]
+            assert cleaned["stopped"] == []
+            assert fake_cache.store[session_key]["status"] == "TERMINATING"
+            assert fake_celery.calls == [("app.tasks.pythonlab.stop_session", [session_id])]
+        assert session_id in fake_cache.client.sets[sessions_key]
+
+    asyncio.run(run())
+
+
 def test_cleanup_sessions_only_stops_owned_active_sessions(monkeypatch):
     fake_cache, fake_celery = _patch_session_env(monkeypatch)
     user_id = 11
@@ -373,6 +404,7 @@ def test_cleanup_sessions_only_stops_owned_active_sessions(monkeypatch):
         "session_id": "dbg_inactive",
         "owner_user_id": user_id,
         "status": sessions_api.SESSION_STATUS_TERMINATED,
+        "stop_confirmed": True,
         "ttl_seconds": 1800,
         "last_heartbeat_at": "before",
     }
@@ -386,7 +418,10 @@ def test_cleanup_sessions_only_stops_owned_active_sessions(monkeypatch):
 
     result = asyncio.run(sessions_api.cleanup_sessions(current_user={"id": user_id}))
 
-    assert result == {"ok": True, "accepted": ["dbg_active"], "accepted_count": 1, "stopped": [], "stopped_count": 0}
+    assert result == {
+        "ok": True, "accepted": ["dbg_active"], "accepted_count": 1,
+        "stopped": ["dbg_inactive"], "stopped_count": 1,
+    }
     active_meta = fake_cache.store[f"{sessions_api.CACHE_KEY_SESSION_PREFIX}:dbg_active"]
     assert isinstance(active_meta, dict)
     assert active_meta["status"] == sessions_api.SESSION_STATUS_TERMINATING
