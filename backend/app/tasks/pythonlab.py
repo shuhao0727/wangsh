@@ -541,22 +541,14 @@ def cleanup_stale_sessions():
     _run_async(run())
 
 
-async def _other_session_owns_live_sandbox(run_docker, name, record, session_id):
-    from app.core.sandbox.docker_runtime import inspect_container
-
-    if record.get("phase") != "live" or record.get("container_name") != name:
-        return False
-    other_session_id = record.get("session_id")
-    container_id = record.get("container_id")
-    if not other_session_id or other_session_id == session_id or not container_id:
-        return False
-    actual = await inspect_container(run_docker, name)
-    return bool(actual and actual.get("Id") == container_id)
-
-
 async def _confirm_stopped_resource(provider, session_id, meta):
     from app.core.sandbox.docker import _run_async as run_docker, _workspace_root
-    from app.core.sandbox.docker_runtime import WorkspaceOwnership, inspect_container
+    from app.core.sandbox.docker_runtime import (
+        WorkspaceOwnership,
+        inspect_container,
+        other_session_owns_live_sandbox,
+        published_container_stopped,
+    )
 
     name = provider._container_name(meta)
     workspace = provider._ws_path_for_session(meta)
@@ -566,11 +558,7 @@ async def _confirm_stopped_resource(provider, session_id, meta):
         token = meta.get("sandbox_owner_token")
         removed = record and record.get("phase") == "removed"
         if container_id or token:
-            return bool(
-                removed and container_id and token
-                and (record.get("container_name"), record.get("session_id"), record.get("token"), record.get("container_id"))
-                == (name, session_id, token, container_id)
-            )
+            return await published_container_stopped(run_docker, name, record, session_id, meta)
         if removed and record.get("session_id") == session_id:
             # An in-flight STARTING task may have compensated before publishing IDs.
             return bool(
@@ -580,7 +568,7 @@ async def _confirm_stopped_resource(provider, session_id, meta):
         if record is None or removed:
             return await inspect_container(run_docker, name) is None
         # A session that never began startup has no claim on a verified sibling sandbox.
-        return not meta.get("startup_task_id") and await _other_session_owns_live_sandbox(
+        return not meta.get("startup_task_id") and await other_session_owns_live_sandbox(
             run_docker, name, record, session_id,
         )
 

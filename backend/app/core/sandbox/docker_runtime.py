@@ -125,6 +125,37 @@ async def inspect_container(run, name: str):
     return info[0]
 
 
+async def other_session_owns_live_sandbox(run, name, record, session_id):
+    if record.get("phase") != "live" or record.get("container_name") != name:
+        return False
+    other_session_id = record.get("session_id")
+    container_id = record.get("container_id")
+    if not other_session_id or other_session_id == session_id or not container_id:
+        return False
+    actual = await inspect_container(run, name)
+    return bool(actual and actual.get("Id") == container_id)
+
+
+async def published_container_stopped(run, name, record, session_id, meta):
+    """Confirm release while the caller holds the workspace fence."""
+    container_id = meta.get("docker_container_id")
+    token = meta.get("sandbox_owner_token")
+    if not (container_id and token and record and record.get("container_name") == name):
+        return False
+    removed = record.get("phase") == "removed"
+    if record.get("session_id") == session_id:
+        return removed and (record.get("token"), record.get("container_id")) == (token, container_id)
+    if removed:
+        # A replacement's removed journal is usable only if its name is also absent.
+        successor_verified = (
+            record.get("session_id") and record.get("container_id")
+            and await inspect_container(run, name) is None
+        )
+    else:
+        successor_verified = await other_session_owns_live_sandbox(run, name, record, session_id)
+    return bool(successor_verified) and await inspect_container(run, container_id) is None
+
+
 def _check_resource_settings(info, expected) -> None:
     config = info.get('Config') or {}
     host = info.get('HostConfig') or {}

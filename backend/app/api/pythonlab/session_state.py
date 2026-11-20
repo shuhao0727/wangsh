@@ -84,15 +84,15 @@ async def publish_failed_stop(client, key, raw, meta, ttl, timestamp):
 
 
 async def publish_confirmed_stop(client, key, meta, ttl, timestamp):
-    # Existing run/transport writers can record normal exit during Docker IO.
-    # Merge that outcome only for the same session generation and stop attempt.
-    latest_raw, latest = await read_session_snapshot(client, key)
+    # A stop task ID gates execution. Once the resource is gone, a concurrent
+    # request for the same generation can use that result and keep its own ID.
     identity_fields = ("session_id", "owner_user_id", "startup_task_id", "sandbox_owner_token", "docker_container_id")
-    if not latest or latest.get("stop_task_id") not in (None, meta.get("stop_task_id")) or any(
-        latest.get(field) != meta.get(field) for field in identity_fields
-    ):
-        raise RuntimeError("PythonLab session identity changed while stopping")
-    latest.update(status=SESSION_STATUS_TERMINATED, stop_confirmed=True,
-                  error_code=None, error_detail=None, last_heartbeat_at=timestamp)
-    if not await replace_session_snapshot(client, key, latest_raw, encode_session_meta(latest), ttl):
-        raise RuntimeError("PythonLab session metadata changed while stopping")
+    for _ in range(3):
+        latest_raw, latest = await read_session_snapshot(client, key)
+        if not latest or any(latest.get(field) != meta.get(field) for field in identity_fields):
+            raise RuntimeError("PythonLab session identity changed while stopping")
+        latest.update(status=SESSION_STATUS_TERMINATED, stop_confirmed=True,
+                      error_code=None, error_detail=None, last_heartbeat_at=timestamp)
+        if await replace_session_snapshot(client, key, latest_raw, encode_session_meta(latest), ttl):
+            return
+    raise RuntimeError("PythonLab session metadata changed while stopping")

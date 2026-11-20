@@ -87,7 +87,7 @@ RUN sed -i \
     && rm -rf /var/lib/apt/lists/*
 
 RUN useradd -m -u 1000 appuser \
-    && mkdir -p /app/data/typst_pdfs \
+    && mkdir -p /app/data/typst_pdfs /app/uploads \
     && chown -R appuser:appuser /app
 USER appuser
 

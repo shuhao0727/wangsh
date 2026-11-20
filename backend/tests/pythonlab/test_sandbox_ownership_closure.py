@@ -34,6 +34,10 @@ def ownership_env(task_env, docker_env, monkeypatch):
 
     async def run(cmd, timeout_s=30):
         # Unlike an argv-only fake, model successful creation/removal and reuse.
+        if cmd[:2] == ['docker', 'inspect'] and cmd[2] != provider._container_name(meta):
+            if cmd[2] not in live_ids:
+                calls.append(list(cmd))
+                return 1, '', 'Error: No such container: synthetic'
         rc, out, err = await original_run(cmd, timeout_s=timeout_s)
         if cmd[:2] == ['docker', 'run'] and rc == 0:
             out = state.get('next_id', out.strip())
@@ -163,8 +167,12 @@ def test_stop_owner_check_to_delete_interleaving_preserves_new_session(ownership
 
     monkeypatch.setattr(provider, 'terminate_session', interleaved_terminate)
     result = tasks.stop_session.apply(args=['synthetic', True], throw=False)
-    assert result.state == 'FAILURE'
-    assert store['status'] == 'TERMINATING'
+    if adoption == 'replacement':
+        assert result.state == 'SUCCESS'
+        assert store['status'] == 'TERMINATED' and store['stop_confirmed'] is True
+    else:
+        assert result.state == 'FAILURE'
+        assert store['status'] == 'TERMINATING'
     assert newer['status'] == 'READY'
     assert newer['docker_container_id'] in live_ids
     assert (ws/'main.py').read_text() == 'new owner code'
@@ -336,6 +344,88 @@ def test_stop_worker_transient_ownership_failure_can_be_retried(ownership_env, m
     assert not live_ids
     assert publish.call_count == 2
     assert len([cmd for cmd in calls if cmd[1] == 'rm']) == 1
+
+
+@pytest.mark.parametrize('when', ['after-removal', 'during-redis-write'])
+def test_automatic_stop_confirms_release_when_explicit_stop_arrives(ownership_env, monkeypatch, when):
+    store, provider, _, _, _, calls, live_ids = ownership_env
+    assert apply_start().state == 'SUCCESS'
+    owned_id = store['docker_container_id']
+    store['status'] = 'TERMINATED'
+    publish = Mock()
+    monkeypatch.setattr(sessions_api, 'cache', tasks.cache)
+    monkeypatch.setattr(sessions_api.celery_app, 'send_task', publish)
+    client = tasks.cache.get_client.return_value
+
+    async def explicit_stop():
+        assert not live_ids
+        response = await sessions_api.stop_session('synthetic', current_user={'id': 701})
+        assert response['status'] == 'TERMINATING'
+
+    if when == 'after-removal':
+        stop = provider.stop_session
+
+        async def stop_then_request(*args):
+            await stop(*args)
+            await explicit_stop()
+
+        monkeypatch.setattr(provider, 'stop_session', stop_then_request)
+    else:
+        compare_and_set = client.eval
+
+        async def request_before_cas(script, key_count, key, expected, replacement, ttl):
+            if json.loads(replacement).get('stop_confirmed') and not publish.called:
+                await explicit_stop()
+            return await compare_and_set(script, key_count, key, expected, replacement, ttl)
+
+        monkeypatch.setattr(client, 'eval', request_before_cas)
+
+    task = tasks.stop_session.apply(args=['synthetic'], throw=False)
+    assert task.state == 'SUCCESS'
+    assert store['status'] == 'TERMINATED' and store['stop_confirmed'] is True
+    explicit = publish.call_args.kwargs
+    assert store['stop_task_id'] == explicit['kwargs']['stop_task_id']
+    client.srem.assert_awaited_once_with('debug:user:701:sessions', 'synthetic')
+    tasks.stop_session.run(*explicit['args'], **explicit['kwargs'])
+    assert [cmd for cmd in calls if cmd[1] == 'rm'] == [['docker', 'rm', '-f', owned_id]]
+
+
+@pytest.mark.parametrize('old_inspect', ['absent', 'unavailable'])
+def test_retry_confirms_absent_old_container_after_successor_stopped(ownership_env, monkeypatch, old_inspect):
+    store, provider, meta, _, state, calls, live_ids = ownership_env
+    assert apply_start().state == 'SUCCESS'
+    previous_id = store['docker_container_id']
+    # The provider removed the old container, but its terminal cache write was lost.
+    asyncio.run(provider.terminate_session('synthetic', store))
+    store['status'] = 'TERMINATING'
+    state['next_id'] = 'c' * 64
+    newer = dict(meta, session_id='newer', startup_task_id='newer-task')
+    newer.update(asyncio.run(provider.start_session('newer', 'new session', newer)))
+    asyncio.run(provider.terminate_session('newer', newer))
+    assert not live_ids
+    recorded_removals = [cmd for cmd in calls if cmd[1] == 'rm']
+
+    if old_inspect == 'unavailable':
+        run = docker_api._run_async
+
+        async def unavailable(cmd, **kwargs):
+            if cmd == ['docker', 'inspect', previous_id]:
+                return 1, '', 'Cannot connect to the Docker daemon at synthetic socket'
+            return await run(cmd, **kwargs)
+
+        monkeypatch.setattr(docker_api, '_run_async', unavailable)
+
+    result = tasks.stop_session.apply(args=['synthetic'], throw=False)
+    client = tasks.cache.get_client.return_value
+    if old_inspect == 'absent':
+        assert result.state == 'SUCCESS'
+        assert store['status'] == 'TERMINATED' and store['stop_confirmed'] is True
+        client.srem.assert_awaited_once_with('debug:user:701:sessions', 'synthetic')
+    else:
+        assert result.state == 'FAILURE'
+        assert store['status'] == 'TERMINATING' and store['error_code'] == 'SANDBOX_STOP_FAILED'
+        client.srem.assert_not_awaited()
+    assert [cmd for cmd in calls if cmd[1] == 'rm'] == recorded_removals
 
 
 def test_stop_confirms_removed_generation_after_normal_exit_updates_meta(ownership_env, monkeypatch):

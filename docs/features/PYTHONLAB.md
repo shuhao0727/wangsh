@@ -396,7 +396,7 @@ HTTP provider 仅对选定的 `NetworkError` / `TimeoutException` 类型进入�
 - `POST /api/v2/pythonlab/sessions` - 创建调试会话（已登录用户）
 - `GET /api/v2/pythonlab/sessions/{session_id}` - 获取会话详情（仅会话所有者）
 - `POST /api/v2/pythonlab/sessions/{session_id}/stop` - 停止会话（仅会话所有者）。`503` 表示派发未确认，可重试；`TERMINATING` 表示尚未确认回收；GET 的 `TERMINATED` 且 `stop_confirmed=true` 才表示 worker 已确认。worker 停止失败时保留会话和错误码 `SANDBOX_STOP_FAILED`，允许重试。
-- `GET /api/v2/pythonlab/sessions` 与 `POST /api/v2/pythonlab/sessions/cleanup` - 列表保留尚未确认回收的会话，批量清理可继续派发停止任务。worker 只操作可信归属记录与会话、令牌、容器 ID 匹配的沙箱。未开始启动的会话在确认沙箱属于另一会话时也能结束。确认后移除会话索引。
+- `GET /api/v2/pythonlab/sessions` 与 `POST /api/v2/pythonlab/sessions/cleanup` - 列表保留尚未确认回收的会话，批量清理可继续派发停止任务。worker 只操作可信归属记录与会话、令牌、容器 ID 匹配的沙箱。未开始启动的会话在确认沙箱属于另一会话时也能结束。确认后移除会话索引。同一沙箱归属下，自动停止和显式停止重叠时可复用已证实的回收结果，保留最新请求编号。如果可信归属已切到后继会话，worker 按旧容器的精确 ID 确认是否已消失，并保护后继容器和工作区。Docker 无法核验时保留会话供重试。
 - `WS /api/v2/pythonlab/sessions/{session_id}/ws` - 调试 WebSocket（仅会话所有者）
 - `WS /api/v2/pythonlab/sessions/{session_id}/terminal` - 终端 WebSocket（仅会话所有者）
 - `POST /api/v2/pythonlab/flow/parse` - 代码解析流程图（已登录用户）
