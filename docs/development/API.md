@@ -312,9 +312,9 @@ ASGI middleware 在 FastAPI/Starlette 表单解析前约束请求头和表单请
 
 ## 管理与课堂事件流会话合同补充
 
-`GET /api/v1/admin/stream`、`GET /api/v1/classroom/admin/stream`、`GET /api/v1/classroom/stream` 在既有接入认证后增加持续会话校验：订阅前及每帧发送前复核实际接受的 JWT/nonce/IP，空闲等待也有界复查。失效或存储故障结束流并退订；事件格式、角色守卫及 token 来源优先级不变，不改为成功空数据或匿名订阅。响应开始后不补发 HTTP 401。
+`GET /api/v1/admin/stream`、`GET /api/v1/classroom/admin/stream`、`GET /api/v1/classroom/stream` 在订阅前、每帧发送前和空闲等待期间复核入场接受的 JWT、nonce 和配置要求的 IP。通用与课堂管理员流同时复核数据库角色。`admin_global` 要求管理员角色，课堂个人管理频道要求教职工角色。失去频道权限时发送 `event: error`，数据的 `error` 为 `access_revoked`，随后关闭并退订。失效或存储故障也会结束流。响应开始后不改写 HTTP 状态。
 
-检查和网络发送不是原子操作，不能保证已经在途/已缓存事件被收回，也不刷新数据库角色或班级。
+学生课堂流在入场时核对角色和班级。经过最后一次检查的在途或已缓存事件仍可能送达。
 AI 与小组讨论 SSE 复用持续会话校验，其供应商及并发错误另见下文。
 规则见 [AUTH](../features/AUTH.md#管理与课堂-sse-会话持续校验)，证据见测试状态。
 
@@ -441,7 +441,7 @@ PythonLab WS 接入补充（2026-09-09）：terminal/DAP 在业务缓存、termi
 | PUT | `/users/{user_id}` | 更新用户 | 管理员 |
 | DELETE | `/users/{user_id}` | 删除用户；普通 admin 无权删除高权限用户 | 管理员 |
 | POST | `/users/batch-delete` | 批量删除，请求体为 `{ "user_ids": [1, 2] }`；目标缺失或普通 admin 遇到高权限账号时整批拒绝 | 管理员 |
-| GET | `/users/import/template` | 获取导入模板（Excel） | 管理员 |
+| GET | `/users/import/template?format=xlsx` | 获取导入模板，`format` 支持 `xlsx`（默认）和 `csv` | 管理员 |
 | POST | `/users/import` | 导入用户；普通 admin 仅可新增/更新 student、teacher；高权限行在 `UserImportResult.errors` 中逐行失败 | 管理员 |
 | GET | `/users/privacy/me/export` | 导出本人基础信息、AI 对话与小组讨论消息 | 是 |
 | GET | `/users/privacy/me/data-summary` | 本人上述两类消息数量 | 是 |
@@ -449,7 +449,8 @@ PythonLab WS 接入补充（2026-09-09）：terminal/DAP 在业务缓存、termi
 
 用户管理权限说明：
 - 普通 `admin` 仅可创建、删除和导入 `student`、`teacher`；允许修改自己资料，但不能修改其他管理员或超级管理员，不能授予高权限角色。
-- 导入文件中的高权限角色行不会自动降级；该行单独失败并继续处理后续行，失败明细通过 `UserImportResult.errors` 返回。
+- `POST /users/import` 接收 multipart 文件字段 `file`，必填列为学号和姓名。CSV 和 XLSX 更新用户时，角色和状态分别处理，缺列、空单元格或纯空白均保留该字段。新增用户未填写时默认学生、启用。显式值按现有角色、状态和权限规则校验。
+- 逐行失败仍会处理其余数据行。响应分别返回 `imported_count`、`updated_count`、`error_count` 和 `errors`。存在失败行时 `success=false`，已导入和更新的行仍可提交。错误 `row_number` 从表头后的第一条记录计起。CSV 模板说明占编号，空行跳过。去除表头首尾空白后如有重复列，返回 400，整份文件不写入。
 - 批量删除在目标缺失或包含普通 `admin` 无权删除的高权限账号时整批拒绝，不执行部分删除。
 - 批量删除请求体与前端统一为对象结构 `{ "user_ids": number[] }`，不接受裸数组。
 - 导入模板为统一模板，不按当前角色动态变化。
@@ -630,12 +631,13 @@ PythonLab WS 接入补充（2026-09-09）：terminal/DAP 在业务缓存、termi
 - legacy `GET/DELETE /ai-agents/task-analysis/{analysis_id}` 只接受
   `task_analyses.id`，不会再用裸整数 ID 跨热点/问题链表猜测记录。热点和学生问题链
   必须使用各自 typed 详情/删除端点；typed 删除只在完整快照唯一匹配时清理 legacy
-  双写副本，歧义记录会安全保留。
+  双写副本，歧义记录会安全保留。后台详情链接显式指定类型时，只读取对应详情接口。旧式无类型链接先查旧任务记录，仅在 404 时按视图回退。读取失败的记录不可导出。
 - 小组讨论班级归属策略：
   - 学生调用 `/ai-agents/group-discussion/join` 时，班级以登录态 `class_name` 为准；跨班级请求会被拒绝（`403`）。
   - 管理员新建/加入未显式传 `class_name` 时，后端优先使用管理员账号自身 `class_name`；若两者都为空则返回 `422`。前端创建表单已改为班级必填。
 - 小组讨论会话读取权限：
   - 学生调用 `/ai-agents/group-discussion/messages` 与 `/ai-agents/group-discussion/stream` 时，必须是该会话成员，否则返回 `403`。SSE 连接建立后每 5 秒复核成员，收到新消息前也会复核；被移除后发送 `event: access_revoked` 并关闭流。
+  - 讨论组已被删除时 `messages` 返回 `404`。前端把 `403`/`404` 都当作终态：停止兜底轮询并退回小组列表；其他失败按 3 秒起退避重试、上限 30 秒。
   - 管理员/超级管理员可读取任意会话（用于巡检与管理）。
 - 跨系统分析 `/ai-agents/group-discussion/admin/cross-system-analyze`：
   - 当传入 `date`/`class_name` 时，会校验所选 `session_ids` 与参数一致；不一致返回 `422`。
@@ -814,7 +816,7 @@ PythonLab WS 接入补充（2026-09-09）：terminal/DAP 在业务缓存、termi
 
 - XBK 请求与响应中的 `year` 是规范学年字符串 `YYYY-YYYY`（例如 `2026-2027`）；API/导入边界仍兼容四位起始年份 `2026` 并规范化输出，拒绝 `2026-2028` 等不连续区间。数据库三张 XBK 表使用 `VARCHAR(9)` 并施加连续学年 CHECK 约束。
 - `POST /xbk/import/preview` 与 `POST /xbk/import` 使用 multipart `file`，接受 `scope=students|courses|selections` 以及 `year`、`term`、`grade` 默认值；非空文件值优先，空单元格或缺列回退到默认值。
-- 预检返回有效/无效行数、预览和带工作表行号的错误。执行支持 `skip_invalid`；严格模式先完成全文件校验再写入，数据库失败回滚。导入格式、容量限制及重复键规则以 [XBK 功能文档](../features/XBK.md#导入校验与交互约定) 为准。
+- 预检返回有效/无效行数、预览和带原文件行号的错误。CSV 字段含引号内换行时，以记录起始行为准。执行支持 `skip_invalid`；严格模式先完成全文件校验再写入，数据库失败回滚。导入格式、容量限制及重复键规则以 [XBK 功能文档](../features/XBK.md#导入校验与交互约定) 为准。
 - 非法文件/内容可返回 400，容量超限 413，字段/行校验失败 422；缺少旧 `.xls` 引擎返回 400 并提示格式转换。
 - 预检与执行均在单文件重复自然键、包含多个年份/学期组合、学生同学号与现存姓名/年级冲突时整份返回 422；`skip_invalid=true` 不绕过这些文件级保护。学生学号需跨班级及年级唯一；同人重复导入仍可更新班级/性别，具体规则见 XBK 文档。
 - 课程导入中新增课程缺少“各班限报人数”整份 422（含行号与字段名）；已存在课程缺该列时保留库中原限额。导入请求的 `grade` 与文件中某行年级不一致、或文件年级与库中已有课程/选课快照不一致时整份 422；文件未提供年级时保留库中快照。
@@ -863,9 +865,9 @@ PythonLab WS 接入补充（2026-09-09）：terminal/DAP 在业务缓存、termi
 | POST | `/api/v2/pythonlab/cfg/parse` | CFG 解析（256KB/2000 节点上限） | 是 |
 | POST | `/api/v2/pythonlab/sessions` | 创建调试会话 | 是 |
 | GET | `/api/v2/pythonlab/sessions/{session_id}` | 获取会话详情 | 是 |
-| POST | `/api/v2/pythonlab/sessions/{session_id}/stop` | 停止会话 | 是 |
+| POST | `/api/v2/pythonlab/sessions/{session_id}/stop` | 停止会话。返回 `TERMINATING` 或已确认的 `TERMINATED`；派发未确认时返回 `503`，可重试 | 会话所有者 |
 | GET | `/api/v2/pythonlab/sessions` | 获取会话列表 | 是 |
-| POST | `/api/v2/pythonlab/sessions/cleanup` | 清理过期会话 | 是 |
+| POST | `/api/v2/pythonlab/sessions/cleanup` | 请求清理本人的会话。`accepted` / `accepted_count` 表示已受理，`stopped` / `stopped_count` 只计已确认终止。停止中的会话仍可查询和重试 | 是 |
 | WS | `/api/v2/pythonlab/sessions/{session_id}/terminal` | 终端 WebSocket | 是 |
 | WS | `/api/v2/pythonlab/sessions/{session_id}/ws` | 调试 WebSocket（DAP） | 是 |
 | POST | `/api/v2/pythonlab/optimize/code` | AI 代码优化 | 是 |
@@ -960,13 +962,15 @@ PythonLab WS 接入补充（2026-09-09）：terminal/DAP 在业务缓存、termi
 并发写入：单题 `/answer` 与整卷 `/submit` 在同一会话行上取得事务锁后重验状态，随后写入并提交。先保存成功的答案计入随后交卷；先交卷成功后单题保存返回既有 422；重复提交只允许一个成功。按取得锁的顺序处理，不承诺 HTTP 先到先处理，不提供响应丢失后的幂等成功回放。AI 调用仍位于该事务内，长事务与取消边界另行验收。
 
 评分时机：选择题立即精确判分；填空题立即 AI 评分，并在未配置智能体或 AI 失败时回退
-文本比对；简答题单题提交时只保存答案，整卷提交后统一评分。
+文本比对。AI 回复缺少有效分数时按评分失败处理。简答题单题提交时只保存答案，整卷提交后统一评分。空白单题答案返回 422。生成题评分、学生结果、后台答卷详情与 Excel 导出使用作答快照。无快照的历史题沿用题库。
 
 ### 学生端（/assessment）
 
 本组接口要求 `require_student_or_staff`（`student/teacher/admin/super_admin`）；未认证返回 401，其他角色返回 403，并非任意登录用户均可访问。
 
-`GET /assessment/available` 与新建会话共用开放窗判断：未设置的边界不限制，恰好开始或结束可起测。`POST /assessment/sessions/start` 在配置存在且启用、又无本人同配置进行中会话时，于查题、AI 与写入之前校验；窗前返回 `422 {"detail":"该测评尚未开始"}`，窗后返回 `422 {"detail":"该测评已结束"}`。可复用会话不受窗口重新限制，保持原 session、开始时间和答案；这不改变窗外配置在列表中隐藏的行为，也不保证严格并发幂等。配置禁用仍先于复用拒绝，原有成功响应字段不变。详见 [会话与答题边界](../features/ASSESSMENT.md#会话与答题边界)。
+`GET /assessment/available` 与新建会话共用开放窗判断：未设置的边界不限制，恰好开始或结束可起测。`POST /assessment/sessions/start` 在配置存在且启用、又无本人同配置进行中会话时，于查题、AI 与写入之前校验；窗前返回 `422 {"detail":"该测评尚未开始"}`，窗后返回 `422 {"detail":"该测评已结束"}`。可复用会话保持原 ID、开始时间和答案。列表默认排除窗外配置，传 `include_in_progress=true` 时会额外返回已启用配置下本人的进行中会话，`started_at` 是该会话的原开始时间，`time_limit_minutes` 是当前配置时限。配置禁用仍先于起测接口复用拒绝。详见 [会话与答题边界](../features/ASSESSMENT.md#会话与答题边界)。
+
+`GET /assessment/sessions/{session_id}/resume` 只读复核归属与状态。进行中且配置启用时返回 `session_id`、`status`、`config_title`、`started_at`、`time_limit_minutes` 和 `questions`。题目包含已保存作答，省略标准答案和解析。`submitted` 或 `graded` 时只返回 `session_id` 和 `status`，页面随后读取结果。配置已停用且会话仍进行中、会话不属于本人或不可续答时返回 422。原 `/questions` 返回数组的合同保持有效。
 
 起测并发（2026-09-09）：PostgreSQL READ COMMITTED 下，`POST /assessment/sessions/start` 先按配置与本人 ID 取得事务级互斥，再检查/复用进行中会话；已有会话被保存或交卷锁住时等待，不再跳过另建。事务提交、回滚或会话关闭释放互斥；不同配置/学生可独立起测。该保护只覆盖当前服务入口，不替代唯一约束、历史重复数据修复或新旧版本混跑验收；SQLite 不据此承诺并发唯一。开放窗、题目及响应字段不变。
 
@@ -976,6 +980,7 @@ PythonLab WS 接入补充（2026-09-09）：terminal/DAP 在业务缓存、termi
 |------|------|------|------|
 | GET | `/assessment/available` | 可参与测评列表 | 是 |
 | POST | `/assessment/sessions/start` | 开始测评 | 是 |
+| GET | `/assessment/sessions/{session_id}/resume` | 重新确认本人会话是否可续答 | 是 |
 | GET | `/assessment/sessions/{session_id}/questions` | 当前测评题目 | 是 |
 | POST | `/assessment/sessions/{session_id}/answer` | 提交单题答案 | 是 |
 | POST | `/assessment/sessions/{session_id}/submit` | 提交整卷 | 是 |

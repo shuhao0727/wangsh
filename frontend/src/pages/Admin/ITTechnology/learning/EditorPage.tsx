@@ -3,9 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { showMessage } from "@/lib/toast";
-import { api } from "@services";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { fetchLearningBookContent, saveLearningChapterMarkdown } from "@/features/it-technology/learning/helpers";
 import type { LearningModuleKey, LearningBook } from "@/features/it-technology/learning/types";
 import { BookReader } from "@/features/it-technology/learning/BookReader";
 import {
@@ -34,22 +32,23 @@ const LearningEditorPage: React.FC = () => {
     const load = async () => {
       setLoading(true);
       try {
-        let m: any;
+        let fallback: LearningBook;
         switch (mk) {
-          case "ml": m = await import("@/features/it-technology/courses/ml/book"); break;
-          case "ai": m = await import("@/features/it-technology/courses/ai/book"); break;
-          case "agents": m = await import("@/features/it-technology/courses/agents/book"); break;
-          default: m = await import("@/features/it-technology/courses/ml/book"); break;
+          case "ai": fallback = (await import("@/features/it-technology/courses/ai/book")).AI_BOOK; break;
+          case "agents": fallback = (await import("@/features/it-technology/courses/agents/book")).AGENTS_BOOK; break;
+          default: fallback = (await import("@/features/it-technology/courses/ml/book")).ML_BOOK; break;
         }
-        const b = m.ML_BOOK ?? m.AI_BOOK ?? m.AGENTS_BOOK ?? m.default;
-        if (!cancelled && b) {
-          setBook(b as LearningBook);
-          const slug = b.chapters[0]?.slug ?? "";
-          setActiveSlug(slug);
-          setEditValue(b.chapters[0]?.markdown ?? "");
+        const { book: loadedBook } = await fetchLearningBookContent(fallback, { requireSavedChapters: true });
+        if (!cancelled) {
+          setBook(loadedBook);
+          setActiveSlug(loadedBook.chapters[0]?.slug ?? "");
+          setEditValue(loadedBook.chapters[0]?.markdown ?? "");
         }
       } catch {
-        if (!cancelled) showMessage.error("加载失败");
+        if (!cancelled) {
+          setBook(null);
+          showMessage.error("加载失败");
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -84,14 +83,14 @@ const LearningEditorPage: React.FC = () => {
     if (!activeChapter) return;
     setSaving(true);
     try {
-      await api.put(`/learning/chapters/${mk}/${activeChapter.slug}`, {
-        title: activeChapter.title,
-        summary: activeChapter.summary,
-        estimated_minutes: activeChapter.estimatedMinutes,
-        difficulty: activeChapter.difficulty,
-        group_name: activeChapter.group,
-        markdown: editValue,
-      });
+      const saved = await saveLearningChapterMarkdown(mk, activeChapter, editValue);
+      setBook((current) => current === book && current ? {
+        ...current,
+        chapters: current.chapters.map((chapter) => chapter.slug === saved.slug ? {
+          ...chapter,
+          markdown: saved.markdown ?? editValue,
+        } : chapter),
+      } : current);
       showMessage.success("保存成功");
     } catch {
       showMessage.error("保存失败");

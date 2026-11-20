@@ -25,6 +25,7 @@ from .question_service import (
 from .session_service import (
     get_available_configs,
     start_session,
+    resume_session,
     get_session_questions,
     submit_answer,
     submit_session,
@@ -66,6 +67,7 @@ __all__ = [
     "generate_questions",
     "get_available_configs",
     "start_session",
+    "resume_session",
     "get_session_questions",
     "submit_answer",
     "submit_session",

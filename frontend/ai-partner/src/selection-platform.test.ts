@@ -18,9 +18,10 @@ const draft = (name: string, paperRecorded = false) => {
   const selected = ['p01-01', 'p02-01', 'p03-01', 'p04-01', 'p05-03', 'p06-01'].reduce((selection, id) => selectPart(catalogData as Catalog, selection, id).selected, {});
   return { selected, name, primaryFeature: 'organize', features: [], budget: null, reason: '', testPlan: '', risk: '', paperRecorded };
 };
+const selectionLayout = '<p id="journey-summary"></p><aside class="left-panel"><div id="module-list"></div></aside><aside class="right-panel"></aside><section class="stage-panel"><div class="stage-head"></div><div class="canvas-wrap"></div></section>';
 beforeEach(() => {
-  vi.clearAllMocks(); localStorage.clear();
-  document.body.innerHTML = '<p id="journey-summary"></p><aside class="left-panel"><div id="module-list"></div></aside><aside class="right-panel"></aside><section class="stage-panel"><div class="stage-head"></div><div class="canvas-wrap"></div></section>';
+  vi.clearAllMocks(); localStorage.clear(); sessionStorage.clear();
+  document.body.innerHTML = selectionLayout;
   mocks.evaluate.mockResolvedValue(evaluation);
   mocks.currentUser.mockResolvedValue({ id: 11, name: '甲' });
   mocks.getLeaderboard.mockResolvedValue({ round_id: 'r', status: 'waiting', expires_at: null, rows: [] });
@@ -83,6 +84,60 @@ describe('real selection UI integration (original catalog and server AI scoring)
     identity({ pending: false, hasToken: false }); expect(disabled('submit-score')).toBe(true); expect((document.getElementById('selection-name') as HTMLInputElement).value).toBe('');
     expect(localStorage.getItem('ai-classmate-selection-v3')).toContain('匿名旧稿');
   });
+  it.each([401, 403])('recovers the unsaved scoring draft after %s and same-account login', async status => {
+    localStorage.setItem(draftKeyFor(11), JSON.stringify(draft('上次保存', true)));
+    mocks.evaluate.mockRejectedValueOnce({ response: { status } });
+    mountSelection(vi.fn()); await flush(); click('restore-selection');
+    input('selection-name', '尚未保存');
+    input('selection-reason', '未保存的取舍记录');
+    click('run-test'); click('run-score'); await flush();
+
+    expect(document.getElementById('score-result')!.textContent).toContain('请重新登录');
+    expect(document.querySelector<HTMLAnchorElement>('.partner-auth a')?.hidden).toBe(false);
+    expect(disabled('run-score')).toBe(true);
+    expect(disabled('submit-score')).toBe(true);
+    expect(localStorage.getItem(draftKeyFor(11))).toContain('上次保存');
+    identity({ pending: true, hasToken: false });
+    identity({ pending: false, hasToken: true });
+    await flush();
+    expect((document.getElementById('selection-name') as HTMLInputElement).value).toBe('尚未保存');
+    expect(mocks.evaluate).toHaveBeenCalledTimes(1);
+
+    click('run-score'); await flush();
+    expect(mocks.evaluate).toHaveBeenCalledTimes(2);
+    expect(mocks.evaluate.mock.calls[1][0]).toEqual(mocks.evaluate.mock.calls[0][0]);
+    expect(document.querySelector('.score-total strong')?.textContent).toBe('82');
+  });
+
+  it.each([11, 22])('recovers across the login page only when account %s owns the expired draft', async loginId => {
+    localStorage.setItem(draftKeyFor(11), JSON.stringify(draft('上次保存', true)));
+    mocks.evaluate.mockRejectedValueOnce({ response: { status: 401 } });
+    mountSelection(vi.fn()); await flush(); click('restore-selection');
+    input('selection-name', '仅甲可见的未保存稿');
+    input('selection-reason', '仅甲可见的记录');
+    click('run-test'); click('run-score'); await flush();
+    expect(document.querySelector<HTMLAnchorElement>('.partner-auth a')?.hidden).toBe(false);
+    window.dispatchEvent(new Event('pagehide'));
+    document.body.innerHTML = selectionLayout;
+    mocks.currentUser.mockResolvedValue({ id: loginId, name: '登录用户' });
+    mountSelection(vi.fn()); await flush();
+    const name = document.getElementById('selection-name') as HTMLInputElement;
+    if (loginId === 11) {
+      expect(name.value).toBe('仅甲可见的未保存稿');
+      click('run-score'); await flush();
+      expect(mocks.evaluate.mock.calls[1][0]).toEqual(mocks.evaluate.mock.calls[0][0]);
+    } else {
+      expect(name.value).toBe('');
+      expect((document.getElementById('selection-reason') as HTMLTextAreaElement).value).toBe('');
+      click('run-score'); await flush(); expect(mocks.evaluate).toHaveBeenCalledTimes(1);
+      mocks.currentUser.mockResolvedValue({ id: 11, name: '甲' });
+      identity({ pending: true, hasToken: false });
+      identity({ pending: false, hasToken: true });
+      await flush();
+      expect(name.value).toBe('');
+    }
+  });
+
   it('allows anonymous design but no AI request, named-board fetch, submission or save', async () => {
     mocks.currentUser.mockRejectedValue({ response: { status: 401 } }); mountSelection(vi.fn()); await flush();
     input('selection-name', '匿名设计'); click('run-score'); await flush(); expect(document.querySelectorAll('.score-dimensions li')).toHaveLength(0); expect(mocks.evaluate).not.toHaveBeenCalled();

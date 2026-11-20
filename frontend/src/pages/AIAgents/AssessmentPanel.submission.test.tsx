@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { assessmentSessionApi, type AnswerResult, type QuestionForStudent } from "@services/assessment";
+import { assessmentSessionApi, profileApi, type AnswerResult, type QuestionForStudent } from "@services/assessment";
 import { showMessage } from "@/lib/toast";
 import AssessmentPanel from "./AssessmentPanel";
 
@@ -8,7 +8,7 @@ import AssessmentPanel from "./AssessmentPanel";
 // boundaries and unrelated profile rendering are replaced. This is not full E2E.
 vi.mock("@services/assessment", () => ({
   assessmentSessionApi: {
-    available: vi.fn(), start: vi.fn(), getQuestions: vi.fn(), submitAnswer: vi.fn(),
+    available: vi.fn(), start: vi.fn(), resume: vi.fn(), getQuestions: vi.fn(), submitAnswer: vi.fn(),
     submit: vi.fn(), getResult: vi.fn(), getProfileStatus: vi.fn(), getBasicProfile: vi.fn(),
   },
   profileApi: { getMyProfiles: vi.fn() },
@@ -58,6 +58,8 @@ beforeEach(() => {
     session_id: 10, config_title: "合成检测", total_questions: 1, total_score: 5,
     time_limit_minutes: 1, started_at: new Date().toISOString(),
   });
+  vi.mocked(assessmentSessionApi.getBasicProfile).mockRejectedValue(new Error("尚无画像"));
+  vi.mocked(profileApi.getMyProfiles).mockResolvedValue({ items: [], total: 0, page: 1, page_size: 10, total_pages: 0 });
   vi.mocked(assessmentSessionApi.submitAnswer).mockResolvedValue(answerResult);
   vi.mocked(assessmentSessionApi.submit).mockResolvedValue({
     session_id: 10, status: "graded", earned_score: 5, total_score: 5, basic_profile_id: null, summary: null,
@@ -69,6 +71,73 @@ beforeEach(() => {
   });
 });
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); });
+
+it("continues the saved session with its original start and the current limit", async () => {
+  const startedAt = new Date("2026-11-18T08:00:00Z");
+  vi.spyOn(Date, "now").mockReturnValue(startedAt.getTime() + 4 * 60_000);
+  const resumable = {
+    id: 1, title: "已关窗的检测", total_score: 5, time_limit_minutes: 20,
+    session_status: "in_progress", session_id: 10, earned_score: null,
+    started_at: startedAt.toISOString(),
+  };
+  vi.mocked(assessmentSessionApi.available).mockResolvedValue([resumable]);
+  const savedQuestions = [{ ...question(), student_answer: "保留的答案", is_answered: true }];
+  vi.mocked(assessmentSessionApi.getQuestions).mockResolvedValue(savedQuestions);
+  vi.mocked(assessmentSessionApi.resume).mockResolvedValue({
+    session_id: 10, status: "in_progress", config_title: resumable.title,
+    time_limit_minutes: 10, started_at: startedAt.toISOString(), questions: savedQuestions,
+  });
+  render(<AssessmentPanel isAuthenticated isStudent isAdmin={false} userId={7} />);
+  fireEvent.click(button("自我评价"));
+  fireEvent.click(await screen.findByRole("button", { name: "继续答题" }));
+
+  await screen.findByText("合成题 101");
+  expect(assessmentSessionApi.resume).toHaveBeenCalledWith(10);
+  expect(assessmentSessionApi.start).not.toHaveBeenCalled();
+  expect(screen.getByDisplayValue("保留的答案")).toBeDisabled();
+  expect(screen.getByText("06:00")).toBeInTheDocument();
+  expect(assessmentSessionApi.available).toHaveBeenCalledWith({ includeInProgress: true });
+  vi.mocked(Date.now).mockReturnValue(startedAt.getTime() + 10 * 60_000);
+  await screen.findByText("00:00", {}, { timeout: 2000 });
+  expect(assessmentSessionApi.submit).not.toHaveBeenCalled();
+});
+
+it("opens results when a listed session was submitted before continuing", async () => {
+  vi.mocked(assessmentSessionApi.available).mockResolvedValue([{
+    id: 1, title: "已交卷的检测", total_score: 5, time_limit_minutes: 20,
+    session_status: "in_progress", session_id: 10, earned_score: null,
+  }]);
+  vi.mocked(assessmentSessionApi.resume).mockResolvedValue({ session_id: 10, status: "graded" });
+  vi.mocked(assessmentSessionApi.getResult).mockResolvedValue({
+    session_id: 10, config_id: 1, config_title: "已交卷的检测", status: "graded",
+    earned_score: 5, total_score: 5, started_at: null, submitted_at: null,
+    answers: [{
+      id: 101, question_type: "choice", content: "冻结的生成题", options: '{"A":"快照选项甲","B":"快照选项乙"}',
+      student_answer: "B", correct_answer: "B", is_correct: true, earned_score: 5,
+      max_score: 5, explanation: null, ai_feedback: null,
+    }], basic_profile_id: null,
+  });
+  render(<AssessmentPanel isAuthenticated isStudent isAdmin={false} userId={7} />);
+  fireEvent.click(button("自我评价"));
+  fireEvent.click(await screen.findByRole("button", { name: "继续答题" }));
+  fireEvent.click(await screen.findByText("第1题"));
+  expect(screen.getByText("A. 快照选项甲")).toBeVisible();
+  expect(screen.getByText("B. 快照选项乙")).toBeVisible();
+  expect(assessmentSessionApi.getResult).toHaveBeenCalledWith(10);
+  expect(assessmentSessionApi.getQuestions).not.toHaveBeenCalled();
+});
+
+it("opens results for an already submitted session listed on entry", async () => {
+  vi.mocked(assessmentSessionApi.available).mockResolvedValue([{
+    id: 1, title: "历史已提交检测", total_score: 5, time_limit_minutes: 20,
+    session_status: "submitted", session_id: 10, earned_score: null,
+  }]);
+  render(<AssessmentPanel isAuthenticated isStudent isAdmin={false} userId={7} />);
+  fireEvent.click(button("自我评价"));
+  fireEvent.click(await screen.findByRole("button", { name: "查看结果" }));
+  await screen.findByRole("tab", { name: "答题详情" });
+  expect(assessmentSessionApi.getResult).toHaveBeenCalledWith(10);
+});
 
 describe("AssessmentPanel submission interlock (real component, synthetic API)", () => {
   it("blocks pending answer settlement then permits explicit submission", async () => {

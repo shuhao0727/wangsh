@@ -21,6 +21,9 @@ from app.services.auth import verify_token
 from app.core.session_guard import verify_request_session_detail
 from app.schemas.user_info import UserInfo
 
+ADMIN_ROLES = ("admin", "super_admin")
+STAFF_ROLES = ("teacher", *ADMIN_ROLES)
+
 # OAuth2 配置
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login", auto_error=False)
 
@@ -268,7 +271,7 @@ async def require_admin(
     异常:
         403: 权限不足
     """
-    if current_user.get("role_code") not in ["admin", "super_admin"]:
+    if current_user.get("role_code") not in ADMIN_ROLES:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="需要管理员权限",
@@ -282,7 +285,7 @@ async def require_admin_sse(
     """
     SSE 版 require_admin：放行 query token（EventSource 无法自定义 header）
     """
-    if current_user.get("role_code") not in ["admin", "super_admin"]:
+    if current_user.get("role_code") not in ADMIN_ROLES:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="需要管理员权限",
@@ -331,7 +334,7 @@ async def require_staff(
     要求用户必须是教职工（教师/管理员/超级管理员均可）
     用于课堂互动、课堂计划、测评等教学共享模块
     """
-    if current_user.get("role_code") not in ["teacher", "admin", "super_admin"]:
+    if current_user.get("role_code") not in STAFF_ROLES:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="需要教职工权限",

@@ -53,7 +53,8 @@ const LockCrackerPage: React.FC = () => {
   }, [startTime]);
 
   const pickPassword = useCallback((type: LockType) => {
-    const pool = loadPools()[type];
+    const savedPool = loadPools()?.[type];
+    const pool = Array.isArray(savedPool) && savedPool.length > 0 ? savedPool : DEFAULT_POOLS[type];
     setPassword(pool[Math.floor(Math.random()*pool.length)]);
     setAttempts([]); setUnlocked(false); setResult(null); setGuess("");
     setTimeout(() => inputRef.current?.focus(), 100);

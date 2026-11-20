@@ -1,56 +1,68 @@
-import { useEffect, useState } from "react";
-import { useLocation, useParams, useSearchParams } from "react-router-dom";
-import { agentDataApi } from "@services/znt/api";
-import { showMessage } from "@/lib/toast";
+import { useEffect, useMemo, useState } from "react";
+import { useMatch, useParams, useSearchParams } from "react-router-dom";
+import { isAxiosError } from "axios";
+import { api } from "@services/api";
 import type { TaskAnalysisDetail } from "../../types";
 
-export function useAnalysisDetail() {
-  const { analysisId } = useParams<{ analysisId?: string }>();
-  const location = useLocation();
-  const [searchParams] = useSearchParams();
-  const view = (searchParams.get("view") || "timeline") as "timeline" | "beam" | "wordcloud";
-  const typeParam = searchParams.get("type");
-  const isChainRoute = location.pathname.includes("/task-analysis/chains/");
-  const isHotRoute = location.pathname.includes("/task-analysis/hot/");
-  const isBeamView = isChainRoute || view === "beam" || typeParam === "chains";
-  const isTimelineView = view === "timeline" && !isBeamView;
+const detailPaths = {
+  legacy: "/ai-agents/analysis/task-analyses",
+  hot: "/ai-agents/analysis/hot-questions",
+  chains: "/ai-agents/analysis/student-chains",
+};
 
-  const [loading, setLoading] = useState(true);
-  const [detail, setDetail] = useState<TaskAnalysisDetail | null>(null);
+export function useAnalysisDetail() {
+  const { analysisId } = useParams<{ analysisId: string }>();
+  const [searchParams] = useSearchParams();
+  const hotRoute = useMatch("/task-analysis/hot/:analysisId");
+  const chainRoute = useMatch("/task-analysis/chains/:analysisId");
+  const typeParam = searchParams.get("type");
+  const queryType = typeParam === "hot" || typeParam === "chains" ? typeParam : null;
+  const explicitType = hotRoute ? "hot" : chainRoute ? "chains" : queryType;
+  const reportType = explicitType ?? (searchParams.get("view") === "beam" ? "chains" : "hot");
+  const id = /^\d+$/.test(analysisId ?? "") ? Number(analysisId) : 0;
+  const validId = Number.isSafeInteger(id) && id > 0;
+
+  const request = useMemo(() => ({ id, explicitType, reportType } as const), [id, explicitType, reportType]);
+  const [result, setResult] = useState<{
+    request: typeof request;
+    detail: TaskAnalysisDetail | null;
+    error: string | null;
+  }>();
 
   useEffect(() => {
-    const id = Number.parseInt(analysisId || "", 10);
-    if (Number.isNaN(id)) { setLoading(false); return; }
-    let cancelled = false;
-    setLoading(true);
-
-    const fetchers = typeParam === "chains" || isChainRoute
-      ? [agentDataApi.getChainAnalysis, agentDataApi.getTaskAnalysis]
-      : typeParam === "hot" || isHotRoute
-        ? [agentDataApi.getHotAnalysis, agentDataApi.getTaskAnalysis]
-        : isBeamView
-          ? [agentDataApi.getTaskAnalysis, agentDataApi.getChainAnalysis]
-          : [agentDataApi.getTaskAnalysis, agentDataApi.getHotAnalysis];
+    if (!validId) return;
+    const controller = new AbortController();
+    const { signal } = controller;
+    const paths = request.explicitType
+      ? [detailPaths[request.explicitType]]
+      : [detailPaths.legacy, detailPaths[request.reportType]];
 
     void (async () => {
-      try {
-        for (const fetcher of fetchers) {
-          const response = await fetcher(id);
-          if (cancelled) return;
-          if (response.success) {
-            setDetail(response.data as TaskAnalysisDetail);
-            return;
-          }
+      for (const path of paths) {
+        try {
+          const { data } = await api.client.get<TaskAnalysisDetail>(`${path}/${request.id}`, { signal });
+          if (!signal.aborted) setResult({ request, detail: data, error: null });
+          return;
+        } catch (cause) {
+          if (signal.aborted) return;
+          const status = isAxiosError(cause) ? cause.response?.status : undefined;
+          if (path === detailPaths.legacy && status === 404) continue;
+          const error = status === 404 ? "记录不存在"
+            : status === 503 ? "服务暂不可用，请稍后重试" : "获取任务分析失败";
+          setResult({ request, detail: null, error });
+          return;
         }
-        if (!cancelled) showMessage.error("记录不存在");
-      } catch {
-        if (!cancelled) showMessage.error("获取任务分析失败");
-      } finally {
-        if (!cancelled) setLoading(false);
       }
     })();
-    return () => { cancelled = true; };
-  }, [analysisId, isBeamView, isChainRoute, isHotRoute, typeParam]);
+    return () => controller.abort();
+  }, [request, validId]);
 
-  return { loading, detail, isBeamView, isTimelineView, view };
+  // 路由切换的首次渲染就隐藏旧详情，避免等待 effect 清理时仍可导出。
+  const current = result?.request === request ? result : undefined;
+  return {
+    loading: validId && !current,
+    detail: current?.detail ?? null,
+    error: validId ? current?.error : "记录不存在",
+    isBeamView: reportType === "chains",
+  };
 }

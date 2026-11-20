@@ -155,11 +155,12 @@ export async function stopPythonlabDebugSession(params: {
   client: DebugController;
   sessionId: string | null;
   shouldDisconnect: boolean;
+  recoveryScope?: string;
   cleanup: () => void;
   clearTrackedSessionId: () => void;
   resetState: () => void;
 }): Promise<void> {
-  const { client, sessionId, shouldDisconnect, cleanup, clearTrackedSessionId, resetState } = params;
+  const { client, sessionId, shouldDisconnect, recoveryScope, cleanup, clearTrackedSessionId, resetState } = params;
 
   if (shouldDisconnect) {
     try {
@@ -169,11 +170,7 @@ export async function stopPythonlabDebugSession(params: {
 
   cleanup();
 
-  if (sessionId) {
-    try {
-      await pythonlabSessionApi.stop(sessionId);
-    } catch {}
-  }
+  if (sessionId) await pythonlabSessionApi.stopAndWait(sessionId, recoveryScope);
 
   clearTrackedSessionId();
   resetState();

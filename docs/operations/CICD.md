@@ -86,6 +86,7 @@ ECharts/词云 peer major、manifest 与 lockfile 由 workflow contracts 校验�
 后端发布前同时运行普通治理检查及相对原发布基线的 `--base-ref`，不能只看默认 check 的 errors=0。
 保存端点软校验的19项自含用例只在 `repo-config` 的隔离Python入口运行；`backend-pytest`
 精确排除该模块以防正常app导入冲突，不排除其他用例或coverage；workflow合同锁定两处。
+课堂与测评角色贯通用例由同一阻断 pytest 自动收集，无需另起服务。用例在 SQLite 和合成角色下走真实 ASGI 路由，覆盖发布、答题、到时推进、关窗续答和复盘；不代替远程身份、行锁并发或真实网关联测。
 
 以下仍为非阻断或有限覆盖，不得写成完整端到端已过：
 
@@ -99,6 +100,22 @@ ECharts/词云 peer major、manifest 与 lockfile 由 workflow contracts 校验�
 PR/main push 修改 Markdown、合同脚本或本 workflow 时运行
 `node --test scripts/markdown-contracts.test.mjs`，覆盖链接/锚点、围栏/H1、生命周期、
 redirect、archive 索引、学习章节与派生统计。文档-only 改动仍有门禁，不代表应用测试已跑。
+
+### 2.6 release-image-smoke.yml — 正式镜像隔离验收
+
+[工作流](../../.github/workflows/release-image-smoke.yml)仅接受 `workflow_dispatch`，要求
+`reviewed_sha` 等于 `main` 上实际 workflow 提交。一次性 GitHub-hosted `ubuntu-24.04`
+Linux x64 job 从独立目录取正式构建 `15c818c`、run `44002776220` 的清单及对应六镜像。
+只读仓库权限用于检出和取工件；不使用发布凭据、自托管 runner 或生产连接，不构建或推送镜像。
+
+启动前固定镜像摘要和合成 Compose，实际验收覆盖健康/AUTH、课堂作答回读、Typst 异步 PDF
+及真实 Chrome channel/WebKit PythonLab。只读取既有发布工件，不上传新工件或创建 Actions 缓存。
+清理后在运行摘要和原生日志中记录脱敏的发布身份、逐阶段结果、镜像摘要与残留数；不发布合成库、凭据或浏览器原始报告。
+[运行摘要和原生日志不计入工件存储额度](https://docs.github.com/en/billing/concepts/product-billing/github-actions#how-storage-billing-works)。
+只有 GitHub 最终 job 结论为 `success`、冒烟与回收步骤都成功，且证据与原清单逐项一致、残留为零才通过。
+补回收成功只更新残留证据，不改写首次失败。提前失败、取消或超时导致摘要缺失时，不以局部日志判通过。
+本地无 Docker 运行的合同入口为 `python3 -I -B scripts/prod-smoke/test_release_images.py`。
+权限、首次触发和待验范围见 [R1](../plans/2026-11-18-site-remediation.md#r1-ci-隔离验收方案)；本地文件存在不代表已合入、已触发或已通过 R1。
 
 ## 三、部署接口边界
 

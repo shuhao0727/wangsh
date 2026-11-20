@@ -159,7 +159,6 @@ class DockerProvider(DockerMountMixin, SandboxProvider):
         """
         name = self._container_name(meta)
         runtime_mode = str(meta.get("runtime_mode") or "debug").lower()
-        
         ws_path = self._ws_path_for_session(meta)
         async with WorkspaceOwnership(_workspace_root(), ws_path, timeout=120) as ownership, RedisDistributedLock(name, timeout=120):
             record = ownership.read()
@@ -197,8 +196,9 @@ class DockerProvider(DockerMountMixin, SandboxProvider):
                 total_size = sum(f.stat().st_size for f in mount_path.rglob('*') if f.is_file())
                 if total_size > quota_mb * 1024 * 1024:
                     raise RuntimeError(f"Workspace exceeds disk quota: {total_size / 1024 / 1024:.1f}MB > {quota_mb}MB")
-            record = ownership.claim(session_id, meta, name)
+            # 先写工作区再记归属：写入失败不能留下 phase=creating 的归属记录。
             self._prepare_workspace_files(ws_path, code, {**meta, "session_id": session_id})
+            record = ownership.claim(session_id, meta, name)
 
             if runtime_mode == "debug":
                 # Use python to kill debugpy since ps/pkill might be missing
@@ -297,10 +297,10 @@ class DockerProvider(DockerMountMixin, SandboxProvider):
         if same_session and live_owner and record.get('startup_task_id') != meta.get('startup_task_id'):
             raise RuntimeError('同会话的另一个启动任务仍拥有运行环境。')
         container_id = existing["Id"]
-        if not (same_session and live_owner):
-            record = ownership.claim(session_id, meta, name, container_id)
         if not same_session:
             self._prepare_workspace_files(ws_path, code, {**meta, 'session_id': session_id})
+        if not (same_session and live_owner):
+            record = ownership.claim(session_id, meta, name, container_id)
         return {**self._start_result(container_id, ws_path), 'sandbox_owner_token': record['token']}
 
     async def _retire_existing_container(

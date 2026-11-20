@@ -94,6 +94,17 @@ async def capacity_used_batch(
     return counts
 
 
+def validate_course_quota_reduction(occupied_classes: Iterable[tuple[Optional[str], str, int]], quota: int) -> None:
+    """Reject a course quota below any class's current enrollment."""
+    over = [(grade, name, int(used)) for grade, name, used in occupied_classes if int(used) > quota]
+    if over:
+        grade, class_name, used = min(over, key=lambda item: (-item[2], str(item[0]), item[1]))
+        raise HTTPException(
+            status_code=409,
+            detail=f"限额不能降至 {quota}：{grade or '未分年级'} {class_name} 已有 {used} 人选课",
+        )
+
+
 async def validate_capacities(
     db: AsyncSession,
     affected: Iterable[CapacityKey],

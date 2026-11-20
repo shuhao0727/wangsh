@@ -7,7 +7,7 @@ type Props = {
   title: string;
   description: string;
   icon: React.ReactNode;
-  enabled: boolean;
+  enabled: boolean | null;
   onToggle: (checked: boolean) => void;
   loading?: boolean;
   actionLabel?: string;
@@ -34,8 +34,8 @@ const AdminAppCard: React.FC<Props> = ({
     <div className="ws-admin-app-actions flex shrink-0 items-center justify-end gap-3">
       {showToggle ? (
         <div className="flex items-center gap-1.5">
-          <Switch aria-label={`${title}启用状态`} checked={enabled} disabled={loading} onCheckedChange={onToggle} />
-          <span className="text-xs text-text-tertiary">{enabled ? "已启用" : "已禁用"}</span>
+          <Switch aria-label={`${title}启用状态`} checked={enabled === true} disabled={loading || enabled === null} onCheckedChange={onToggle} />
+          <span className="text-xs text-text-tertiary">{enabled === null ? "未知" : enabled ? "已启用" : "已禁用"}</span>
         </div>
       ) : <span />}
       {onAction && actionLabel && (

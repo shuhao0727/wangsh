@@ -32,7 +32,7 @@ import {
   type ResourceItem,
   type ToolItem,
 } from "@/features/it-technology/courses/agents/content";
-import { fetchLearningContentPayload, filterByKeyword } from "@/features/it-technology/learning/helpers";
+import { fetchLearningBookContent, filterByKeyword } from "@/features/it-technology/learning/helpers";
 import { BookReader } from "@/features/it-technology/learning/BookReader";
 import MindMapViewer from "@/features/it-technology/learning/MindMapViewer";
 import { AGENTS_BOOK } from "@/features/it-technology/courses/agents/book";
@@ -250,7 +250,7 @@ const AgentExploration: React.FC<{ embedded?: boolean }> = ({ embedded = false }
 
   useEffect(() => {
     let mounted = true;
-    void fetchLearningContentPayload<AgentsLearningContentPayload>("agents").then((payload) => {
+    void fetchLearningBookContent<AgentsLearningContentPayload>(AGENTS_BOOK).then((payload) => {
       if (mounted && payload) setContentPayload(payload);
     });
     return () => {

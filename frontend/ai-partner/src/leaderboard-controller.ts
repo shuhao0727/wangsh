@@ -35,7 +35,7 @@ export class LeaderboardController {
   private listeners = new Set<(state: BoardState) => void>();
   private disposed = false;
 
-  constructor(private gateway: PartnerGateway, private resetDesign: () => void, private now: () => number = Date.now) {}
+  constructor(private gateway: PartnerGateway, private resetDesign: (expiredUserId?: number) => void, private now: () => number = Date.now) {}
 
   subscribe(listener: (state: BoardState) => void) {
     this.listeners.add(listener);
@@ -60,15 +60,17 @@ export class LeaderboardController {
     this.readTask = null;
     this.state.loading = false;
   }
-  private invalidateIdentity(verifying = false) {
+  expireIdentity() {
+    this.invalidateIdentity(false, '登录状态已失效，请重新登录。', this.state.user?.id);
+  }
+  private invalidateIdentity(verifying = false, error = '', expiredUserId?: number) {
     ++this.epoch;
     this.authAbort?.abort();
     this.postAbort?.abort();
     this.cancelRead();
-    Object.assign(this.state, { user: null, verifying, board: null, submitting: false, error: '', message: '' });
-    // Clear the previous participant's design, notes, score and rendered data
-    // before starting another asynchronous /auth/me request.
-    this.resetDesign();
+    Object.assign(this.state, { user: null, verifying, board: null, submitting: false, error, message: '' });
+    // Clear the previous participant's rendered data while identity is unverified.
+    this.resetDesign(expiredUserId);
     this.syncPolling();
     this.emit();
   }
@@ -158,9 +160,10 @@ export class LeaderboardController {
   private handleError(error: unknown) {
     const status = statusOf(error);
     if (status === 401 || status === 403) {
-      this.invalidateIdentity();
-      this.state.error = '登录状态已失效，请登录后查看实名榜或提交。';
-    } else if (status === 409) {
+      this.expireIdentity();
+      return;
+    }
+    if (status === 409) {
       this.state.board = null;
       this.state.error = '身份或轮次已变化，请重新确认身份与轮次后再次点击提交。';
     } else if (status === 410) {

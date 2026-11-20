@@ -482,15 +482,11 @@ const AIAgentsPage: React.FC = () => {
       const streamStartedAt = Date.now();
 
       // 构建多轮对话上下文
-      const contextMessages: Array<{ role: string; content: string }> = [];
-      const recentMessages = messages.slice(-20);
-      for (const msg of recentMessages) {
-        if (msg.sender === "user") {
-          contextMessages.push({ role: "user", content: msg.content });
-        } else if (msg.sender === "agent" && msg.content) {
-          contextMessages.push({ role: "assistant", content: msg.content });
-        }
-      }
+      // 接口最多 20 条，为当前提问保留最后一条。
+      const contextMessages = messages
+        .filter(msg => msg.sender === "user" || msg.content)
+        .slice(-19)
+        .map(msg => ({ role: msg.sender === "user" ? "user" : "assistant", content: msg.content }));
       contextMessages.push({ role: "user", content });
 
       let currentGroupId = "";

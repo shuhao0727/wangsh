@@ -1,4 +1,6 @@
 import asyncio
+import json
+from contextlib import asynccontextmanager
 from datetime import date, datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -417,33 +419,158 @@ class _IdleClient:
 
 
 def test_group_discussion_stream_rechecks_access_when_idle(monkeypatch):
+    now = 100.0
+    member = True
+    reads = []
+
     async def fake_get_client():
         return _IdleClient()
 
-    async def reject_access(*args, **kwargs):
-        raise HTTPException(status_code=403, detail="not a member")
+    async def check_access(*args, **kwargs):
+        if not member:
+            raise HTTPException(status_code=403, detail="not a member")
 
-    async def fail_list(*args, **kwargs):
-        raise AssertionError("list_messages must not run after revocation")
+    async def empty_list(_db, *, session_id, after_id, limit):
+        reads.append(after_id)
+        return [], after_id
 
     monkeypatch.setattr(gd_api.settings, "GROUP_DISCUSSION_REDIS_ENABLED", True)
     monkeypatch.setattr(gd_api, "cache", SimpleNamespace(get_client=fake_get_client))
     monkeypatch.setattr(gd_api, "AsyncSessionLocal", lambda: _FakeSessionContext())
-    monkeypatch.setattr(gd_api, "ensure_session_view_access", reject_access)
-    monkeypatch.setattr(gd_api, "list_messages", fail_list)
+    monkeypatch.setattr(gd_api, "ensure_session_view_access", check_access)
+    monkeypatch.setattr(gd_api, "list_messages", empty_list)
+    loop = SimpleNamespace(time=lambda: now)
+    monkeypatch.setattr(gd_api, "asyncio", SimpleNamespace(
+        get_running_loop=lambda: loop, CancelledError=asyncio.CancelledError, sleep=asyncio.sleep,
+    ))
 
     async def consume():
-        return [
-            item
-            async for item in gd_api._stream_group_discussion_messages(
-                1, 0, {"id": 7, "role_code": "student"}
-            )
-        ]
+        nonlocal now, member
+        stream = gd_api._stream_group_discussion_messages(1, 0, {"id": 7, "role_code": "student"})
+        try:
+            assert await anext(stream) == ":keepalive\n\n"
+            member = False
+            now += 5
+            assert (await anext(stream)).startswith("event: access_revoked")
+            with pytest.raises(StopAsyncIteration):
+                await anext(stream)
+        finally:
+            await stream.aclose()
 
-    items = asyncio.run(consume())
+    asyncio.run(consume())
+    assert reads == [0]
 
-    assert items
-    assert items[0].startswith("event: access_revoked")
+
+@pytest.mark.parametrize("revoke_midway", [False, True])
+def test_quiet_stream_drains_backlog_and_rechecks_membership(monkeypatch, revoke_midway):
+    session = SimpleNamespace(id=1)
+    rows = [
+        SimpleNamespace(
+            id=message_id, session_id=1, user_id=7, user_display_name="学生",
+            content=f"消息 {message_id}", created_at=datetime(2026, 11, 18),
+        )
+        for message_id in range(11, 246)
+    ]
+    # The periodic check, first page, and every subsequent fetch each use a
+    # scoped DB session. Use the real membership and cursor queries with fake rows.
+    connections = iter([
+        _FakeDB([session, object()]),
+        _FakeDB([session, object(), rows[:200]]),
+        _FakeDB([session, None] if revoke_midway else [session, object(), rows[200:]]),
+    ])
+
+    @asynccontextmanager
+    async def db_session():
+        yield next(connections)
+
+    real_list = gd_api.list_messages
+    cursors = []
+
+    async def checked_list(db, *, session_id, after_id, limit):
+        cursors.append((after_id, limit))
+        return await real_list(db, session_id=session_id, after_id=after_id, limit=limit)
+
+    async def no_cached_id(_key):
+        return None
+
+    async def idle_pubsub(_channel):
+        return _IdlePubSub()
+
+    monkeypatch.setattr(gd_api.settings, "GROUP_DISCUSSION_REDIS_ENABLED", True)
+    monkeypatch.setattr(gd.session_service.cache, "get", no_cached_id)
+    monkeypatch.setattr(gd_api, "_open_group_discussion_pubsub", idle_pubsub)
+    monkeypatch.setattr(gd_api, "AsyncSessionLocal", db_session)
+    monkeypatch.setattr(gd_api, "list_messages", checked_list)
+
+    async def consume():
+        stream = gd_api._stream_group_discussion_messages(1, 10, {"id": 7, "role_code": "student"})
+        try:
+            first = await anext(stream)
+            assert first.startswith("data: "), first
+            first_page = json.loads(first.removeprefix("data: "))
+            assert [item["id"] for item in first_page["items"]] == list(range(11, 211))
+            assert first_page["next_after_id"] == 210
+            second = await anext(stream)
+            if revoke_midway:
+                assert second.startswith("event: access_revoked")
+                with pytest.raises(StopAsyncIteration):
+                    await anext(stream)
+            else:
+                second_page = json.loads(second.removeprefix("data: "))
+                assert [item["id"] for item in second_page["items"]] == list(range(211, 246))
+                assert second_page["next_after_id"] == 245
+        finally:
+            await stream.aclose()
+
+    asyncio.run(consume())
+    assert cursors == ([(10, 200)] if revoke_midway else [(10, 200), (210, 200)])
+
+
+def test_stream_retries_read_after_consuming_the_only_notification(monkeypatch):
+    class SingleNotification(_FakePubSub):
+        notified = False
+
+        async def get_message(self, **kwargs):
+            if not self.notified:
+                self.notified = True
+                return {"type": "message"}
+            return None
+
+    async def open_pubsub(_channel):
+        return SingleNotification()
+
+    row = SimpleNamespace(
+        id=11, session_id=1, user_id=7, user_display_name="学生",
+        content="暂时读不到的消息", created_at=datetime(2026, 11, 18),
+    )
+    reads = iter([([], 10), RuntimeError("synthetic DB failure"), ([row], 11)])
+
+    async def read_messages(_session_id, after_id, _user):
+        assert after_id == 10
+        result = next(reads)
+        if isinstance(result, Exception):
+            raise result
+        return result
+
+    @asynccontextmanager
+    async def db_session():
+        yield _FakeDB([SimpleNamespace(id=1), object()])
+
+    monkeypatch.setattr(gd_api, "_open_group_discussion_pubsub", open_pubsub)
+    monkeypatch.setattr(gd_api, "AsyncSessionLocal", db_session)
+    monkeypatch.setattr(gd_api, "_list_group_discussion_messages", read_messages)
+
+    async def consume():
+        stream = gd_api._stream_group_discussion_messages(1, 10, {"id": 7, "role_code": "student"})
+        try:
+            assert await anext(stream) == ":keepalive\n\n"
+            retry = await anext(stream)
+            assert retry.startswith("data: "), retry
+            assert json.loads(retry.removeprefix("data: "))["next_after_id"] == 11
+        finally:
+            await stream.aclose()
+
+    asyncio.run(consume())
 
 
 def test_group_discussion_stream_uses_scoped_db_and_closes_request_db():

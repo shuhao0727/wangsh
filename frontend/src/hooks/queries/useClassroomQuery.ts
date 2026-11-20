@@ -28,11 +28,22 @@ export function useActiveAgents() {
   });
 }
 
+export function activityDetailUnavailable(error: unknown): boolean {
+  const status = (error as { response?: { status?: number } })?.response?.status;
+  return status === 403 || status === 404;
+}
+
 export function useActivityDetail(id: number | null) {
   return useQuery({
     queryKey: queryKeys.classroom.detail(id),
     queryFn: () => classroomApi.getDetail(id!),
-    enabled: id != null,
+    enabled: (query) => id != null && !activityDetailUnavailable(query.state.error),
+    retry: (failures, error) => failures < 1 && !activityDetailUnavailable(error),
+    refetchInterval: (query) => {
+      if (activityDetailUnavailable(query.state.error)) return false;
+      if (query.state.error && (!query.state.data || query.state.data.status === "active")) return 6000;
+      return query.state.data?.status === "active" ? 3000 : false;
+    },
   });
 }
 

@@ -178,6 +178,67 @@ from openpyxl import Workbook  # noqa: E402
 from app.api.endpoints.management.users import import_service  # noqa: E402
 
 
+@pytest.mark.parametrize("format", ["csv", "xlsx"])
+@pytest.mark.parametrize("fields,values,expected", [
+    ([], [], ("teacher", False)),
+    (["学年", "班级", "状态", "用户名", "角色"], ["", "", "  ", "", ""], ("teacher", False)),
+    (["状态", "角色"], [True, ""], ("teacher", True)),
+    (["状态", "角色"], [" ", "student"], ("student", False)),
+])
+def test_import_preserves_unspecified_existing_role_and_status(format, fields, values, expected, monkeypatch):
+    from unittest.mock import AsyncMock
+
+    # Row parsing and final fields run here. Durable revocation uses a real
+    # database in test_user_governance_isolated.py.
+    monkeypatch.setattr(import_service, "revoke_if_account_removed", AsyncMock())
+    user = SimpleNamespace(
+        id=1, student_id="A001", username="teacher1", full_name="原教师",
+        study_year=None, class_name=None, role_code="teacher", is_active=False, is_deleted=False,
+    )
+    db = _ImportDb(user)
+    headers = [" 学号 ", " 姓名 ", *fields]
+    row = ["A001", "改名教师", *values]
+    output = io.BytesIO()
+    if format == "csv":
+        import csv
+        csv_file = io.StringIO()
+        csv.writer(csv_file).writerows([headers, row])
+        output.write(csv_file.getvalue().encode("utf-8-sig"))
+    else:
+        workbook = Workbook()
+        workbook.active.append(headers)
+        workbook.active.append(row)
+        workbook.save(output)
+    output.seek(0)
+    upload = UploadFile(filename=f"users.{format}", file=output)
+    result = asyncio.run(users_api.import_users(upload, {"id": 10, "role_code": "admin"}, db))
+    assert result.updated_count == 1 and result.error_count == 0, result.errors
+    assert user.full_name == "改名教师"
+    assert (user.role_code, user.is_active) == expected
+    assert not db.added
+
+
+@pytest.mark.parametrize("format", ["csv", "xlsx"])
+def test_import_rejects_duplicate_normalized_headers_before_writing(format):
+    output = io.BytesIO()
+    if format == "csv":
+        output.write("学号,姓名,状态, 状态 \nDUP-1,重复字段,false,\n".encode("utf-8"))
+    else:
+        workbook = Workbook()
+        workbook.active.append(["学号", "姓名", "状态", " 状态 "])
+        workbook.active.append(["DUP-1", "重复字段", False, None])
+        workbook.save(output)
+    output.seek(0)
+    db = _ImportDb(existing_user=None)
+    upload = UploadFile(filename=f"users.{format}", file=output)
+
+    with pytest.raises(HTTPException, match="重复字段.*状态") as exc_info:
+        asyncio.run(users_api.import_users(upload, {"id": 10, "role_code": "admin"}, db))
+
+    assert exc_info.value.status_code == 400
+    assert not db.added and not db.savepoints and db.commit_count == 0
+
+
 def test_parse_csv_rows_rejects_non_utf8_bytes_with_400():
     # 0xff 不是合法 UTF-8 起始字节，旧实现会让 UnicodeDecodeError 冒泡成 500
     content = "学号,姓名\nS1,张三\n".encode("utf-8") + b"\xff\xfe\x00"

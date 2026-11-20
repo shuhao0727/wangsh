@@ -72,6 +72,7 @@ from .group_discussion_public_config import (  # noqa: F401  有意回导，非�
 
 
 router = APIRouter(prefix="/group-discussion")
+_STREAM_MESSAGE_LIMIT = 200
 
 # 路由聚合顺序须与原单文件实现一致：public-config -> 用户端路由 -> admin 路由
 router.include_router(public_config_router)
@@ -232,7 +233,7 @@ async def _list_group_discussion_messages(
             poll_db,
             session_id=int(session_id),
             after_id=int(after_id or 0),
-            limit=200,
+            limit=_STREAM_MESSAGE_LIMIT,
         )
     return rows, int(next_after)
 
@@ -258,23 +259,29 @@ async def _stream_group_discussion_messages(
     pubsub = await _open_group_discussion_pubsub(channel)
 
     last_access_check = 0.0
+    # Subscribe before reading so messages arriving during catch-up can wake the live stream.
+    catching_up = True
     try:
         while True:
             try:
                 last_access_check = await _check_group_discussion_access(
                     session_id, user, last_access_check
                 )
-                if pubsub is not None:
-                    msg = await pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
-                    if msg is None:
-                        yield ":keepalive\n\n"
-                        continue
-                else:
-                    await asyncio.sleep(1)
+                if not catching_up:
+                    if pubsub is not None:
+                        msg = await pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
+                        if msg is None:
+                            yield ":keepalive\n\n"
+                            continue
+                    else:
+                        await asyncio.sleep(1)
 
+                # Retry from the same cursor if a read fails after consuming a notification.
+                catching_up = True
                 rows, next_after = await _list_group_discussion_messages(
                     session_id, after_id, user
                 )
+                catching_up = len(rows) == _STREAM_MESSAGE_LIMIT
                 if rows:
                     items = [
                         {

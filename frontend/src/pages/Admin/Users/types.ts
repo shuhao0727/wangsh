@@ -2,7 +2,7 @@
  * 用户管理相关类型定义
  */
 
-import type { User } from "@services";
+import type { User, UserImportResult } from "@services/users";
 
 // 用户表单组件 props
 export interface UserFormProps {
@@ -64,9 +64,9 @@ export interface UserActions {
   handleDelete: (id: number) => void;
   handleFormSubmit: (values: any) => Promise<void>;
   handleView: (record: User) => void;
-  handleBatchDelete: () => void;
+  handleBatchDelete: (userIds: number[]) => Promise<void>;
   handleDownloadTemplate: (format?: "xlsx" | "csv") => Promise<void>;
-  handleFileUpload: (file: File) => Promise<boolean>;
+  handleFileUpload: (file: File) => Promise<UserImportResult | null>;
   setSelectedRowKeys: (keys: number[]) => void;
   handleRoleFilter: (roleCode: string | undefined) => void;
   handleStatusFilter: (isActive: boolean | undefined) => void;

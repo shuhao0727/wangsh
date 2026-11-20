@@ -11,7 +11,7 @@ from urllib.parse import urlencode
 
 import pytest
 
-from app.api.pythonlab.ws import handlers
+from app.api.pythonlab.ws import handlers, session_auth
 from app.core import session_guard
 from app.core.config import settings
 from app.models import User
@@ -100,6 +100,14 @@ def test_ws_session_admission(isolated, monkeypatch, endpoint, case):
     async def scenario():
         async with isolated() as h:
             # Never stub JWT verification, raw ORM resolver or the session verifier.
+            authenticate = session_auth.authenticate_ws_session
+
+            async def verify_released_transaction(token, db, socket, resolve_user):
+                identity = await authenticate(token, db, socket, resolve_user)
+                assert not db.in_transaction(), 'identity lookup must release the connection before opening the stream'
+                return identity
+
+            monkeypatch.setattr(session_auth, 'authenticate_ws_session', verify_released_transaction)
             h.app.include_router(handlers.router, prefix='/api/v2/pythonlab')
             business = BusinessCache()
             celery = FakeCeleryApp()

@@ -40,7 +40,7 @@ import {
   type StageStatus,
   type ToolItem,
 } from "@/features/it-technology/courses/ml/content";
-import { fetchLearningContentPayload, filterByKeyword } from "@/features/it-technology/learning/helpers";
+import { fetchLearningBookContent, filterByKeyword } from "@/features/it-technology/learning/helpers";
 import { BookReader } from "@/features/it-technology/learning/BookReader";
 import MindMapViewer from "@/features/it-technology/learning/MindMapViewer";
 import { ML_BOOK } from "@/features/it-technology/courses/ml/book";
@@ -289,7 +289,7 @@ const MLLearningPage: React.FC<MLLearningPageProps> = ({ embedded = false }) => 
 
   useEffect(() => {
     let mounted = true;
-    void fetchLearningContentPayload<MLLearningContentPayload>("ml").then((payload) => {
+    void fetchLearningBookContent<MLLearningContentPayload>(ML_BOOK).then((payload) => {
       if (mounted && payload) setContentPayload(payload);
     });
     return () => {

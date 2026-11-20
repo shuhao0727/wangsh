@@ -30,32 +30,29 @@ const MetricRow: React.FC<{ label: string; value: React.ReactNode }> = ({ label,
 );
 
 const AdminSystem: React.FC = () => {
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [health, setHealth] = useState<any>(null);
   const [settings, setSettings] = useState<any>(null);
   const [overview, setOverview] = useState<any>(null);
   const [tab, setTab] = useState<"system" | "typst">("system");
-  const [navVisibleMap, setNavVisibleMap] = useState<Record<string, boolean>>({});
+  const [navVisibleMap, setNavVisibleMap] = useState<Record<string, boolean> | null>(null);
   const [navToggleLoading, setNavToggleLoading] = useState<Record<string, boolean>>({});
-/* PLACEHOLDER_SYS_1 */
 
   const load = useCallback(async () => {
     setLoading(true);
-    try { setHealth((await api.get("/health")).data); } catch { setHealth(null); }
-    try { setSettings((await api.get("/system/settings")).data); } catch { setSettings(null); }
-    try { setOverview((await api.get("/system/overview")).data); } catch { setOverview(null); }
-    try {
-      const flags = await featureFlagsApi.list();
-      const next: Record<string, boolean> = {};
-      for (const item of NAV_VISIBILITY_ITEMS) {
-        const found = flags.find((f) => f.key === item.flagKey);
-        next[item.path] = found?.value?.enabled !== false;
-      }
-      setNavVisibleMap(next);
-    } catch {
-      const next: Record<string, boolean> = {};
-      for (const item of NAV_VISIBILITY_ITEMS) next[item.path] = true;
-      setNavVisibleMap(next);
+    const [healthResult, settingsResult, overviewResult, flagsResult] = await Promise.allSettled([
+      api.get("/health"), api.get("/system/settings"), api.get("/system/overview"), featureFlagsApi.list(),
+    ]);
+    setHealth(healthResult.status === "fulfilled" ? healthResult.value.data : null);
+    setSettings(settingsResult.status === "fulfilled" ? settingsResult.value.data : null);
+    setOverview(overviewResult.status === "fulfilled" ? overviewResult.value.data : null);
+    if (flagsResult.status === "fulfilled") {
+      const flags = flagsResult.value;
+      setNavVisibleMap(Object.fromEntries(NAV_VISIBILITY_ITEMS.map((item) => [
+        item.path, flags.find((flag) => flag.key === item.flagKey)?.value?.enabled !== false,
+      ])));
+    } else {
+      setNavVisibleMap(null);
     }
     setLoading(false);
   }, []);
@@ -63,6 +60,7 @@ const AdminSystem: React.FC = () => {
   useEffect(() => { void load(); }, [load]);
 
   const handleNavToggle = async (item: typeof NAV_VISIBILITY_ITEMS[number], checked: boolean) => {
+    if (loading || navVisibleMap === null) return;
     setNavToggleLoading((prev) => ({ ...prev, [item.path]: true }));
     try {
       await featureFlagsApi.save({ key: item.flagKey, value: { enabled: checked } });
@@ -98,6 +96,9 @@ const AdminSystem: React.FC = () => {
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
           <div className="lg:col-span-2">
             <AdminCard title="前端导航可见性" className="ws-system-group" size="small">
+              {!loading && navVisibleMap === null && (
+                <p role="alert" className="mb-2 text-sm text-text-secondary">导航开关状态未知。点击刷新重试。</p>
+              )}
               <div className="grid grid-cols-1 gap-2 md:grid-cols-3 xl:grid-cols-5">
                 {NAV_VISIBILITY_ITEMS.map((item) => (
                   <div
@@ -105,12 +106,16 @@ const AdminSystem: React.FC = () => {
                     className="ws-system-nav-item flex items-center justify-between border border-border-secondary bg-surface-2 px-2.5 py-1.5"
                   >
                     <span className="text-sm text-text-base">{item.label}</span>
-                    <Switch
-                      aria-label={`${item.label}导航可见性`}
-                      checked={navVisibleMap[item.path] !== false}
-                      disabled={!!navToggleLoading[item.path]}
-                      onCheckedChange={(checked) => handleNavToggle(item, checked)}
-                    />
+                    {navVisibleMap === null ? (
+                      <span className="text-xs text-text-tertiary">{loading ? "读取中" : "未知"}</span>
+                    ) : (
+                      <Switch
+                        aria-label={`${item.label}导航可见性`}
+                        checked={navVisibleMap[item.path]}
+                        disabled={loading || !!navToggleLoading[item.path]}
+                        onCheckedChange={(checked) => handleNavToggle(item, checked)}
+                      />
+                    )}
                   </div>
                 ))}
               </div>
@@ -126,7 +131,7 @@ const AdminSystem: React.FC = () => {
                     {health.status}
                   </Badge>
                 ) : (
-                  <Badge variant="secondary">-</Badge>
+                  <Badge variant="secondary">{loading ? "读取中" : "未知"}</Badge>
                 )
               }
             />
@@ -137,7 +142,7 @@ const AdminSystem: React.FC = () => {
             />
             <InfoRow
               label="运行环境"
-              value={health?.system?.environment || "-"}
+              value={health?.system?.environment || (loading ? "读取中" : "未知")}
               valueClassName="text-sm text-text-secondary"
             />
           </AdminCard>

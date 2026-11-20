@@ -134,9 +134,7 @@ const ArticlesPage: React.FC = () => {
     const category = searchParams.get("category");
 
     setCurrentPage(page);
-    if (category) {
-      setSelectedCategory(parseInt(category, 10));
-    }
+    setSelectedCategory(category ? parseInt(category, 10) : null);
   }, [searchParams]);
 
   useEffect(() => {
@@ -202,20 +200,12 @@ const ArticlesPage: React.FC = () => {
 
         abortController = new AbortController();
 
-        let response;
-        if (debouncedKeyword.trim()) {
-          response = await articleApi.searchArticles(
-            debouncedKeyword.trim(),
-            currentPage,
-            pageSize,
-          );
-        } else {
-          response = await articleApi.listPublicArticles({
-            page: currentPage,
-            size: pageSize,
-            category_id: selectedCategory || undefined,
-          });
-        }
+        const response = await articleApi.listPublicArticles({
+          page: currentPage,
+          size: pageSize,
+          category_id: selectedCategory || undefined,
+          q: debouncedKeyword.trim() || undefined,
+        }, abortController.signal);
 
         if (!isMounted) return;
 

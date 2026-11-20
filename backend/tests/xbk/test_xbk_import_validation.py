@@ -133,9 +133,8 @@ class FakeDb:
             if is_parent_scope_query:
                 # Parent records are separate from the imported table's existing
                 # keys. Honor both requested period/key and soft-delete state.
-                # 课程查询额外带 grade 列用于年级范围校验（方案 D），学生仍为 3 列。
-                expected_columns = 4 if table == "xbk_courses" else 3
-                assert len(statement.selected_columns) == expected_columns
+                # 课程范围校验同时读取课程开设年级和学生当前名册年级。
+                assert len(statement.selected_columns) == 4
                 self.parent_queries.append(statement)
                 # `tuple_(...).in_()` 可能被编译成元组列表参数，也可能展开为
                 # 多个独立命名参数；两种形状都要还原成键集合。
@@ -144,11 +143,8 @@ class FakeDb:
                     keys = set(raw_keys[0])
                 else:
                     keys = {tuple(raw_keys)}
-                rows = [row[:3] for row in self.parents.get(table, ())
-                        if row[3] is False and row[:3] in keys]
-                if table == "xbk_courses":
-                    # 与 FakeDb._orm_records 保持一致：课程开设年级固定为“高一”。
-                    rows = [(*row, "高一") for row in rows]
+                rows = [(*row[:3], row[4] if table == "xbk_students" and len(row) >= 5 else "高一")
+                        for row in self.parents.get(table, ()) if row[3] is False and row[:3] in keys]
                 return SimpleNamespace(all=lambda: rows)
             if len(statement.selected_columns) == 5:
                 return SimpleNamespace(all=lambda: [row if len(row) == 5 else (*row, "学生甲", None) for row in self.existing])
@@ -733,13 +729,12 @@ def test_student_template_style_grade_default_does_not_conflict_with_stored_snap
     assert "grade" not in _upsert_set_columns(db.writes[0])
 
 
-def test_selection_grade_conflict_with_existing_snapshot_is_rejected():
-    db = FakeDb(
-        existing=[("2026-2027", "上学期", "0012", "高一")],
-        parents=selection_parents(),
-    )
-    row = {**ROWS["selections"], "年级": "高二"}
-    # 课程开设年级为高一，文件写高二：年级范围校验先于快照冲突给出行级错误。
+def test_selection_outside_live_grade_scope_is_rejected():
+    parents = selection_parents()
+    parents["xbk_students"] = [("2026-2027", "上学期", "0012", False, "高二")]
+    db = FakeDb(parents=parents)
+    row = {**ROWS["selections"], "年级": "高一"}
+    # 文件填高一也不能让名册中的高二学生选高一课程。
     preview_result = asyncio.run(
         imports.preview_import(scope="selections", file=upload([row]), db=db, _={})
     )

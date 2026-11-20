@@ -14,6 +14,7 @@ from app.db.database import get_db
 from app.core.deps import get_current_user, require_admin
 from app.schemas.user_info import UserInfo
 from app.core.pubsub import publish
+from app.services.assessment.answer_question import answer_review
 from app.schemas.assessment import (
     AssessmentConfigCreate,
     AssessmentConfigUpdate,
@@ -493,23 +494,6 @@ async def api_get_session_detail(
         )
         bp = bp_r.scalar_one_or_none()
 
-        answers_detail = []
-        for a in session.answers:
-            q = a.question
-            answers_detail.append({
-                "id": a.id,
-                "question_type": a.question_type,
-                "content": q.content if q else "",
-                "options": q.options if q else None,
-                "student_answer": a.student_answer,
-                "correct_answer": q.correct_answer if q else "",
-                "is_correct": a.is_correct,
-                "earned_score": a.ai_score,
-                "max_score": a.max_score,
-                "ai_feedback": a.ai_feedback,
-                "explanation": q.explanation if q else None,
-            })
-
         return {
             "session_id": session.id,
             "config_id": config.id,
@@ -519,7 +503,7 @@ async def api_get_session_detail(
             "total_score": session.total_score,
             "started_at": session.started_at,
             "submitted_at": session.submitted_at,
-            "answers": answers_detail,
+            "answers": [answer_review(answer) for answer in session.answers],
             "basic_profile_id": bp.id if bp else None,
         }
     except HTTPException:

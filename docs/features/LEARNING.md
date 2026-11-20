@@ -118,6 +118,8 @@ Chapters、Content、Progress 共享相同的 module_key 校验逻辑，仅允�
 
 4 个端点（2 登录 + 2 管理）。以 module_key 和 slug 为联合标识，提供 Markdown 章节的列表、详情、创建/更新（upsert）和删除操作。章节支持 `group_name` 分组、`difficulty` 难度分级和 `sort_order` 排序，前端 BookReader 组件据此渲染分组目录和进度。
 
+通用章节编辑器与课程阅读页按模块和章节 `slug` 回读同一份已保存正文。没有已保存章节时仍显示配套教材。
+
 - **登录接口**：`GET /learning/chapters/{module_key}` 列出模块所有章节，`GET /learning/chapters/{module_key}/{slug}` 获取单章节详情。二者均需登录，按 `sort_order` 排序。
 - **管理接口**：`PUT` 使用 upsert 语义——章节不存在则创建，存在则更新；`DELETE` 删除章节。均需 admin 权限。
 

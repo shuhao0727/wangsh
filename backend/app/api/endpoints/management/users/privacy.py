@@ -196,14 +196,18 @@ async def log_audit(
 
 async def _log_failure(db: AsyncSession, user_id: int, action: str, operation_id: str,
                        ip_address: str = None, user_agent: str = None) -> None:
-    """失败审计尽力写入；审计故障不能覆盖原始异常。"""
+    """回滚失败事务，再尽力写入审计，保留原始异常。"""
     try:
+        await db.rollback()
         await log_audit(
             db, user_id, action, "privacy_operation", operation_id,
             ip_address, user_agent,
         )
-    except Exception as audit_error:
-        logger.error(f"GDPR 失败审计写入失败: user_id={user_id}, error={audit_error}")
+    except Exception:
+        logger.error(
+            "GDPR 失败审计未写入 | user_id={} | action={} | operation_id={}",
+            user_id, action, operation_id,
+        )
 
 
 @router.get("/me/export")
@@ -292,9 +296,11 @@ async def export_my_data(
             f"{len(discussion_messages)} 条讨论消息"
         )
         return export_data
-    except Exception:
+    except Exception as exc:
         await _log_failure(db, user_id, "EXPORT_DATA_FAILED", operation_id, ip_address, user_agent)
-        raise
+        logger.error("GDPR 导出失败 | user_id={} | operation_id={} | error_type={}",
+                     user_id, operation_id, type(exc).__name__)
+        raise HTTPException(status_code=500, detail="服务器内部错误") from exc
 
 
 @router.delete("/me/data", status_code=200)
@@ -370,7 +376,6 @@ async def delete_my_data(
         }
 
     except Exception as e:
-        await db.rollback()
         await _log_failure(
             db, user_id, "DELETE_DATA_FAILED", operation_id, ip_address, user_agent
         )

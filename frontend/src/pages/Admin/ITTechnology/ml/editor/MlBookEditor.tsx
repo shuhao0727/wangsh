@@ -136,7 +136,7 @@ const MlBookEditor: React.FC<Props> = ({ onBack }) => {
 
   // Save current chapter
   const saveChapter = async () => {
-    if (!bookId) return;
+    if (!bookId || saving) return;
     if (!editedChapter.title.trim()) {
       showMessage.error("请输入章节标题");
       return;
@@ -194,17 +194,19 @@ const MlBookEditor: React.FC<Props> = ({ onBack }) => {
 
   // Reorder chapters
   const handleReorder = async (items: ReorderItem[]) => {
-    // Optimistic update
-    setChapters((prev) => {
-      const map = new Map(items.map((item) => [item.slug, item.chapter_number]));
-      return prev
-        .map((ch) => ({ ...ch, chapter_number: map.get(ch.slug) ?? ch.chapter_number, sort_order: map.get(ch.slug) ?? ch.sort_order }))
-        .sort((a, b) => a.sort_order - b.sort_order);
-    });
+    if (saving) return;
+    setSaving(true);
     try {
       await mlBookAdminApi.reorderChapters("ml", items);
+      const numbers = new Map(items.map((item) => [item.slug, item.chapter_number]));
+      setChapters((prev) => prev.map((chapter) => {
+        const number = numbers.get(chapter.slug);
+        return number === undefined ? chapter : { ...chapter, chapter_number: number, sort_order: number };
+      }).sort((a, b) => a.sort_order - b.sort_order));
     } catch {
       showMessage.error("排序保存失败");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -225,7 +227,7 @@ const MlBookEditor: React.FC<Props> = ({ onBack }) => {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [editedChapter, bookId]);
+  }, [editedChapter, bookId, saving]);
 
   const toolbarButtons = [
     { label: "B", action: "**粗体**", title: "加粗 (Ctrl+B)" },

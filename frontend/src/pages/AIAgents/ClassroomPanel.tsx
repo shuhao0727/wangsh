@@ -23,6 +23,7 @@ import { config as appConfig } from "@services";
 import { getStoredAccessToken } from "@services/api";
 import { floatingBtnRegistry } from "@utils/floatingBtnRegistry";
 import { cn } from "@/lib/utils";
+import { formatBlankAnswers, parseBlankAnswers } from "@/lib/classroomAnswers";
 
 const STORAGE_KEYS = {
   POS: "ci_floating_pos",
@@ -43,22 +44,6 @@ interface Props {
 const DEFAULT_W = 420;
 const DEFAULT_H = 480;
 
-const parseBlankAnswers = (raw?: string | null): string[] => {
-  const text = String(raw || "").trim();
-  if (!text) return [];
-  if (!text.startsWith("[") && !text.startsWith("{")) return [text];
-  try {
-    const parsed = JSON.parse(text);
-    if (Array.isArray(parsed)) return parsed.map((v) => String(v ?? "").trim());
-    if (parsed && typeof parsed === "object") {
-      return Object.keys(parsed)
-        .sort((a, b) => Number(a) - Number(b))
-        .map((k) => String((parsed as Record<string, unknown>)[k] ?? "").trim());
-    }
-  } catch {}
-  return [text];
-};
-
 const getCodeTemplate = (activity: Activity | null): string => {
   if (!activity || activity.activity_type !== "fill_blank") return "";
   if (!Array.isArray(activity.options)) return "";
@@ -74,12 +59,6 @@ const getBlankCount = (activity: Activity | null): number => {
   if (marks.length > 0) return marks.length;
   const byAnswer = parseBlankAnswers(activity.correct_answer).length;
   return Math.max(1, byAnswer);
-};
-
-const formatDisplayAnswer = (raw?: string | null): string => {
-  const blanks = parseBlankAnswers(raw);
-  if (blanks.length <= 1) return String(raw || "");
-  return blanks.map((v, i) => `(${i + 1}) ${v}`).join("；");
 };
 
 const clampPercent = (value?: number | null) => {
@@ -203,14 +182,13 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isAdmin, 
   const [reviewStats, setReviewStats] = useState<ActivityStats | null>(null);
   const [reviewStatsLoading, setReviewStatsLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [unavailableFor, setUnavailableFor] = useState<number | null>(null);
+  const unavailable = participantId != null && unavailableFor === participantId;
 
   const timerRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
-  const pollRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
-  // SSE 是否已连通；连通期间停掉 3 秒轮询，断线后恢复兜底
-  const sseConnectedRef = useRef(false);
-  const streamRetryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownRefreshRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeRequestSeqRef = useRef(0);
+  const unavailableForRef = useRef<number | null>(null);
   const reviewRequestSeqRef = useRef(0);
   const refreshingRef = useRef(false);
   const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
@@ -262,6 +240,9 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isAdmin, 
   const checkActive = useCallback(async (options?: { silent?: boolean }) => {
     const silent = options?.silent ?? true;
     const requestParticipantId = participantId;
+    if (silent && requestParticipantId != null && unavailableForRef.current === requestParticipantId) {
+      return "unavailable" as const;
+    }
     const requestSeq = ++activeRequestSeqRef.current;
     const isCurrentRequest = () => (
       participantIdRef.current === requestParticipantId
@@ -282,6 +263,8 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isAdmin, 
         planApi.getActivePlan().catch(() => null),
       ]);
       if (!isCurrentRequest()) return false;
+      unavailableForRef.current = null;
+      setUnavailableFor(null);
       setActivePlan(plan);
       if (list.length > 0) {
         const a = list[0];
@@ -306,34 +289,41 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isAdmin, 
         }
       } else if (activity && activity.status === "active") {
         // 活动结束了
-        try {
-          const result = await classroomApi.getResult(activity.id);
-          if (!isCurrentRequest()) return false;
-          setMyAnswer(result.my_answer);
-          setIsCorrect(result.is_correct);
-          setStats(result.stats);
-          setActivity({ ...activity, status: "ended", correct_answer: result.correct_answer });
-          // 记录本题答案
-          setItemAnswers(prev => ({ ...prev, [activity.id]: { my_answer: result.my_answer, correct_answer: result.correct_answer, is_correct: result.is_correct } }));
-          // 如果有计划进行中，回到 idle 等待下一题；否则显示结果
-          if (plan && plan.status === "active") {
-            setView("idle");
-            setActivity(null);
-          } else {
-            setView("result");
-          }
-        } catch {
-          if (!isCurrentRequest()) return false;
+        const result = await classroomApi.getResult(activity.id);
+        if (!isCurrentRequest()) return false;
+        setMyAnswer(result.my_answer);
+        setIsCorrect(result.is_correct);
+        setStats(result.stats);
+        setActivity({ ...activity, status: "ended", correct_answer: result.correct_answer });
+        // 记录本题答案
+        setItemAnswers(prev => ({ ...prev, [activity.id]: { my_answer: result.my_answer, correct_answer: result.correct_answer, is_correct: result.is_correct } }));
+        // 如果有计划进行中，回到 idle 等待下一题；否则显示结果
+        if (plan && plan.status === "active") {
           setView("idle");
           setActivity(null);
+        } else {
+          setView("result");
         }
       } else if (viewRef.current !== "idle" && viewRef.current !== "result" && viewRef.current !== "submitted" && !plan) {
         setView("idle");
         setActivity(null);
       }
       return true;
-    } catch {
+    } catch (error) {
       if (!isCurrentRequest()) return false;
+      const status = (error as { response?: { status?: number } })?.response?.status;
+      if (status === 403 || status === 404) {
+        unavailableForRef.current = requestParticipantId;
+        setUnavailableFor(requestParticipantId);
+        clearTimeout(countdownRefreshRef.current ?? undefined);
+        countdownRefreshRef.current = null;
+        setActivePlan(null);
+        setActivity(null);
+        setRemaining(null);
+        setReviewStats(null);
+        setView("idle");
+        return "unavailable" as const;
+      }
       if (!silent) showMessage.error("刷新失败，请稍后重试");
       return false;
     }
@@ -342,6 +332,11 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isAdmin, 
   useEffect(() => {
     activeRequestSeqRef.current += 1;
     reviewRequestSeqRef.current += 1;
+    unavailableForRef.current = null;
+    activityRef.current = null;
+    openRef.current = false;
+    viewRef.current = "idle";
+    setUnavailableFor(null);
     if (countdownRefreshRef.current) {
       clearTimeout(countdownRefreshRef.current);
       countdownRefreshRef.current = null;
@@ -374,7 +369,7 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isAdmin, 
     setRefreshing(true);
     try {
       const ok = await checkActive({ silent: false });
-      if (ok && participantIdRef.current === requestParticipantId) {
+      if (ok === true && participantIdRef.current === requestParticipantId) {
         showMessage.success("已刷新");
       }
     } finally {
@@ -385,97 +380,84 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isAdmin, 
     }
   }, [checkActive]);
 
-  // 兜底轮询：SSE 未连通时才按 3 秒节奏拉取
-  const stopPolling = useCallback(() => {
-    if (pollRef.current) {
-      clearInterval(pollRef.current);
-      pollRef.current = undefined;
+  // Only poll while disconnected, with finite backoff and one pending read.
+  useEffect(() => {
+    if (participantId == null || unavailable) return;
+    let disposed = false;
+    let terminal = false;
+    let connected = false;
+    let polling = false;
+    let readVersion = 0;
+    let pollFailures = 0;
+    let reconnectFailures = 0;
+    let pollTimer: ReturnType<typeof setTimeout> | undefined;
+    let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+    let stream: EventSource | undefined;
+    const delay = (failures: number) => Math.min(3000 * 2 ** failures, 60000);
+    const schedulePoll = () => {
+      if (disposed || terminal || (connected && !pollFailures) || polling || pollTimer !== undefined) return;
+      pollTimer = setTimeout(runPoll, delay(pollFailures));
+    };
+    const requestRead = () => {
+      if (disposed || terminal || (pollFailures > 0 && pollTimer !== undefined)) return;
+      clearTimeout(pollTimer);
+      void runPoll();
+    };
+    async function runPoll() {
+      pollTimer = undefined;
+      if (disposed || terminal) return;
+      polling = true;
+      const version = ++readVersion;
+      const result = await checkActive({ silent: true });
+      // New activity notifications need not wait for a slower result read.
+      if (disposed || version !== readVersion) return;
+      polling = false;
+      if (result === "unavailable") terminal = true;
+      pollFailures = result === true ? 0 : Math.min(pollFailures + 1, 5);
+      schedulePoll();
     }
-  }, []);
-
-  const startPolling = useCallback(() => {
-    if (pollRef.current) return;
-    pollRef.current = setInterval(() => {
-      void checkActive({ silent: true });
-    }, 3000);
-  }, [checkActive]);
-
-  useEffect(() => {
-    if (participantId == null) return;
-    void checkActive({ silent: true });
-    if (!sseConnectedRef.current) startPolling();
-    return () => { stopPolling(); };
-  }, [participantId, checkActive, startPolling, stopPolling]);
-
-  // SSE 增强：优先用实时推送触发刷新，仅当 SSE 未连通时用轮询兜底
-  useEffect(() => {
-    if (participantId == null) return;
-    let stopped = false;
-    let stream: EventSource | null = null;
-
-    const clearRetry = () => {
-      if (streamRetryRef.current) {
-        clearTimeout(streamRetryRef.current);
-        streamRetryRef.current = null;
-      }
+    const onDisconnect = () => {
+      if (disposed || terminal) return;
+      stream?.close();
+      stream = undefined;
+      connected = false;
+      schedulePoll();
+      reconnectTimer = setTimeout(connect, delay(reconnectFailures));
+      reconnectFailures = Math.min(reconnectFailures + 1, 5);
     };
-
-    const closeStream = () => {
-      if (stream) {
-        stream.close();
-        stream = null;
-      }
-    };
-
-    const scheduleReconnect = () => {
-      if (stopped) return;
-      clearRetry();
-      streamRetryRef.current = setTimeout(connect, 3000);
-    };
-
-    const connect = () => {
-      if (stopped) return;
-      clearRetry();
+    function connect() {
+      if (disposed || terminal) return;
       const token = getStoredAccessToken();
       const query = token ? `?token=${encodeURIComponent(token)}` : "";
-      const streamUrl = `${appConfig.apiUrl}/classroom/stream${query}`;
       try {
-        stream = new EventSource(streamUrl, { withCredentials: true });
-        stream.onmessage = (event) => {
+        const source = new EventSource(`${appConfig.apiUrl}/classroom/stream${query}`, { withCredentials: true });
+        stream = source;
+        source.onmessage = (event) => {
+          if (disposed || terminal || stream !== source) return;
           try {
-            const payload = JSON.parse(event.data || "{}");
-            if (payload?.type === "connected") {
-              // SSE 已连通：停掉兜底轮询，只靠推送刷新
-              sseConnectedRef.current = true;
-              stopPolling();
+            if (JSON.parse(event.data || "{}")?.type === "connected") {
+              connected = true;
+              reconnectFailures = 0;
+              requestRead();
               return;
             }
-          } catch {}
-          void checkActive({ silent: true });
+          } catch { /* a non-JSON update can still trigger a refresh */ }
+          requestRead();
         };
-        stream.onerror = () => {
-          closeStream();
-          // 断线：恢复兜底轮询，重连成功后 onmessage 会再次停掉
-          sseConnectedRef.current = false;
-          startPolling();
-          scheduleReconnect();
-        };
+        source.onerror = () => { if (stream === source) onDisconnect(); };
       } catch {
-        closeStream();
-        sseConnectedRef.current = false;
-        startPolling();
-        scheduleReconnect();
+        onDisconnect();
       }
-    };
-
+    }
+    void runPoll();
     connect();
     return () => {
-      stopped = true;
-      sseConnectedRef.current = false;
-      clearRetry();
-      closeStream();
+      disposed = true;
+      clearTimeout(pollTimer);
+      clearTimeout(reconnectTimer);
+      stream?.close();
     };
-  }, [participantId, checkActive, startPolling, stopPolling]);
+  }, [participantId, checkActive, unavailable]);
 
   // 倒计时
   useEffect(() => {
@@ -520,11 +502,13 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isAdmin, 
     try {
       const resp = await classroomApi.respond(activity.id, answer);
       if (participantIdRef.current !== requestParticipantId) return;
-      setMyAnswer(resp.answer);
-      setIsCorrect(resp.is_correct);
       setItemAnswers(prev => ({ ...prev, [activity.id]: { my_answer: resp.answer, correct_answer: null, is_correct: resp.is_correct } }));
-      setView("submitted");
-      showMessage.success("已提交");
+      if (activityRef.current?.id === activity.id && activityRef.current.status === "active") {
+        setMyAnswer(resp.answer);
+        setIsCorrect(resp.is_correct);
+        setView("submitted");
+        showMessage.success("已提交");
+      }
     } catch (e: any) {
       if (participantIdRef.current === requestParticipantId) {
         showMessage.error(e.message || "提交失败");
@@ -542,8 +526,6 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isAdmin, 
     activeRequestSeqRef.current += 1;
     reviewRequestSeqRef.current += 1;
     if (timerRef.current) clearInterval(timerRef.current);
-    if (pollRef.current) clearInterval(pollRef.current);
-    if (streamRetryRef.current) clearTimeout(streamRetryRef.current);
     if (countdownRefreshRef.current) clearTimeout(countdownRefreshRef.current);
   }, []);
 
@@ -561,9 +543,14 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isAdmin, 
     setView("review");
     setReviewStatsLoading(true);
     try {
-      const s = await classroomApi.getStatistics(activityId);
+      const result = await classroomApi.getResult(activityId);
       if (!isCurrentRequest()) return;
-      setReviewStats(s);
+      setReviewStats(result.stats);
+      setItemAnswers((prev) => ({ ...prev, [activityId]: {
+        my_answer: result.my_answer,
+        correct_answer: result.correct_answer ?? null,
+        is_correct: result.is_correct,
+      } }));
     } catch {
       if (isCurrentRequest()) {
         showMessage.error("加载班级数据失败");
@@ -669,6 +656,7 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isAdmin, 
             </Button>
           </InlineTooltip>
           <Button variant="ghost" size="sm" className="!text-[var(--ws-color-surface)]"
+            aria-label="刷新"
             disabled={refreshing}
             onClick={() => { void handleManualRefresh(); }}>
             {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
@@ -748,7 +736,9 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isAdmin, 
           {/* IDLE */}
           {view === "idle" && (
             <div className="flex flex-col items-center justify-center h-full pt-10">
-              {activePlan ? (
+              {unavailable ? (
+                <p role="status" className="text-sm text-text-secondary">暂时无法读取课堂。请确认班级后刷新。</p>
+              ) : activePlan ? (
                 <div className="text-center text-text-tertiary">
                   <div className="text-4xl mb-3">⏳</div>
                   <div className="text-sm font-medium text-text-tertiary mb-1">等待下一题</div>
@@ -860,7 +850,7 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isAdmin, 
             <div className="text-center py-8">
               <div className="text-5xl mb-3">✅</div>
               <div className="text-[var(--ws-text-md)] font-semibold mb-2 text-text-secondary">已提交</div>
-              <div className="text-text-tertiary text-sm mb-1">你的答案：{formatDisplayAnswer(myAnswer)}</div>
+              <div className="text-text-tertiary text-sm mb-1">你的答案：{formatBlankAnswers(myAnswer)}</div>
               <div className="text-text-tertiary text-xs">等待老师结束活动后查看结果…</div>
             </div>
           )}
@@ -890,10 +880,10 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isAdmin, 
                         : "text-text"
                   )}
                 >
-                  {formatDisplayAnswer(myAnswer) || "未作答"}{isCorrect === true && " ✓ 正确"}{isCorrect === false && " ✗ 错误"}
+                  {formatBlankAnswers(myAnswer) || "未作答"}{isCorrect === true && " ✓ 正确"}{isCorrect === false && " ✗ 错误"}
                 </div>
                 {activity.correct_answer && (
-                  <div className="text-sm text-text-tertiary mt-1">参考答案：{formatDisplayAnswer(activity.correct_answer)}</div>
+                  <div className="text-sm text-text-tertiary mt-1">参考答案：{formatBlankAnswers(activity.correct_answer)}</div>
                 )}
               </div>
               {stats && activity.activity_type === "vote" && Array.isArray(activity.options) && (
@@ -973,10 +963,10 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isAdmin, 
                           : "text-text"
                     )}
                   >
-                    {formatDisplayAnswer(ans?.my_answer) || "未作答"}{ans?.is_correct === true && " ✓ 正确"}{ans?.is_correct === false && " ✗ 错误"}
+                    {formatBlankAnswers(ans?.my_answer) || "未作答"}{ans?.is_correct === true && " ✓ 正确"}{ans?.is_correct === false && " ✗ 错误"}
                   </div>
                   {ans?.correct_answer && (
-                    <div className="text-xs text-text-tertiary mt-0.5">参考答案：{formatDisplayAnswer(ans.correct_answer)}</div>
+                    <div className="text-xs text-text-tertiary mt-0.5">参考答案：{formatBlankAnswers(ans.correct_answer)}</div>
                   )}
                   {ans?.is_correct == null && <div className="text-xs mt-0.5 text-[var(--ws-color-warning)]">等待公布结果…</div>}
                 </div>

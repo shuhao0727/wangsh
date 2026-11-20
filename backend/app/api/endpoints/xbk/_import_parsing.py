@@ -28,11 +28,15 @@ def read_csv_rows(content: bytes, max_rows: int, max_columns: int) -> pd.DataFra
     # csv.reader preserves literal identifiers (including leading zeros/NA)
     # and lets us reject surplus cells rather than infer an implicit index.
     rows = []
+    row_offsets = []
+    next_offset = 0
     reader = csv.reader(io.StringIO(text, newline=""), strict=True)
     for row in reader:
         if len(row) > max_columns:
             raise HTTPException(status_code=413, detail=f"导入列数不能超过 {max_columns}")
         rows.append(row)
+        row_offsets.append(next_offset)
+        next_offset = reader.line_num
         if len(rows) > max_rows + 1:
             raise HTTPException(status_code=413, detail=f"导入数据不能超过 {max_rows} 行")
     if not rows:
@@ -40,7 +44,7 @@ def read_csv_rows(content: bytes, max_rows: int, max_columns: int) -> pd.DataFra
     width = len(rows[0])
     if any(len(row) > width for row in rows[1:]):
         raise HTTPException(status_code=400, detail="CSV 数据列数超过表头列数，请检查分隔符或引号")
-    return pd.DataFrame(rows)
+    return pd.DataFrame(rows, index=row_offsets)
 
 
 def read_excel_rows(content: bytes, extension: str, max_rows: int, max_expanded_bytes: int) -> pd.DataFrame:
@@ -70,6 +74,5 @@ def validate_import_header(raw: pd.DataFrame, max_rows: int, max_columns: int) -
         raise HTTPException(status_code=422, detail="表头包含重复列，请删除重复列后重试")
     df = raw.iloc[1:].copy()
     df.columns = columns
-    # Preserve physical worksheet row offsets even after dropping blank lines.
-    df.index = range(len(df))
+    # Keep original CSV/worksheet row offsets after removing the header.
     return df.fillna("")

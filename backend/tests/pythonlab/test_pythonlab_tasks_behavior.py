@@ -1,6 +1,11 @@
+import asyncio
 from copy import deepcopy
+from unittest.mock import AsyncMock, Mock
+
+import pytest
 
 import app.tasks.pythonlab as pythonlab_tasks
+from test_pythonlab_v2_sessions_behavior import FakeCache
 
 
 class FakeProvider:
@@ -15,95 +20,77 @@ class FakeProvider:
         self.terminate_calls.append((session_id, deepcopy(meta)))
 
 
-class FakeRedisClient:
-    def __init__(self):
-        self.removed: list[tuple[str, str]] = []
-
-    async def srem(self, key: str, value: str):
-        self.removed.append((key, value))
-
-
-class FakeCache:
-    def __init__(self):
-        self.client = FakeRedisClient()
-
-    async def get_client(self):
-        return self.client
-
-
-def _patch_stop_session_env(monkeypatch, *, meta, has_other_active=False):
+@pytest.fixture
+def stop_worker_env(monkeypatch):
     provider = FakeProvider()
     fake_cache = FakeCache()
-    saved_meta: list[tuple[str, dict]] = []
-
-    async def fake_get_session_meta(session_id: str):
-        return deepcopy(meta)
-
-    async def fake_owner_has_other_active_session(owner_user_id: int, excluding_session_id: str):
-        return has_other_active
-
-    async def fake_set_session_meta(session_id: str, next_meta: dict):
-        saved_meta.append((session_id, deepcopy(next_meta)))
-
-    monkeypatch.setattr(pythonlab_tasks, "_get_session_meta", fake_get_session_meta)
-    monkeypatch.setattr(pythonlab_tasks, "_owner_has_other_active_session", fake_owner_has_other_active_session)
-    monkeypatch.setattr(pythonlab_tasks, "_set_session_meta", fake_set_session_meta)
+    monkeypatch.setattr(pythonlab_tasks, "_run_async", asyncio.run)
     monkeypatch.setattr(pythonlab_tasks, "get_sandbox_provider", lambda: provider)
     monkeypatch.setattr(pythonlab_tasks, "cache", fake_cache)
-    return provider, fake_cache, saved_meta
+    return provider, fake_cache
 
 
-def test_debug_stop_hard_terminates_container_when_no_other_active_session(monkeypatch):
-    provider, fake_cache, saved_meta = _patch_stop_session_env(
-        monkeypatch,
-        meta={"session_id": "dbg_done", "owner_user_id": 7, "runtime_mode": "debug", "ttl_seconds": 300},
-    )
+@pytest.mark.parametrize(("runtime_mode", "force", "hard_stop"), [
+    ("debug", False, True),
+    ("plain", False, False),
+    ("plain", True, True),
+])
+def test_stop_worker_selects_existing_provider_operation(stop_worker_env, monkeypatch, runtime_mode, force, hard_stop):
+    provider, fake_cache = stop_worker_env
+    meta = {"session_id": "dbg_done", "owner_user_id": 7, "status": "TERMINATING",
+            "runtime_mode": runtime_mode, "ttl_seconds": 300}
+    fake_cache.store["debug:session:dbg_done"] = meta
+    fake_cache.client.sets["debug:user:7:sessions"] = {"dbg_done"}
+    monkeypatch.setattr(pythonlab_tasks, "_confirm_stopped_resource", AsyncMock(return_value=True))
 
-    pythonlab_tasks.stop_session.run("dbg_done")
+    pythonlab_tasks.stop_session.run("dbg_done", force=force)
 
-    assert provider.terminate_calls == [
-        ("dbg_done", {"session_id": "dbg_done", "owner_user_id": 7, "runtime_mode": "debug", "ttl_seconds": 300})
-    ]
-    assert provider.stop_calls == []
-    assert fake_cache.client.removed == [(f"{pythonlab_tasks.CACHE_KEY_USER_SESSIONS_PREFIX}:7:sessions", "dbg_done")]
-    assert saved_meta[-1][0] == "dbg_done"
-    assert saved_meta[-1][1]["status"] == pythonlab_tasks.SESSION_STATUS_TERMINATED
+    assert provider.terminate_calls == ([("dbg_done", meta)] if hard_stop else [])
+    assert provider.stop_calls == ([] if hard_stop else [("dbg_done", meta)])
+    assert fake_cache.client.sets["debug:user:7:sessions"] == set()
+    assert fake_cache.store["debug:session:dbg_done"]["status"] == "TERMINATED"
 
 
-def test_debug_stop_preserves_container_when_other_session_is_active(monkeypatch):
-    provider, fake_cache, saved_meta = _patch_stop_session_env(
-        monkeypatch,
-        meta={"session_id": "dbg_old", "owner_user_id": 7, "runtime_mode": "debug", "ttl_seconds": 300},
-        has_other_active=True,
-    )
+def test_debug_stop_preserves_container_when_other_session_is_active(stop_worker_env, monkeypatch):
+    provider, fake_cache = stop_worker_env
+    fake_cache.store["debug:session:dbg_old"] = {"session_id": "dbg_old", "owner_user_id": 7, "status": "TERMINATING"}
+    fake_cache.store["debug:session:dbg_current"] = {"session_id": "dbg_current", "owner_user_id": 7, "status": "RUNNING"}
+    fake_cache.client.sets["debug:user:7:sessions"] = {"dbg_old", "dbg_current"}
+    monkeypatch.setattr(pythonlab_tasks, "_confirm_stopped_resource", AsyncMock(return_value=False))
 
-    pythonlab_tasks.stop_session.run("dbg_old")
+    with pytest.raises(RuntimeError, match="could not confirm"):
+        pythonlab_tasks.stop_session.run("dbg_old", force=True)
 
     assert provider.terminate_calls == []
     assert provider.stop_calls == []
-    assert fake_cache.client.removed == [(f"{pythonlab_tasks.CACHE_KEY_USER_SESSIONS_PREFIX}:7:sessions", "dbg_old")]
-    assert saved_meta[-1][1]["status"] == pythonlab_tasks.SESSION_STATUS_TERMINATED
+    assert fake_cache.client.sets["debug:user:7:sessions"] == {"dbg_old", "dbg_current"}
+    assert fake_cache.store["debug:session:dbg_old"]["error_code"] == "SANDBOX_STOP_FAILED"
 
 
-def test_plain_stop_keeps_soft_stop_path(monkeypatch):
-    provider, _fake_cache, _saved_meta = _patch_stop_session_env(
-        monkeypatch,
-        meta={"session_id": "plain_done", "owner_user_id": 8, "runtime_mode": "plain", "ttl_seconds": 300},
-    )
-
-    pythonlab_tasks.stop_session.run("plain_done")
-
-    assert provider.stop_calls == [
-        ("plain_done", {"session_id": "plain_done", "owner_user_id": 8, "runtime_mode": "plain", "ttl_seconds": 300})
-    ]
-    assert provider.terminate_calls == []
-
-
-def test_stop_session_without_meta_uses_session_id_for_legacy_container(monkeypatch):
-    provider, _fake_cache, saved_meta = _patch_stop_session_env(monkeypatch, meta=None)
+def test_stop_session_without_meta_uses_session_id_for_legacy_container(stop_worker_env):
+    provider, fake_cache = stop_worker_env
 
     pythonlab_tasks.stop_session.run("legacy_session")
 
     assert provider.terminate_calls == [("legacy_session", {"session_id": "legacy_session"})]
     assert provider.stop_calls == []
-    assert saved_meta == []
+    assert fake_cache.store == {}
+
+
+def test_stale_cleanup_skips_non_metadata_keys_and_retries_dispatch(stop_worker_env, monkeypatch):
+    _, fake_cache = stop_worker_env
+    key = "debug:session:dbg_stale"
+    original = {"session_id": "dbg_stale", "owner_user_id": 7, "status": "RUNNING",
+                "created_at": "2026-01-01T00:00:00+00:00", "ttl_seconds": 300}
+    fake_cache.store.update({f"{key}:code": "print('synthetic')", f"{key}:ws_owner": "conn:synthetic", key: original})
+    fake_cache.client.scan = AsyncMock(return_value=(0, list(fake_cache.store)))
+    publish = Mock(side_effect=[ConnectionError("offline broker"), None])
+    monkeypatch.setattr(pythonlab_tasks.celery_app, "send_task", publish)
+
+    pythonlab_tasks.cleanup_stale_sessions.run()
+    assert fake_cache.store[key] == original
+
+    pythonlab_tasks.cleanup_stale_sessions.run()
+    assert fake_cache.store[key]["status"] == "TERMINATING"
+    assert publish.call_count == 2
+    assert publish.call_args.kwargs["args"] == ["dbg_stale", True]

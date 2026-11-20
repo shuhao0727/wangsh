@@ -4,14 +4,17 @@ import React, { useEffect, useState } from "react";
 import { LayoutGrid, ArrowRight } from "lucide-react";
 import { xbkPublicConfigApi } from "@services";
 import { AdminAppCard, AdminPage } from "@/components/Admin";
+import { Button } from "@/components/ui/button";
 
 const AdminPersonalPrograms: React.FC = () => {
-  const [xbkEnabled, setXbkEnabled] = useState(false);
+  const [xbkEnabled, setXbkEnabled] = useState<boolean | null>(null);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     let mounted = true;
+    setLoading(true);
     void (async () => {
       try {
         const config = await xbkPublicConfigApi.get();
@@ -19,7 +22,7 @@ const AdminPersonalPrograms: React.FC = () => {
         setXbkEnabled(Boolean(config.enabled));
       } catch {
         if (!mounted) return;
-        setXbkEnabled(false);
+        setXbkEnabled(null);
       } finally {
         if (!mounted) return;
         setLoading(false);
@@ -28,9 +31,10 @@ const AdminPersonalPrograms: React.FC = () => {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [loadAttempt]);
 
   const handleToggleXbk = async (nextEnabled: boolean) => {
+    if (xbkEnabled === null || loading || saving) return;
     const prev = xbkEnabled;
     setXbkEnabled(nextEnabled);
     setSaving(true);
@@ -49,6 +53,12 @@ const AdminPersonalPrograms: React.FC = () => {
   return (
     <AdminPage padding="var(--ws-panel-padding)">
       <div className="ws-personal-programs-shell">
+      {!loading && xbkEnabled === null && (
+        <div role="alert" className="mb-3 flex flex-wrap items-center gap-2 text-sm text-text-secondary">
+          无法读取 XBK 公开设置，入口状态未知。
+          <Button variant="outline" size="sm" onClick={() => setLoadAttempt((attempt) => attempt + 1)}>重试</Button>
+        </div>
+      )}
       <div className="ws-personal-programs-grid">
         <AdminAppCard
           title="校本课 (XBK)"

@@ -38,16 +38,6 @@ interface TocItem {
 
 const normalizePath = (p: string) => (p || "").replace(/\\/g, "/").replace(/^\/+/, "").trim();
 
-const readAsUint8Array = async (blob: Blob) => new Uint8Array(await blob.arrayBuffer());
-
-const hashString = (s: string) => {
-  let h = 5381;
-  for (let i = 0; i < s.length; i++) {
-    h = (h * 33) ^ s.charCodeAt(i);
-  }
-  return (h >>> 0).toString(16);
-};
-
 const ensureDefaultStyleImport = (source: string) => {
   let s = source || "";
   const hasImport = /#import\s+['"]style\/my_style\.typ['"]/.test(s);
@@ -85,20 +75,20 @@ const TypstNoteEditorInner: React.FC<{
   const [submitting, setSubmitting] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("split");
   const [sideCollapsed, setSideCollapsed] = useState(false);
-  const viewModeRef = useRef<ViewMode>("split");
 
   const [title, setTitle] = useState(note?.title || "");
   const [summary, setSummary] = useState(note?.summary || "");
   const [categoryPath, setCategoryPath] = useState(note?.category_path || "");
   const [published, setPublished] = useState(Boolean(note?.published));
   const [styleKey, setStyleKey] = useState(note?.style_key || "my_style");
-  const [content, setContent] = useState<string>(String((note?.files && (note.files as Record<string, unknown>)["main.typ"]) || note?.content_typst || ""));
+  const noteId = note?.id;
+  const entryPath = note?.entry_path || "main.typ";
+  const savedContent = note?.files?.[entryPath] ?? note?.content_typst ?? "";
+  const [content, setContent] = useState(savedContent);
   const [assetPrefix, setAssetPrefix] = useState<string>("images");
   const [assets, setAssets] = useState<TypstAssetListItem[]>([]);
   const [styleOptions, setStyleOptions] = useState<string[]>(["my_style"]);
   const [autoPreview, setAutoPreview] = useState(true);
-  const [assetsVersion, setAssetsVersion] = useState(0);
-  const [stylesVersion, setStylesVersion] = useState(0);
   const [categoryOptions, setCategoryOptions] = useState<TypstCategoryListItem[]>([]);
   const [categoryManageOpen, setCategoryManageOpen] = useState(false);
   const [stylesManageOpen, setStylesManageOpen] = useState(false);
@@ -117,23 +107,9 @@ const TypstNoteEditorInner: React.FC<{
   const [confirmState, setConfirmState] = useState<{ message: string; onOk: () => void } | null>(null);
   const [renderError, setRenderError] = useState<string>("");
   const [previewPdfData, setPreviewPdfData] = useState<Uint8Array | null>(null);
-  const previewTimerRef = useRef<number | null>(null);
-  const previewRefreshTimerRef = useRef<number | null>(null);
-  const previewTokenRef = useRef(0);
-  const renderTokenRef = useRef(0);
-  const previewInFlightRef = useRef(false);
-  const previewLastAtRef = useRef(0);
-  const autoPreviewPendingKeyRef = useRef<string>("");
-  const autoPreviewLastSuccessKeyRef = useRef<string>("");
-  const previewRefreshRequestRef = useRef<{ id?: number; force?: boolean } | null>(null);
-  const assetsCacheRef = useRef<Map<string, Uint8Array>>(new Map());
   const assetInputRef = useRef<HTMLInputElement | null>(null);
   const [previewRefreshSeq, setPreviewRefreshSeq] = useState(0);
   const editorRef = useRef<{ focus: () => void; getLineNumber: (offset: number) => number } | null>(null);
-
-  useEffect(() => {
-    viewModeRef.current = viewMode;
-  }, [viewMode]);
 
   useEffect(() => {
     setTitle(note?.title || "");
@@ -141,20 +117,22 @@ const TypstNoteEditorInner: React.FC<{
     setCategoryPath(note?.category_path || "");
     setPublished(Boolean(note?.published));
     setStyleKey(note?.style_key || "my_style");
-    setPreviewPdfData(null);
-    const nf = note?.files && typeof note?.files === "object" ? note.files as Record<string, unknown> : null;
-    const nextFiles = (nf as Record<string, string>) || { "main.typ": note?.content_typst || "" };
-    setContent(nextFiles["main.typ"] || note?.content_typst || "");
+    setContent(savedContent);
     setToc((note?.toc as TocItem[]) || []);
     setAssets([]);
-    assetsCacheRef.current.clear();
     if (note?.id) {
       typstNotesApi
         .listAssets(note.id)
         .then((res) => setAssets(res || []))
         .catch(() => {});
     }
-  }, [note]);
+  }, [note, savedContent]);
+
+  useEffect(() => {
+    setPreviewPdfData(null);
+    setRenderError("");
+    setRenderLoading(false);
+  }, [noteId]);
 
   useEffect(() => {
     publicTypstNotesApi
@@ -218,22 +196,9 @@ const TypstNoteEditorInner: React.FC<{
     }
   }, []);
 
-  const refreshAssetsCache = async (idOverride?: number) => {
-    const id = idOverride ?? note?.id;
+  const refreshAssets = async (id = noteId) => {
     if (!id) return;
-    const list = await typstNotesApi.listAssets(id);
-    setAssets(list || []);
-    const cache = new Map<string, Uint8Array>();
-    for (const a of list || []) {
-      try {
-        const blob = await typstNotesApi.downloadAsset(id, a.id);
-        cache.set(normalizePath(a.path), await readAsUint8Array(blob));
-      } catch {
-        cache.set(normalizePath(a.path), new Uint8Array());
-      }
-    }
-    assetsCacheRef.current = cache;
-    setAssetsVersion((v) => v + 1);
+    setAssets((await typstNotesApi.listAssets(id)) || []);
   };
 
   const parseAxiosBlobError = useCallback(async (e: unknown) => {
@@ -254,248 +219,95 @@ const TypstNoteEditorInner: React.FC<{
     return String((e as { message?: string })?.message || "预览失败");
   }, []);
 
-  const renderServerPreview = useCallback(async (token: number): Promise<{ ok: boolean; rateLimited: boolean }> => {
-    const renderToken = ++renderTokenRef.current;
+  const previewVisible = viewMode !== "edit";
+  const refreshPreview = () => setPreviewRefreshSeq((seq) => seq + 1);
 
-    setRenderLoading(true);
-    setRenderError("");
-    try {
-      if (!note?.id) {
-        throw new Error("请先保存后再预览");
-      }
-
-      const ep = "main.typ";
-      const nextFiles: Record<string, string> = { "main.typ": ensureDefaultStyleImport(String(content) || "") };
-
-      await typstNotesApi.update(note.id, {
-        title: title.trim() || "未命名",
-        summary: summary || "",
-        category_path: categoryPath || "",
-        published,
-        style_key: styleKey || "my_style",
-        entry_path: ep,
-        files: nextFiles,
-        toc,
-        content_typst: nextFiles["main.typ"] || "",
-      });
-
-      const blob = await typstNotesApi.compilePdf(note.id);
-      if (previewTokenRef.current !== token || renderTokenRef.current !== renderToken) return { ok: false, rateLimited: false };
-      const data = new Uint8Array(await blob.arrayBuffer());
-      setPreviewPdfData(data);
-      return { ok: true, rateLimited: false };
-    } catch (e: unknown) {
-      if (previewTokenRef.current !== token || renderTokenRef.current !== renderToken) return { ok: false, rateLimited: false };
-      const status = Number((e as { response?: { status?: number } })?.response?.status);
-      if (status === 429) {
-        setRenderError("请求过于频繁，稍后将自动重试");
-        return { ok: false, rateLimited: true };
-      }
-      setRenderError(await parseAxiosBlobError(e));
-      setPreviewPdfData(null);
-      return { ok: false, rateLimited: false };
-    } finally {
-      if (previewTokenRef.current === token && renderTokenRef.current === renderToken) setRenderLoading(false);
-    }
-  }, [categoryPath, content, note?.id, parseAxiosBlobError, published, styleKey, summary, title, toc]);
-
-  const queuePreviewRefresh = useCallback((id?: number, options?: { force?: boolean }) => {
-    previewRefreshRequestRef.current = { id, force: Boolean(options?.force) };
-    setPreviewRefreshSeq((v) => v + 1);
-  }, []);
-
-  const switchViewMode = async (next: ViewMode) => {
-    setViewMode(next);
-    if (next === "edit") return;
-    if (!note?.id) {
-      if (isCreateMode) {
-        const created = await save();
-        if (created?.id) queuePreviewRefresh(created.id);
-      }
+  const switchViewMode = (next: ViewMode) => {
+    if (next !== "edit" && !noteId) {
+      showMessage.info("请先保存笔记再预览");
       return;
     }
-    queuePreviewRefresh(note.id);
+    setViewMode(next);
+  };
+
+  const openPreview = () => {
+    if (!previewVisible) switchViewMode(canSplit ? "split" : "preview");
+    refreshPreview();
   };
 
   useEffect(() => {
-    const req = previewRefreshRequestRef.current;
-    if (!req) return;
-    if (viewMode === "edit" && !req.force) return;
-    if (!note?.id) return;
-    if (req.id !== undefined && req.id !== note.id) return;
-    if (previewRefreshTimerRef.current) window.clearTimeout(previewRefreshTimerRef.current);
-    const requestedId = req.id;
-    const requestedForce = Boolean(req.force);
-    const run = async () => {
-      const currentReq = previewRefreshRequestRef.current;
-      if (!currentReq) return;
-      if (viewModeRef.current === "edit" && !currentReq.force) return;
-      if (!note?.id) return;
-      if (requestedId !== undefined && requestedId !== note.id) return;
-
-      const minIntervalMs = 1500;
-      const now = Date.now();
-      const elapsed = now - previewLastAtRef.current;
-      if (elapsed >= 0 && elapsed < minIntervalMs) {
-        previewRefreshTimerRef.current = window.setTimeout(run, minIntervalMs - elapsed);
-        return;
-      }
-      if (previewInFlightRef.current) {
-        previewRefreshTimerRef.current = window.setTimeout(run, 300);
-        return;
-      }
-
-      previewInFlightRef.current = true;
-      previewLastAtRef.current = Date.now();
-      previewRefreshRequestRef.current = null;
-      const res = await renderServerPreview(++previewTokenRef.current);
-      previewInFlightRef.current = false;
-      if (res.rateLimited) {
-        previewRefreshRequestRef.current = { id: requestedId, force: requestedForce };
-        previewRefreshTimerRef.current = window.setTimeout(run, 1600);
+    if (!noteId || !previewVisible) return;
+    const controller = new AbortController();
+    let retryTimer: number | undefined;
+    const renderSaved = async () => {
+      setRenderLoading(true);
+      setRenderError("");
+      try {
+        const blob = await typstNotesApi.compilePdf(noteId, controller.signal);
+        const data = new Uint8Array(await blob.arrayBuffer());
+        if (!controller.signal.aborted) setPreviewPdfData(data);
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        if ((error as { response?: { status?: number } })?.response?.status === 429) {
+          setRenderError("请求过于频繁，稍后将自动重试");
+          retryTimer = window.setTimeout(renderSaved, 1600);
+        } else {
+          const message = await parseAxiosBlobError(error);
+          if (!controller.signal.aborted) setRenderError(message);
+        }
+      } finally {
+        if (!controller.signal.aborted) setRenderLoading(false);
       }
     };
-
-    previewRefreshTimerRef.current = window.setTimeout(run, 0);
+    void renderSaved();
     return () => {
-      if (previewRefreshTimerRef.current) window.clearTimeout(previewRefreshTimerRef.current);
+      controller.abort();
+      window.clearTimeout(retryTimer);
     };
-  }, [note?.id, previewRefreshSeq, renderServerPreview, viewMode]);
+  }, [noteId, parseAxiosBlobError, previewRefreshSeq, previewVisible]);
 
-  useEffect(() => {
-    if (previewTimerRef.current) window.clearTimeout(previewTimerRef.current);
-    if (!autoPreview) return;
-    if (viewMode === "edit") return;
-    if (!note?.id) return;
-
-    const previewKey = [
-      `id=${note.id}`,
-      `t=${title.trim() || ""}`,
-      `s=${summary || ""}`,
-      `c=${categoryPath || ""}`,
-      `p=${published ? 1 : 0}`,
-      `sk=${styleKey || ""}`,
-      `sv=${stylesVersion}`,
-      `toc=${hashString(JSON.stringify(toc || []))}`,
-      `a=${assetsVersion}`,
-      `m=${hashString(ensureDefaultStyleImport(content || ""))}`,
-    ].join("|");
-
-    if (autoPreviewLastSuccessKeyRef.current === previewKey && previewPdfData && !renderError) return;
-    autoPreviewPendingKeyRef.current = previewKey;
-
-    const token = ++previewTokenRef.current;
-    const run = async () => {
-      if (previewTokenRef.current !== token) return;
-
-      const minIntervalMs = 1500;
-      const now = Date.now();
-      const elapsed = now - previewLastAtRef.current;
-      if (elapsed >= 0 && elapsed < minIntervalMs) {
-        previewTimerRef.current = window.setTimeout(run, minIntervalMs - elapsed);
-        return;
-      }
-
-      if (previewInFlightRef.current) {
-        previewTimerRef.current = window.setTimeout(run, 300);
-        return;
-      }
-
-      previewInFlightRef.current = true;
-      previewLastAtRef.current = Date.now();
-      const desiredKey = autoPreviewPendingKeyRef.current || previewKey;
-      const res = await renderServerPreview(token);
-      previewInFlightRef.current = false;
-      if (previewTokenRef.current !== token) return;
-
-      if (res.ok) {
-        autoPreviewLastSuccessKeyRef.current = desiredKey;
-      }
-
-      if (res.rateLimited) {
-        previewTimerRef.current = window.setTimeout(run, 1600);
-        return;
-      }
-
-      if (autoPreviewPendingKeyRef.current && autoPreviewPendingKeyRef.current !== desiredKey) {
-        previewTimerRef.current = window.setTimeout(run, 200);
-      }
+  const buildSavePayload = () => {
+    const source = isCreateMode ? ensureDefaultStyleImport(content) : content;
+    return {
+      title: title.trim() || "未命名",
+      summary,
+      category_path: categoryPath,
+      published,
+      style_key: styleKey || "my_style",
+      entry_path: entryPath,
+      files: { ...note?.files, [entryPath]: source },
+      toc,
+      content_typst: source,
     };
+  };
 
-    previewTimerRef.current = window.setTimeout(run, 700);
-  }, [assetsVersion, autoPreview, categoryPath, content, note?.id, previewPdfData, published, renderError, renderServerPreview, styleKey, stylesVersion, summary, title, toc, viewMode]);
-
-  useEffect(() => {
-    if (!note?.id) return;
-    if (viewMode === "edit") return;
-    queuePreviewRefresh(note.id);
-  }, [note?.id, queuePreviewRefresh, viewMode]);
-
-  const save = async (): Promise<TypstNote | null> => {
-    const t = title.trim() || "未命名";
+  const save = async () => {
     setSubmitting(true);
     try {
-      const previewVisible = viewMode !== "edit";
-      const nextFiles: Record<string, string> = { "main.typ": ensureDefaultStyleImport(String(content) || "") };
       if (isCreateMode) {
-        const created = await typstNotesApi.create({
-          title: t,
-          summary: summary || "",
-          category_path: categoryPath || "",
-          published,
-          style_key: styleKey || "my_style",
-          entry_path: "main.typ",
-          files: nextFiles,
-          toc,
-          content_typst: nextFiles["main.typ"] || "",
-        });
+        const created = await typstNotesApi.create(buildSavePayload());
         showMessage.success("创建成功");
         onCreated(created);
-        if (previewVisible) queuePreviewRefresh(created.id);
-        return created;
+      } else if (noteId) {
+        await typstNotesApi.update(noteId, buildSavePayload());
+        showMessage.success("保存成功");
+        if (autoPreview) refreshPreview();
       }
-      if (!note) return null;
-      const updated = await typstNotesApi.update(note.id, {
-        title: t,
-        summary: summary || "",
-        category_path: categoryPath || "",
-        published,
-        style_key: styleKey || "my_style",
-        entry_path: "main.typ",
-        files: nextFiles,
-        toc,
-        content_typst: nextFiles["main.typ"] || "",
-      });
-      showMessage.success("保存成功");
-      if (previewVisible) queuePreviewRefresh(note.id);
-      return updated;
     } catch (e: unknown) {
       showMessage.error(getErrMsg(e, "保存失败"));
-      return null;
     } finally {
       setSubmitting(false);
     }
   };
 
   const ensureSavedThen = async <T,>(fn: (id: number) => Promise<T>) => {
-    if (!note?.id && isCreateMode) {
-      const nextFiles: Record<string, string> = { "main.typ": ensureDefaultStyleImport(String(content) || "") };
-      const created = await typstNotesApi.create({
-        title: title.trim() || "未命名",
-        summary: summary || "",
-        category_path: categoryPath || "",
-        style_key: styleKey || "my_style",
-        published,
-        entry_path: "main.typ",
-        files: nextFiles,
-        toc,
-        content_typst: nextFiles["main.typ"] || "",
-      });
+    if (!noteId && isCreateMode) {
+      const created = await typstNotesApi.create(buildSavePayload());
       onCreated(created);
-      return await fn(created.id);
+      return fn(created.id);
     }
-    if (!note?.id) throw new Error("笔记未创建");
-    return await fn(note.id);
+    if (!noteId) throw new Error("笔记未创建");
+    return fn(noteId);
   };
 
   const uploadAssets = async (fileList: FileList | null) => {
@@ -510,7 +322,8 @@ const TypstNoteEditorInner: React.FC<{
         }
         return id;
       });
-      await refreshAssetsCache(id);
+      await refreshAssets(id);
+      if (autoPreview) refreshPreview();
       showMessage.success("资源上传成功");
     } catch (e: unknown) {
       showMessage.error(getErrMsg(e, "上传失败"));
@@ -524,7 +337,8 @@ const TypstNoteEditorInner: React.FC<{
     if (!note?.id) return;
     setConfirmState({ message: `确认删除 ${asset.path}？`, onOk: async () => {
       await typstNotesApi.deleteAsset(note.id!, asset.id);
-      await refreshAssetsCache();
+      await refreshAssets();
+      if (autoPreview) refreshPreview();
       showMessage.success("已删除");
     }});
   };
@@ -602,12 +416,17 @@ const TypstNoteEditorInner: React.FC<{
           </Alert>
         </div>
       ) : null}
+      {noteId && (
+        <div className="px-3 pt-2 text-xs text-text-secondary">
+          {renderError && previewPdfData ? "上一次成功预览" : "预览已保存版本"}
+        </div>
+      )}
       <PdfCanvasVirtualViewer data={previewPdfData} />
       {!renderLoading && !renderError && !previewPdfData ? (
         <div className="p-3">
           <div className="flex flex-col gap-2">
-            <span className="text-sm text-text-tertiary">暂无预览</span>
-            <Button variant="outline" onClick={() => queuePreviewRefresh(note?.id, { force: true })} disabled={!note?.id}>
+            <span className="text-sm text-text-tertiary">{noteId ? "暂无预览" : "请先保存笔记再预览"}</span>
+            <Button variant="outline" onClick={openPreview} disabled={!note?.id}>
               <RefreshCw className="h-4 w-4" /> 刷新预览
             </Button>
           </div>
@@ -639,7 +458,7 @@ const TypstNoteEditorInner: React.FC<{
             assetSearch={assetSearch}
             onOpenToc={() => setTocOpen(true)}
             onToggleCollapsed={() => setSideCollapsed((v) => !v)}
-            onRefreshPreview={() => queuePreviewRefresh(note?.id, { force: true })}
+            onRefreshPreview={openPreview}
             onSave={save}
             onSetTitle={setTitle}
             onSetSummary={setSummary}
@@ -673,7 +492,7 @@ const TypstNoteEditorInner: React.FC<{
             onSetAssetPrefix={setAssetPrefix}
             onUploadClick={() => assetInputRef.current?.click()}
             onUploadFiles={(files) => uploadAssets(files)}
-            onRefreshAssets={() => refreshAssetsCache()}
+            onRefreshAssets={() => refreshAssets()}
             onDeleteAsset={(a) => deleteAsset(a)}
             onSetAssetSearch={setAssetSearch}
             assetInputRef={assetInputRef}
@@ -761,7 +580,7 @@ const TypstNoteEditorInner: React.FC<{
                   <div className="flex items-center gap-2">
                     <Button
                       variant="outline"
-                      onClick={() => queuePreviewRefresh(note?.id, { force: true })}
+                      onClick={openPreview}
                       disabled={!note?.id}
                     >
                       <RefreshCw className="h-4 w-4" /> 刷新预览
@@ -933,7 +752,7 @@ const TypstNoteEditorInner: React.FC<{
                 setStyleEditing(s);
                 setStyleDraft({ ...s });
                 await refreshStyles();
-                setStylesVersion((v) => v + 1);
+                if (autoPreview) refreshPreview();
                 showMessage.success("已从资源重置");
               } catch (e: unknown) {
                 showMessage.error(getErrMsg(e, "重置失败"));
@@ -957,7 +776,7 @@ const TypstNoteEditorInner: React.FC<{
                 await refreshStyles();
                 const keys = await publicTypstNotesApi.listStyles();
                 setStyleOptions((keys && keys.length ? keys : ["my_style"]).filter(Boolean));
-                setStylesVersion((v) => v + 1);
+                if (autoPreview) refreshPreview();
                 showMessage.success("已保存");
               } catch {
               }

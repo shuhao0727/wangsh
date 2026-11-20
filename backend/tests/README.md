@@ -29,6 +29,10 @@ CI 的 `repo-config` 独立执行这19项；`backend-pytest` 仅排除该自含�
 
 `core/test_config_optional_scoring_agent.py` 独立加载配置字段，验证评分智能体 ID 的空值、环境变量和正整数约束；虽不导入全局 Settings，仍须上述 collection 保护。
 
+## 课堂与测评角色贯通回归
+
+`classroom/test_classroom_role_flow_isolated.py` 由 `backend-pytest` 的正常测试发现规则收集。用合成角色、SQLite、固定时钟和 ASGI 请求验证教师投放、学生作答、到时推进、关窗续答与结果复盘。隔离运行时按上述共同前提选择该文件、显式加载 `pytest_asyncio.plugin`，不把 PostgreSQL 锁等待、JWT、Redis 或浏览器计入本用例。
+
 ## KNN 采集隔离回归
 
 `it/test_knn_collection_isolated.py` 使用 unittest、真实 PostgreSQL 事务和 HTTPX ASGITransport，覆盖学号规范化、严格字段与时间窗、并发防重和幂等、重填授权及历史版本、取消回滚、名单变更原子性、CSV 和冻结匿名数据。功能与迁移合同见 [KNN_SURVEY](../../docs/features/KNN_SURVEY.md)。

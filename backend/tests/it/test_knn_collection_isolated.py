@@ -327,31 +327,36 @@ class PostgreSQLTests(unittest.IsolatedAsyncioTestCase):
                 await knn.delete_batch(db, opened["id"], TEACHER)
             self.assertEqual(busy.exception.status_code, 409)
 
-    async def test_freeze_requires_four_and_consent_then_stays_immutable(self):
-        batch = await self.create(["1", "2", "3", "4"])
-        async with self.sessions() as db:
-            with self.assertRaises(HTTPException):
-                await knn_exports.freeze(db, batch["id"], Freeze(), TEACHER)
-        for number in ["1", "2", "3", "4"]:
-            await self.answer(batch["id"], submission(number))
-        async with self.sessions() as db:
-            with self.assertRaises(HTTPException):
-                await knn_exports.freeze(db, batch["id"], Freeze(), TEACHER)
-        await self.refill(batch["id"])
-        await self.answer(batch["id"], submission(revision=1, display_consent=True))
-        async with self.sessions() as db:
-            snapshot = await knn_exports.freeze(db, batch["id"], Freeze(a_student_no="01"), TEACHER)
-            self.assertEqual(set(snapshot), {"version", "aId", "students"})
-            self.assertEqual(snapshot["aId"], "S01")
-            self.assertEqual(len(snapshot["students"]), 4)
-            self.assertTrue(all(set(s) == {"id", "label", "features"} for s in snapshot["students"]))
-            with self.assertRaises(HTTPException):
-                await knn_exports.freeze(db, batch["id"], Freeze(), TEACHER)
-        await self.refill(batch["id"])
-        await self.answer(batch["id"], submission(revision=2, label="技巧类"))
-        async with self.sessions() as db:
-            self.assertEqual(await knn_exports.frozen(db, batch["id"], TEACHER), snapshot)
-            self.assertEqual(snapshot["students"][0]["label"], "耐力类")
+    async def test_freeze_requires_four_valid_answers_then_stays_immutable(self):
+        for student_no, expected_id in [(None, "S01"), ("004", "S04")]:
+            with self.subTest(student_no=student_no):
+                batch = await self.create(["1", "2", "3", "4", "5"])
+                for number in ["1", "2", "3"]:
+                    await self.answer(batch["id"], submission(number))
+                async with self.sessions() as db:
+                    with self.assertRaises(HTTPException) as incomplete:
+                        await knn_exports.freeze(db, batch["id"], Freeze(), TEACHER)
+                    self.assertEqual(incomplete.exception.status_code, 409)
+                await self.answer(batch["id"], submission("4"))
+                await self.refill(batch["id"], ["4"])
+                async with self.sessions() as db:
+                    with self.assertRaises(HTTPException) as missing:
+                        await knn_exports.freeze(db, batch["id"], Freeze(a_student_no="5"), TEACHER)
+                    self.assertEqual(missing.exception.status_code, 409)
+                    snapshot = await knn_exports.freeze(db, batch["id"], Freeze(a_student_no=student_no), TEACHER)
+                    self.assertEqual(set(snapshot), {"version", "aId", "featureNames", "students"})
+                    self.assertEqual(snapshot["version"], 2)
+                    self.assertEqual(snapshot["aId"], expected_id)
+                    self.assertEqual(len(snapshot["featureNames"]), 6)
+                    self.assertEqual(len(snapshot["students"]), 4)
+                    self.assertTrue(all(set(s) == {"id", "label", "features"} for s in snapshot["students"]))
+                    with self.assertRaises(HTTPException) as repeated:
+                        await knn_exports.freeze(db, batch["id"], Freeze(), TEACHER)
+                    self.assertEqual(repeated.exception.status_code, 409)
+                await self.answer(batch["id"], submission("4", revision=1, label="技巧类"))
+                async with self.sessions() as db:
+                    self.assertEqual(await knn_exports.frozen(db, batch["id"], TEACHER), snapshot)
+                    self.assertEqual(snapshot["students"][3]["label"], "耐力类")
 
     async def test_csv_missing_and_latest_revision(self):
         batch = await self.create(["1", "2"])
@@ -363,8 +368,12 @@ class PostgreSQLTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(content.startswith("\ufeff"))
         rows = list(csv.reader(io.StringIO(content.lstrip("\ufeff"))))
         self.assertEqual(len(rows), 3)
+        self.assertEqual(rows[0], ["学号", "状态", "版本", "允许重填", *[
+            f"{name}天数" for name in knn_exports.DIMENSIONS
+        ], "报名类别", "提交时间"])
         self.assertEqual(rows[1][0:4], ["1", "已提交", "2", "否"])
-        self.assertEqual(rows[1][16], "力量类")
+        self.assertEqual(rows[1][4:10], [str(value) for value in FEATURES])
+        self.assertEqual(rows[1][10], "力量类")
         self.assertEqual(rows[2][0:4], ["2", "未提交", "0", "否"])
         for dangerous in ["=SUM(1)", "+1", "-1", "@x", "\t=x"]:
             self.assertTrue(knn_exports.csv_cell(dangerous).startswith("'"))

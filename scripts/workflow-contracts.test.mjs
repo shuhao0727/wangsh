@@ -681,6 +681,10 @@ test("local production simulation uses local images and can smoke with guarantee
   assert.doesNotMatch(simulateBody, /up-no-build|verify_release_set/);
   assert.match(simulateBody, /verify-local-images/);
   assert.match(simulateBody, /docker compose[\s\S]*up -d --no-build/);
+  for (const helper of ["run_sim_deploy", "run_sim_compose"]) {
+    const body = simulateBody.match(new RegExp(`${helper}\\(\\) \\{([\\s\\S]*?)\\n\\s*\\}`))?.[1] ?? "";
+    assert.match(body, /REDIS_HOST=redis/);
+  }
   assert.ok(
     simulateBody.indexOf("verify-local-images") < simulateBody.lastIndexOf("down-v"),
     "simulation must verify local images before deleting prior simulation volumes",

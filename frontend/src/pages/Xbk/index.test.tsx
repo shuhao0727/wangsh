@@ -8,6 +8,7 @@ import {
 } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import userEvent from "@testing-library/user-event";
+import axios from "axios";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import XbkPage from "./index";
 import { getCurrentAcademicYear } from "./academicYear";
@@ -99,6 +100,19 @@ const kpiValues = () =>
     document.querySelectorAll(".xbk-kpis .value"),
     (el) => el.textContent,
   );
+const selectFilterOption = async (
+  user: ReturnType<typeof userEvent.setup>,
+  name: string,
+  option: string,
+) => {
+  await user.click(screen.getByRole("combobox", { name }));
+  await user.click(await screen.findByRole("option", { name: option }));
+};
+const metaQueries = (start = 0) =>
+  vi.mocked(xbkDataApi.getMeta).mock.calls.slice(start).map(([params]) => {
+    const uri = axios.getUri({ url: "/xbk/data/meta", params });
+    return Object.fromEntries(new URL(uri, "http://xbk.test").searchParams);
+  });
 const failAll = () => {
   vi.mocked(xbkDataApi.getMeta).mockRejectedValue(serverError);
   vi.mocked(xbkDataApi.getSummary).mockRejectedValue(serverError);
@@ -124,17 +138,20 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("XBK page load failures", () => {
-  it("keeps the selected class and request parameters after metadata fails on refresh and retry", async () => {
+  it("keeps the selected class when all-scope metadata fails and requests it again on retry", async () => {
     const user = userEvent.setup();
-    vi.mocked(xbkDataApi.getMeta).mockResolvedValue({
+    const metadata = {
       years: ["2026-2027"],
       terms: ["上学期"],
       classes: ["1班"],
-    });
+    };
+    vi.mocked(xbkDataApi.getMeta).mockResolvedValue(metadata);
     renderPage();
     await screen.findByText("暂无数据");
-    await user.click(screen.getByRole("combobox", { name: "班级" }));
-    await user.click(await screen.findByRole("option", { name: /^1班$/ }));
+    await selectFilterOption(user, "学期", "全部学期");
+    await user.clear(screen.getByRole("textbox", { name: "学年" }));
+    await user.tab();
+    await selectFilterOption(user, "班级", "1班");
     await waitFor(() =>
       expect(xbkDataApi.listCourseResults).toHaveBeenLastCalledWith(
         expect.objectContaining({ class_name: "1班" }),
@@ -149,6 +166,7 @@ describe("XBK page load failures", () => {
     const listCallCount = vi.mocked(xbkDataApi.listCourseResults).mock.calls
       .length;
     const summaryCallCount = vi.mocked(xbkDataApi.getSummary).mock.calls.length;
+    const metaCallCount = vi.mocked(xbkDataApi.getMeta).mock.calls.length;
     failAll();
     await user.click(screen.getByRole("button", { name: /^刷新$/ }));
     await waitFor(() =>
@@ -185,6 +203,16 @@ describe("XBK page load failures", () => {
         .map(([params]) => params),
     ).toEqual([originalSummaryParams, originalSummaryParams]);
     expect(showMessage.success).not.toHaveBeenCalled();
+
+    succeedAll();
+    vi.mocked(xbkDataApi.getMeta).mockResolvedValue(metadata);
+    await user.click(screen.getByRole("button", { name: "重试加载" }));
+    await waitFor(() =>
+      expect(showMessage.success).toHaveBeenCalledWith("已刷新"),
+    );
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(xbkDataApi.listCourseResults).toHaveBeenLastCalledWith(originalParams);
+    expect(metaQueries(metaCallCount)).toEqual([{}, {}, {}]);
   });
 
   it("still clears an invalid selected class when successful metadata no longer includes it", async () => {
@@ -427,6 +455,112 @@ describe("XBK filtered table export", () => {
       anchorClick.mockRestore();
       vi.unstubAllGlobals();
     }
+  });
+});
+
+it("requests each distinct metadata scope once as filters change", async () => {
+  const user = userEvent.setup();
+  const year = getCurrentAcademicYear();
+  const otherYear = "2098-2099";
+  const rows = [
+    [year, "上学期", "高一", "1班", "合成学生甲"],
+    [year, "上学期", "高二", "1班", "合成学生乙"],
+    [year, "下学期", "高一", "2班", "合成学生丙"],
+    [otherYear, "暑期课程", "高二", "3班", "合成学生丁"],
+  ].map(([year, term, grade, class_name, student_name], index) => ({
+    id: index + 1,
+    year,
+    term,
+    grade,
+    class_name,
+    student_no: `XBK-${index + 1}`,
+    student_name,
+    course_code: "C01",
+  }));
+  const matchingRows = (
+    params: Parameters<typeof xbkDataApi.listCourseResults>[0] = {},
+  ) =>
+    rows.filter(
+      (row) =>
+        (!params.year || row.year === params.year) &&
+        (!params.term || row.term === params.term) &&
+        (!params.grade || row.grade === params.grade) &&
+        (!params.class_name || row.class_name === params.class_name),
+    );
+  vi.mocked(xbkDataApi.getMeta).mockImplementation(async (params) => {
+    const matches = matchingRows(params);
+    return {
+      years: [...new Set(matches.map((row) => row.year))],
+      terms: [...new Set(matches.map((row) => row.term))],
+      classes: [...new Set(matches.map((row) => row.class_name))],
+    };
+  });
+  vi.mocked(xbkDataApi.listCourseResults).mockImplementation(async (params) => {
+    const items = matchingRows(params);
+    return { items, total: items.length };
+  });
+  vi.mocked(xbkDataApi.getSummary).mockImplementation(async (params) => ({
+    ...zeroSummary,
+    students: matchingRows(params).length,
+  }));
+
+  const requests: Record<string, ReturnType<typeof metaQueries>> = {};
+  const expectScope = async (stage: string, ...students: string[]) => {
+    await waitFor(() => {
+      expect(
+        screen.getAllByText(/^合成学生[甲乙丙丁]$/).map((el) => el.textContent),
+      ).toEqual(students.map((name) => `合成学生${name}`));
+      expect(kpiValues()[0]).toBe(String(students.length));
+    });
+    requests[stage] = metaQueries();
+    vi.mocked(xbkDataApi.getMeta).mockClear();
+  };
+
+  renderPage();
+  await expectScope("默认", "甲", "乙");
+  await selectFilterOption(user, "学期", "全部学期");
+  await expectScope("只选学年", "甲", "乙", "丙");
+  await user.clear(screen.getByRole("textbox", { name: "学年" }));
+  await user.tab();
+  await expectScope("全选", "甲", "乙", "丙", "丁");
+
+  const selectFirstClass = async (grade: string, otherClass: string) => {
+    await user.click(screen.getByRole("combobox", { name: "班级" }));
+    const firstClass = await screen.findByRole("option", { name: `${grade}1班` });
+    expect(screen.getAllByRole("option").map((el) => el.textContent)).toEqual([
+      "全部班级",
+      `${grade}1班`,
+      otherClass,
+    ]);
+    await user.click(firstClass);
+  };
+  await selectFilterOption(user, "年级", "高一");
+  await expectScope("高一", "甲", "丙");
+  await selectFirstClass("高一", "高一2班");
+  await expectScope("高一1班", "甲");
+  await selectFilterOption(user, "年级", "高二");
+  await expectScope("高二", "乙", "丁");
+  expect(screen.getByRole("combobox", { name: "班级" })).toHaveTextContent(
+    "全部班级",
+  );
+  await selectFirstClass("高二", "高二3班");
+  await expectScope("高二1班", "乙");
+
+  await selectFilterOption(user, "年级", "全部年级");
+  await expectScope("返回全选", "甲", "乙", "丙", "丁");
+  await selectFilterOption(user, "学期", "暑期课程");
+  await expectScope("只选学期", "丁");
+
+  expect(requests).toEqual({
+    默认: [{}, { year }, { year, term: "上学期" }],
+    只选学年: [{}, { year }],
+    全选: [{}],
+    高一: [{}, { grade: "高一" }],
+    高一1班: [],
+    高二: [{}, { grade: "高二" }],
+    高二1班: [],
+    返回全选: [{}],
+    只选学期: [{}, { term: "暑期课程" }],
   });
 });
 

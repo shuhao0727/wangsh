@@ -41,7 +41,12 @@ async def authenticate_ws_session(
         async with asyncio.timeout(AUTH_CHECK_TIMEOUT_SECONDS):
             if not verify_token(token):
                 return None
-            user = await resolve_user(token, db)
+            try:
+                user = await resolve_user(token, db)
+            finally:
+                # Read-only identity lookup is the WS handler's only use of this session.
+                if db is not None and db.in_transaction():
+                    await db.rollback()
             if not user:
                 return None
             valid = await verify_ws_session(token, int(user.get("id") or 0), websocket)

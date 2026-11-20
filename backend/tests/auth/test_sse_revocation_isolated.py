@@ -5,7 +5,10 @@ import inspect
 import json
 
 import pytest
+from sqlalchemy import update
 from starlette.requests import Request
+
+from app.models import User
 
 from app.core import deps
 from app.core.config import settings
@@ -28,6 +31,10 @@ def assert_session_error(frame, expected_code):
 
 async def open_stream(h, monkeypatch, module_name, function_name, *, cookie=False):
     module = importlib.import_module(module_name)
+    role = 'admin' if module_name.endswith('.admin_stream') else 'teacher' if function_name == 'admin_stream' else 'student'
+    async with h.db_factory() as db:
+        await db.execute(update(User).where(User.id == 1).values(role_code=role))
+        await db.commit()
     pair = await h.login('a')
     headers = [(b'cookie', f'{settings.ACCESS_TOKEN_COOKIE_NAME}={pair["access_token"]}'.encode())] if cookie else []
     request = Request({'type': 'http', 'method': 'GET', 'path': '/stream',

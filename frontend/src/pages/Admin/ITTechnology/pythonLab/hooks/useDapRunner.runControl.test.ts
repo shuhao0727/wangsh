@@ -16,7 +16,7 @@ const fixture = vi.hoisted(() => ({
 }));
 
 vi.mock("../services/pythonlabSessionApi", () => ({
-  pythonlabSessionApi: { stop: vi.fn(async () => ({ ok: true })) },
+  pythonlabSessionApi: { stop: vi.fn(async () => ({ ok: true })), stopAndWait: vi.fn(async () => {}) },
 }));
 
 vi.mock("../core/debugSessionBootstrap", async (importOriginal) => {

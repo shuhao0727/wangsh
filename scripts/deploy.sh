@@ -651,8 +651,10 @@ case "${cmd}" in
     sim_workspace_dir=""
     simulation_started=false
 
+    # The normalized simulation joins only its private network, so the service DNS name is unambiguous.
     run_sim_deploy() {
       COMPOSE_PROJECT_NAME="${sim_project}" \
+        REDIS_HOST=redis \
         APP_VERSION="${sim_version}" \
         VERSION="${sim_version}" \
         IMAGE_TAG="${sim_version}" \
@@ -678,6 +680,7 @@ case "${cmd}" in
 
     run_sim_compose() {
       COMPOSE_PROJECT_NAME="${sim_project}" \
+        REDIS_HOST=redis \
         APP_VERSION="${sim_version}" \
         VERSION="${sim_version}" \
         IMAGE_TAG="${sim_version}" \
@@ -837,6 +840,7 @@ AGENT_API_KEY_ENCRYPTION_KEY=${fernet}
 POSTGRES_DB=wangsh_db
 POSTGRES_USER=admin
 POSTGRES_PASSWORD=${pg_password}
+REDIS_HOST=redis
 SUPER_ADMIN_USERNAME=admin
 SUPER_ADMIN_PASSWORD=${admin_password}
 CORS_ORIGINS=["http://localhost:${sim_web_port}","http://127.0.0.1:${sim_web_port}"]

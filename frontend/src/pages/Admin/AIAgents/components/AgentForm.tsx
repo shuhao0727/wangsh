@@ -2,7 +2,7 @@
  * AI智能体表单组件
  */
 import { showMessage } from "@/lib/toast";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -138,28 +138,18 @@ const AgentForm: React.FC<AgentFormProps> = ({
   const [revealedApiKey, setRevealedApiKey] = useState("");
   const [adminPassword, setAdminPassword] = useState("");
 
-  const watchedName = form.watch("name");
   const watchedApiEndpoint = form.watch("api_endpoint");
-  const watchedApiKey = form.watch("api_key");
   const watchedSystemPrompt = form.watch("system_prompt");
   // Dify 的模型由平台侧应用决定，请求体不携带模型名，因此不展示该字段
   const isDifyAgent = form.watch("agent_type") === "dify";
 
-  const canTest = useMemo(() => {
-    const hasName = Boolean(watchedName?.trim());
-    const hasUrl = Boolean(watchedApiEndpoint?.trim());
-    const hasApiKey = Boolean(watchedApiKey?.trim());
-    const hasStoredApiKey = Boolean(editingAgent?.id && editingAgent.has_api_key);
-    return editingAgent?.id
-      ? hasName && hasUrl && (hasStoredApiKey || hasApiKey)
-      : hasName && hasUrl && hasApiKey;
-  }, [
-    editingAgent?.has_api_key,
-    editingAgent?.id,
-    watchedApiEndpoint,
-    watchedApiKey,
-    watchedName,
-  ]);
+  const canTest = Boolean(editingAgent?.id && editingAgent.api_endpoint?.trim() && editingAgent.has_api_key);
+  const hasConnectionDraft = Boolean(editingAgent && (
+    formValues.agent_type !== (editingAgent.agent_type === "dify" ? "dify" : "general") ||
+    formValues.api_endpoint?.trim() !== (editingAgent.api_endpoint || "").trim() ||
+    formValues.model_name?.trim() !== (editingAgent.model_name || "").trim() ||
+    formValues.api_key?.trim()
+  ));
 
   useEffect(() => {
     if (!visible) return;
@@ -245,22 +235,21 @@ const AgentForm: React.FC<AgentFormProps> = ({
     }
   };
 
-  const discoverModels = useCallback(async () => {
+  const discoverModels = useCallback(async (useSavedConnection = false) => {
     const values = form.getValues();
     const apiEndpoint = values.api_endpoint.trim();
     const apiKey = values.api_key.trim();
-    const hasStoredApiKey = Boolean(editingAgent?.id && editingAgent.has_api_key);
-    if (!apiEndpoint) return;
-    if (!apiKey && !hasStoredApiKey) return;
+    const savedAgentId = editingAgent?.has_api_key ? editingAgent.id : undefined;
+    const agentId = useSavedConnection || !apiKey ? savedAgentId : undefined;
+    if (useSavedConnection ? !agentId : !apiEndpoint || (!apiKey && !agentId)) return;
 
     setDiscoveringModels(true);
     setModelDiscoveryResult(null);
     setAvailableModels([]);
 
     try {
-      const useAgentId = editingAgent?.id && !apiKey && hasStoredApiKey;
-      const result = useAgentId
-        ? await aiAgentsApi.discoverModelsByAgentId(editingAgent.id)
+      const result = agentId
+        ? await aiAgentsApi.discoverModelsByAgentId(agentId)
         : await aiAgentsApi.discoverModels({
             api_endpoint: apiEndpoint,
             api_key: apiKey,
@@ -285,60 +274,23 @@ const AgentForm: React.FC<AgentFormProps> = ({
   }, [form, editingAgent]);
 
   const handleTest = async () => {
-    if (!canTest) return;
+    if (!editingAgent?.id || !canTest) return;
+    setTesting(true);
+    setTestResult(null);
     try {
-      setTesting(true);
-      setTestResult(null);
-
-      const values = form.getValues();
-      const apiEndpoint = values.api_endpoint.trim();
-      const apiKey = values.api_key.trim();
-      const hasStoredApiKey = Boolean(editingAgent?.id && editingAgent.has_api_key);
-      if (!apiEndpoint) throw new Error("API端点不能为空");
-      if (!apiKey && !hasStoredApiKey) throw new Error("请先填写API密钥");
-
-      // 新建智能体时先保存 API 密钥
-      if (editingAgent?.id && apiKey?.trim()) {
-        try {
-          await aiAgentsApi.updateAgent(editingAgent.id, { api_key: apiKey.trim() });
-        } catch (error) {
-          logger.warn("自动保存API密钥失败:", error);
-        }
-      }
-
-      let connectivityResult: UITestResult | null = null;
-      if (editingAgent?.id) {
-        try {
-          const testResp = await aiAgentsApi.testAgent(editingAgent.id, "测试API连接");
-          // 外层 success 只表示请求完成；测试是否通过以后端 AgentTestResponse.success 为准。
-          const testData = testResp.data as { success?: boolean; message?: string; response_time?: number };
-          const passed = testData.success === true;
-          connectivityResult = {
-            success: passed,
-            message: testData.message || (passed ? "连接测试成功" : "测试失败"),
-            timestamp: new Date().toISOString(),
-            response_time:
-              typeof testData.response_time === "number" ? testData.response_time : undefined,
-          };
-        } catch (error) {
-          logger.warn("智能体测试失败:", error);
-          connectivityResult = { success: false, message: "测试失败", timestamp: new Date().toISOString() };
-        }
-      }
-
-      // 连接测试完后刷新模型列表
-      await discoverModels();
-
-      if (connectivityResult) {
-        setTestResult(connectivityResult);
-      }
-    } catch (error) {
-      logger.error("测试失败:", error);
+      const { data } = await aiAgentsApi.testAgent(editingAgent.id, "测试API连接");
+      // 外层 success 只表示请求完成，连接结果取后端 data.success。
+      const passed = data.success === true;
       setTestResult({
-        success: false,
-        message: `测试异常: ${error instanceof Error ? error.message : "未知错误"}`,
+        success: passed,
+        message: (typeof data.message === "string" && data.message) || (passed ? "连接测试成功" : "测试失败"),
         timestamp: new Date().toISOString(),
+        response_time: typeof data.response_time === "number" ? data.response_time : undefined,
       });
+      if (!hasConnectionDraft && !isDifyAgent) await discoverModels(true);
+    } catch (error) {
+      logger.warn("智能体测试失败:", error);
+      setTestResult({ success: false, message: "测试失败", timestamp: new Date().toISOString() });
     } finally {
       setTesting(false);
     }
@@ -514,7 +466,7 @@ const AgentForm: React.FC<AgentFormProps> = ({
                             variant="ghost"
                             size="sm"
                             className="h-auto p-0 text-xs text-text-tertiary hover:text-text-base"
-                            onClick={discoverModels}
+                            onClick={() => void discoverModels()}
                             disabled={!watchedApiEndpoint?.trim()}
                             title="重新获取可用模型列表"
                           >
@@ -625,6 +577,9 @@ const AgentForm: React.FC<AgentFormProps> = ({
                 )}
               />
 
+              {canTest && hasConnectionDraft && (
+                <p className="text-sm text-text-secondary">测试使用已保存的连接配置。当前修改保存后生效。</p>
+              )}
               {testing ? (
                 <div className="flex items-center justify-center rounded-lg border border-border py-6 text-sm text-text-secondary">
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -685,8 +640,8 @@ const AgentForm: React.FC<AgentFormProps> = ({
                     </TooltipTrigger>
                     <TooltipContent>
                       {canTest
-                        ? "测试连接并发现模型"
-                        : "请先填写名称和API地址（新建还需API密钥）"}
+                        ? "测试已保存的连接配置"
+                        : "保存 API 地址和密钥后可测试连接"}
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>

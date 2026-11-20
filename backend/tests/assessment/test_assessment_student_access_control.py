@@ -1,7 +1,6 @@
-"""自主检测学生端 10 端点行为级越权测试（审计 T-1）。
+"""自主检测学生端的角色访问测试。
 
-覆盖 assessment/student.py:38-279 全部 require_student_or_staff 端点
-（审计基线 10 个，无一例外）。测试模式采用 TestClient + dependency_overrides
+覆盖 assessment/student.py 全部 require_student_or_staff 端点。测试模式采用 TestClient + dependency_overrides
 （同 tests/it/test_games_api.py）：覆盖 deps.get_current_user 注入各角色 fake
 UserInfo，require_student_or_staff 守卫本身跑真实代码；未认证用例不覆盖
 get_current_user，走真实"无 token → 401"链路。业务服务用最小 fake 替换，
@@ -46,6 +45,7 @@ ALLOWED_ROLES = ["student", "teacher", "admin", "super_admin"]
 ASSESSMENT_ENDPOINTS = [
     ("available", "get", "/available", {}, "get_available_configs", "list"),
     ("start_session", "post", "/sessions/start", {"json": {"config_id": 1}}, "start_session", "dict"),
+    ("resume", "get", "/sessions/1/resume", {}, "resume_session", "dict"),
     ("questions", "get", "/sessions/1/questions", {}, "get_session_questions", "dict"),
     ("answer", "post", "/sessions/1/answer", {"json": {"answer_id": 1, "student_answer": "A"}}, "submit_answer", "dict"),
     ("submit", "post", "/sessions/1/submit", {}, "submit_session", "dict"),

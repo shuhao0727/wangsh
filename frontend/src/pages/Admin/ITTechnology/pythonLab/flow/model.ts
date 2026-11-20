@@ -1,3 +1,5 @@
+import { isTruncatedFlowTitle } from "./titleSemantics";
+
 export type PortSide = "top" | "right" | "bottom" | "left";
 
 export type FlowPoint = { x: number; y: number };
@@ -39,6 +41,7 @@ export type FlowNode = {
   shape: FlowNodeShape;
   title: string;
   tooltip?: string;
+  writebackBlocked?: true;
   emphasis?: "critical";
   x: number;
   y: number;
@@ -189,6 +192,7 @@ export function normalizeFlowNode(input: unknown): FlowNode | null {
     shape: normalizedShape,
     title,
     tooltip,
+    ...(input.writebackBlocked === true ? { writebackBlocked: true } : {}),
     emphasis,
     x,
     y,
@@ -270,5 +274,11 @@ export function normalizeFlowImport(input: unknown): { nodes: FlowNode[]; edges:
   const nodes = ns.map((n) => normalizeFlowNode(n)).filter((n): n is FlowNode => !!n);
   const edges = es.map((e) => normalizeFlowEdge(e)).filter((e): e is FlowEdge => !!e);
   if (!nodes.length) return null;
+  // Older exports did not store the writeback restriction on display-only nodes.
+  if (nodes.some((node) => node.writebackBlocked || (
+    node.type === "flow_element" && (isTruncatedFlowTitle(node.title) || node.title === "解析超时，已回退到稳定展示")
+  ))) {
+    for (const node of nodes) node.writebackBlocked = true;
+  }
   return { nodes, edges };
 }

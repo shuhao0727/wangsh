@@ -5,6 +5,7 @@ from typing import Any, Dict, List
 
 from fastapi import HTTPException
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -216,13 +217,23 @@ async def reorder_chapters(
     book = await get_book(db, module_key)
 
     slug_map = {item.slug: item.chapter_number for item in items}
-    for chapter in book.chapters:
-        if chapter.slug in slug_map:
-            chapter.chapter_number = slug_map[chapter.slug]
-            chapter.sort_order = slug_map[chapter.slug]
+    chapters = [chapter for chapter in book.chapters if chapter.slug in slug_map]
+    try:
+        # Public chapter numbers are positive. Move changed numbers out of that
+        # range before assigning the final positions under the immediate UNIQUE constraint.
+        for slot, chapter in enumerate(chapters, start=1):
+            if chapter.chapter_number != slug_map[chapter.slug]:
+                chapter.chapter_number = -slot
+        await db.flush()
 
-    await db.commit()
-    return {"message": f"已更新 {len(slug_map)} 个章节的排序"}
+        for chapter in chapters:
+            chapter.chapter_number = slug_map[chapter.slug]
+            chapter.sort_order = chapter.chapter_number
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="章节序号冲突，无法保存排序") from exc
+    return {"message": f"已更新 {len(chapters)} 个章节的排序"}
 
 
 async def toggle_chapter(

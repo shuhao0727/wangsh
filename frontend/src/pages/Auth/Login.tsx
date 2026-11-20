@@ -1,5 +1,5 @@
 import { showMessage } from "@/lib/toast";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import AnimatedLoginCharacters from "@/components/Auth/AnimatedLoginCharacters";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,6 +48,11 @@ const LoginPage: React.FC = () => {
   });
 
   const password = watch("password");
+  const finishNavigation = useCallback(() => {
+    // This game is served as a separate document, not a platform SPA route.
+    if (redirect === "/games/ai-partner/index.html") window.location.replace(redirect);
+    else void navigate(redirect, { replace: true });
+  }, [navigate, redirect]);
 
   useEffect(() => {
     if (auth.isLoading) return;
@@ -57,10 +62,8 @@ const LoginPage: React.FC = () => {
       void auth.logout();
       return;
     }
-    void navigate(redirect, {
-      replace: true,
-    });
-  }, [auth, navigate, redirect, requireAdmin]);
+    finishNavigation();
+  }, [auth, finishNavigation, requireAdmin]);
 
   const onFinish = async (values: LoginFormValues) => {
     const res = await auth.login(values.username, values.password);
@@ -77,7 +80,7 @@ const LoginPage: React.FC = () => {
     }
     localStorage.removeItem("ws_guest_mode");
     showMessage.success("登录成功");
-    void navigate(redirect, { replace: true });
+    finishNavigation();
   };
 
   return (
@@ -168,9 +171,10 @@ const LoginPage: React.FC = () => {
                 />
                 <button
                   type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-text-tertiary hover:text-text-secondary transition-colors"
-                  tabIndex={-1}
+                  onClick={() => setShowPassword((visible) => !visible)}
+                  aria-label={showPassword ? "隐藏密码" : "显示密码"}
+                  aria-controls="password"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 rounded-sm text-text-tertiary transition-colors hover:text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>

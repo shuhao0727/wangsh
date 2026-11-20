@@ -26,8 +26,6 @@ CHANNEL_PREFIX = "sse:"
 _local_subs: Dict[str, Dict[str, asyncio.Queue]] = {}
 # channel -> 后台监听 Task
 _listener_tasks: Dict[str, asyncio.Task] = {}
-# channel -> Redis PubSub 对象
-_redis_pubsubs: Dict[str, object] = {}
 # channel -> listener 完成 Redis SUBSCRIBE 的就绪信号
 _listener_ready: Dict[str, asyncio.Event] = {}
 # channel -> 串行化 Redis SUBSCRIBE 握手和并发 publish
@@ -80,31 +78,26 @@ async def subscribe(channel: str, sub_id: str) -> asyncio.Queue:
     q: asyncio.Queue = asyncio.Queue(maxsize=50)
     _local_subs.setdefault(channel, {})[sub_id] = q
 
-    # 确保该频道有 Redis 监听协程（首个订阅者触发创建）
-    if await _is_redis_available() and channel not in _local_only_channels:
+    try:
+        if not await _is_redis_available() or channel in _local_only_channels:
+            return q
+        # 首个订阅者创建 Redis 监听协程。
         ready = _listener_ready.get(channel)
         if channel not in _listener_tasks:
             ready = asyncio.Event()
             _listener_ready[channel] = ready
             _channel_locks.setdefault(channel, asyncio.Lock())
-            task = asyncio.create_task(_redis_listener(channel))
-            _listener_tasks[channel] = task
+            _listener_tasks[channel] = asyncio.create_task(_redis_listener(channel))
         if ready is not None:
             try:
-                await asyncio.wait_for(
-                    ready.wait(),
-                    timeout=_LISTENER_READY_TIMEOUT,
-                )
+                await asyncio.wait_for(ready.wait(), timeout=_LISTENER_READY_TIMEOUT)
             except TimeoutError:
                 _local_only_channels.add(channel)
-                logger.warning(
-                    "Redis listener {} 就绪超时，回退到进程内模式",
-                    channel,
-                )
+                logger.warning("Redis listener {} 就绪超时，回退到进程内模式", channel)
                 await _stop_listener(channel)
-            except asyncio.CancelledError:
-                await asyncio.shield(unsubscribe(channel, sub_id))
-                raise
+    except asyncio.CancelledError:
+        await asyncio.shield(unsubscribe(channel, sub_id))
+        raise
 
     return q
 
@@ -117,9 +110,9 @@ async def unsubscribe(channel: str, sub_id: str) -> None:
     # 频道无订阅者时，停止 Redis 监听并清理
     if not subs:
         _local_subs.pop(channel, None)
-        await _stop_listener(channel)
         _local_only_channels.discard(channel)
         _channel_locks.pop(channel, None)
+        await _stop_listener(channel)
 
 
 async def shutdown_pubsub() -> None:
@@ -198,7 +191,6 @@ async def _redis_listener(channel: str) -> None:
         ps = client.pubsub()
         async with lock:
             await ps.subscribe(redis_channel)
-            _redis_pubsubs[channel] = ps
             if ready is not None:
                 ready.set()
         logger.debug("Redis listener 已启动: {}", redis_channel)
@@ -223,9 +215,10 @@ async def _redis_listener(channel: str) -> None:
     finally:
         if ready is not None:
             ready.set()
-        _listener_ready.pop(channel, None)
-        _redis_pubsubs.pop(channel, None)
-        _listener_tasks.pop(channel, None)
+        # A new subscriber may already own this channel during cancellation.
+        if _listener_tasks.get(channel) is asyncio.current_task():
+            _listener_ready.pop(channel, None)
+            _listener_tasks.pop(channel, None)
         if ps is not None:
             await _close_pubsub(ps, redis_channel)
         logger.debug("Redis listener 已停止: {}", redis_channel)
@@ -241,9 +234,6 @@ async def _stop_listener(channel: str) -> None:
             await task
         except (asyncio.CancelledError, Exception):
             pass
-    ps = _redis_pubsubs.pop(channel, None)
-    if ps is not None:
-        await _close_pubsub(ps, f"{CHANNEL_PREFIX}{channel}")
 
 
 async def _close_pubsub(ps: object, redis_channel: str) -> None:

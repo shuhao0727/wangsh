@@ -12,13 +12,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import XbkCourse, XbkSelection, XbkStudent
 from app.services.xbk.locking import lock_key_rows, lock_rows
-from app.services.xbk.grade_scope import normalize_grade, validate_course_grade_scope, validate_student_grade_scope
-
-# 容量校验已抽到独立模块；这里保留原私有名做别名，调用点无需改动。
+from app.services.xbk.grade_scope import (
+    normalize_grade, validate_course_grade_change, validate_course_grade_scope,
+    validate_student_grade_scope,
+)
 from app.services.xbk.selection_capacity import (
     capacity_key as _capacity_key,
     capacity_used_batch as _capacity_used_batch,
     validate_capacities as _validate_capacities,
+    validate_course_quota_reduction,
 )
 
 UNSELECTED_CODES = ("", "未选")
@@ -645,7 +647,7 @@ async def guard_student_change(
 
 
 async def guard_course_change(db: AsyncSession, row: XbkCourse, values: Mapping[str, Any]) -> None:
-    """Reject referenced natural-key changes and quota reductions below occupancy."""
+    """Protect existing selections when course identity, grade or quota changes."""
     natural_changed = any(str(getattr(row, field)) != str(values[field]) for field in ("year", "term", "course_code"))
     references = (await db.execute(select(XbkSelection).where(
         XbkSelection.year == row.year,
@@ -657,7 +659,6 @@ async def guard_course_change(db: AsyncSession, row: XbkCourse, values: Mapping[
     active_ids = sorted(selection.id for selection in references if not selection.is_deleted)
     if active_ids:
         await lock_rows(db, XbkSelection, XbkSelection.id.in_(active_ids))
-    new_quota = int(values.get("quota") or 0)
     buckets = (await db.execute(select(
         XbkStudent.grade, XbkStudent.class_name, func.count(XbkSelection.id),
     ).select_from(XbkSelection).join(
@@ -671,10 +672,5 @@ async def guard_course_change(db: AsyncSession, row: XbkCourse, values: Mapping[
         XbkSelection.course_code == row.course_code,
         XbkStudent.is_deleted.is_(False),
     ).group_by(XbkStudent.grade, XbkStudent.class_name))).all()
-    over = [(grade, class_name, int(used)) for grade, class_name, used in buckets if int(used) > new_quota]
-    if over:
-        grade, class_name, used = sorted(over, key=lambda item: (-item[2], str(item[0]), item[1]))[0]
-        raise HTTPException(
-            status_code=409,
-            detail=f"限额不能降至 {new_quota}：{grade or '未分年级'} {class_name} 已有 {used} 人选课",
-        )
+    validate_course_grade_change(row.grade, values.get("grade", row.grade), buckets)
+    validate_course_quota_reduction(buckets, int(values.get("quota") or 0))

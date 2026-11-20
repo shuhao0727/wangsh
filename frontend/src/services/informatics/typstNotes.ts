@@ -92,10 +92,11 @@ export const typstNotesApi = {
     return res.data as unknown as Blob;
   },
 
-  compilePdf: async (id: number) => {
+  compilePdf: async (id: number, signal?: AbortSignal) => {
     const res = await api.post(`/informatics/typst-notes/${id}/compile`, undefined, {
       responseType: "blob",
       timeout: 180000,
+      signal,
     });
     return res.data as unknown as Blob;
   },
@@ -138,10 +139,5 @@ export const typstNotesApi = {
   deleteAsset: async (id: number, assetId: number) => {
     const res = await api.delete(`/informatics/typst-notes/${id}/assets/${assetId}`);
     return res.data as unknown as { success: boolean };
-  },
-
-  downloadAsset: async (id: number, assetId: number) => {
-    const res = await api.get(`/informatics/typst-notes/${id}/assets/${assetId}`, { responseType: "blob" });
-    return res.data as unknown as Blob;
   },
 };

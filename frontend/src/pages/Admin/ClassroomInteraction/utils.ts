@@ -11,22 +11,6 @@ export const ANALYSIS_STATUS_MAP: Record<string, { variant: React.ComponentProps
   not_applicable: { variant: "neutral", text: "不适用" },
 };
 
-export const parseBlankAnswers = (raw?: string | null): string[] => {
-  const text = String(raw || "").trim();
-  if (!text) return [];
-  if (!text.startsWith("[") && !text.startsWith("{")) return [text];
-  try {
-    const parsed = JSON.parse(text);
-    if (Array.isArray(parsed)) return parsed.map((v) => String(v ?? "").trim());
-    if (parsed && typeof parsed === "object") {
-      return Object.keys(parsed)
-        .sort((a, b) => Number(a) - Number(b))
-        .map((k) => String((parsed as any)[k] ?? "").trim());
-    }
-  } catch {}
-  return [text];
-};
-
 export const toFillBlankPayload = (values: { blank_answers: string[] }): string | undefined => {
   const blanks = (values.blank_answers || [])
     .map((v) => String(v || "").trim())

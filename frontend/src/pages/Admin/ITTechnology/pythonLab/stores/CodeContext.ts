@@ -11,6 +11,8 @@ export interface CodeApi {
   setCodeMode: React.Dispatch<React.SetStateAction<"auto" | "manual">>;
   codeIr: IRBlock | null;
   generated: { python: string };
+  canSyncCodeFromFlow: boolean;
+  syncCodeFromFlow: () => void;
   debugMap: DebugMap | null;
   flowDiagnostics: PythonLabFlowDiagnostic[];
   flowExpandFunctions: "all" | "top" | "none";

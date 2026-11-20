@@ -66,7 +66,7 @@ PythonLab 是基于 Docker 沙箱的 Python 代码调试环境，支持断点调
 | 能力 | 用户入口 | 协议/实现 | 当前合同 |
 |---|---|---|---|
 | Python 编辑 | 右侧编辑器 | Monaco + 文本回退 | Monaco 失败时仍可编辑 |
-| 代码与流程图同步 | 编辑器、流程图 | `/flow/parse`、`/cfg/parse` | 失败必须显示明确错误 |
+| 代码与流程图同步 | 编辑器、流程图 | `/flow/parse`、`/cfg/parse` | 标题截断、解析占位或裁剪时保留画布与原稿，手动同步和自动回写均停用。导入旧版限长或超时占位 JSON 时同样保留原稿 |
 | 语法检查 | 编辑器输入 | `/syntax/check` | debounce 后标记问题 |
 | 普通运行 | `Run` | 远端 session 或本地 Pyodide | stdout 和 `input()` 可用 |
 | 断点调试 | gutter + `Debug` | session HTTP + DAP WebSocket | 至少一个断点，source mismatch 可恢复 |
@@ -211,6 +211,7 @@ WebSocket 接入时只有没有容器归属的旧 TCP 会话才要求 `dap_port`
 - 历史 `/api/v1/debug/*` 兼容入口已下线
 - 输入上限（2026-11-16）：`syntax/check`、`cfg/parse` 超过 256KB 返回 413；CFG 最多 2000 节点；AI `messages` 最多 50 条且 JSON ≤256KB，flow ≤256KB；DAP 首个 response 前缓冲上限 8MB/2000 条，超限以 1009 关闭。
 - `flow/parse` 的 limits 由服务端钳制到 2000 节点/4000 边/50000 AST/1500ms，非法整数返回 400；syntax/cfg 的 `RecursionError` 返回结构化错误或 413。
+- 展示文本上限（2026-11-17）：`cfg/parse` 与 `flow/parse` 的节点 `title` 最多 512 字符、`flow/parse` 的 `fullTitle` 最多 2048 字符，超出以 `…` 结尾。复合语句的源码段覆盖整段子树，不设上限时 241KB 输入实测可放大到 14.6MB；解析按请求建立一次行索引，不再逐节点重新切分源码。`flow/parse` 的 options 只接受 `limits`/`expand` 已知键，布尔值与非有限数值返回 400，超时回退结果不写缓存。
 
 ### 消息格式
 
@@ -394,7 +395,7 @@ HTTP provider 仅对选定的 `NetworkError` / `TimeoutException` 类型进入�
 
 - `POST /api/v2/pythonlab/sessions` - 创建调试会话（已登录用户）
 - `GET /api/v2/pythonlab/sessions/{session_id}` - 获取会话详情（仅会话所有者）
-- `POST /api/v2/pythonlab/sessions/{session_id}/stop` - 停止会话（仅会话所有者）
+- `POST /api/v2/pythonlab/sessions/{session_id}/stop` - 停止会话（仅会话所有者）。`503` 表示派发未确认，可重试；`TERMINATING` 表示尚未确认回收；GET 的 `TERMINATED` 且 `stop_confirmed=true` 才表示 worker 已确认。worker 停止失败时保留会话和错误码 `SANDBOX_STOP_FAILED`，允许重试。
 - `WS /api/v2/pythonlab/sessions/{session_id}/ws` - 调试 WebSocket（仅会话所有者）
 - `WS /api/v2/pythonlab/sessions/{session_id}/terminal` - 终端 WebSocket（仅会话所有者）
 - `POST /api/v2/pythonlab/flow/parse` - 代码解析流程图（已登录用户）
@@ -409,6 +410,8 @@ HTTP provider 仅对选定的 `NetworkError` / `TimeoutException` 类型进入�
 ---
 
 ## 前端实现
+
+刷新后，当前标签页仅查找同账号、同实验记录的旧调试会话。页面提供「停止旧会话」，停止未确认可重试。运行与调试重启都在旧会话回收确认后再启动。批量清理分别记录受理与确认，未确认停止的会话仍可在列表中查询。页面刷新不自动继续执行。
 
 ### 核心组件
 

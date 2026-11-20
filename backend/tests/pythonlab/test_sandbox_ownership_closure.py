@@ -6,12 +6,13 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+from fastapi import HTTPException
 
+from app.api.pythonlab import sessions as sessions_api
 from app.core.sandbox import docker as docker_api
 from app.core.sandbox import docker_runtime
 from app.tasks import pythonlab as tasks
 from test_sandbox_start_recovery import (  # Reuse isolated, self-contained fixtures.
-    _REAL_GET_START_META,
     apply_start,
     # 以下两个是 pytest fixture：仅通过 ownership_env 的参数名被引用，
     # 文件内无显式调用，必须保留导入。
@@ -52,6 +53,9 @@ def ownership_env(task_env, docker_env, monkeypatch):
 
     monkeypatch.setattr(docker_api, '_run_async', run)
     monkeypatch.setattr(tasks, 'get_sandbox_provider', lambda: provider)
+    client = tasks.cache.get_client.return_value
+    client.smembers = AsyncMock(return_value={b'synthetic'})
+    client.srem = AsyncMock()
     return store, provider, meta, ws, state, calls, live_ids
 
 
@@ -81,51 +85,39 @@ def test_old_stop_preserves_adopted_container_when_ownership_query_is_uncertain(
     env = ownership_env
     store, _, _, ws, _, calls, live_ids = env
     newer = _create_unpublished_then_adopt(env, monkeypatch)
-    saved, removed_members = [], []
+    store['status'] = 'TERMINATING'
+    client = tasks.cache.get_client.return_value
+    original_get = client.get
 
-    async def get_meta(key):
+    async def raw_get(key):
         if key.endswith(':synthetic'):
-            return deepcopy(store)
-        # Model the normal facade's transport-error downgrade to cache miss.
-        if fault in {'session-read', 'missing-meta'}:
+            return await original_get(key)
+        if fault == 'session-read':
+            raise ConnectionError('synthetic session lookup unavailable')
+        if fault == 'missing-meta':
             return None
         if fault == 'invalid-meta':
             return 'not-a-session'
-        return deepcopy(newer)
-
-    async def raw_get(key):
-        if fault == 'session-read':
-            raise ConnectionError('synthetic session lookup unavailable')
-        value = await get_meta(key)
-        return json.dumps(value) if value is not None else None
+        return json.dumps(newer)
 
     async def members(_key):
         if fault == 'members':
             raise ConnectionError('synthetic membership lookup unavailable')
         return {b'synthetic', b'newer'}
 
-    async def srem(key, sid):
-        removed_members.append((key, sid))
+    monkeypatch.setattr(client, 'get', raw_get)
+    monkeypatch.setattr(client, 'smembers', members)
+    if fault == 'get-client':
+        tasks.cache.get_client.side_effect = [client, ConnectionError('synthetic client unavailable')]
 
-    client = SimpleNamespace(get=raw_get, smembers=members, srem=srem)
-
-    async def get_client():
-        if fault == 'get-client':
-            raise ConnectionError('synthetic client unavailable')
-        return client
-
-    async def save_meta(sid, meta):
-        saved.append((sid, deepcopy(meta)))
-
-    monkeypatch.setattr(tasks, 'cache', SimpleNamespace(get=get_meta, get_client=get_client))
-    monkeypatch.setattr(tasks, '_get_start_meta', _REAL_GET_START_META)
-    monkeypatch.setattr(tasks, '_set_session_meta', save_meta)
-    tasks.stop_session.run('synthetic', force=force)
+    result = tasks.stop_session.apply(args=['synthetic', force], throw=False)
+    assert result.state == 'FAILURE'
     assert live_ids == {newer['docker_container_id']}
     assert (ws/'main.py').read_text() == 'new owner code'
     assert not any(c[1] in {'rm', 'exec'} for c in calls)
-    assert saved[-1][1]['status'] == 'TERMINATED'
-    assert all(sid == 'synthetic' for _, sid in removed_members)
+    assert store['status'] == 'TERMINATING'
+    assert store['error_code'] == 'SANDBOX_STOP_FAILED'
+    client.srem.assert_not_awaited()
 
 
 @pytest.mark.parametrize('status, expected', [
@@ -197,10 +189,9 @@ def test_stop_owner_check_to_delete_interleaving_preserves_new_session(ownership
     assert store['docker_container_id'] == 'b' * 64
     store['status'] = 'TERMINATED'
     newer = dict(meta, session_id='newer', status='STARTING', startup_task_id='newer-task')
-    # Actual helper sees a valid empty membership snapshot, then a new start wins.
-    async def get_client():
-        return SimpleNamespace(smembers=AsyncMock(return_value=set()), srem=AsyncMock())
-
+    # Actual helper sees a valid empty membership snapshot, then another
+    # provider writer claims the resource before the stop checks the journal.
+    tasks.cache.get_client.return_value.smembers.return_value = set()
     real_terminate = provider.terminate_session
 
     async def interleaved_terminate(*args):
@@ -210,30 +201,148 @@ def test_stop_owner_check_to_delete_interleaving_preserves_new_session(ownership
         newer.update(await original('newer', 'new owner code', newer), status='READY')
         await real_terminate(*args)
 
-    monkeypatch.setattr(tasks, 'cache', SimpleNamespace(get_client=get_client))
-    monkeypatch.setattr(tasks, '_get_session_meta', AsyncMock(side_effect=lambda _: deepcopy(store)))
-    monkeypatch.setattr(tasks, '_set_session_meta', AsyncMock())
     monkeypatch.setattr(provider, 'terminate_session', interleaved_terminate)
-    tasks.stop_session.run('synthetic', force=True)
+    result = tasks.stop_session.apply(args=['synthetic', True], throw=False)
+    assert result.state == 'FAILURE'
+    assert store['status'] == 'TERMINATING'
     assert newer['status'] == 'READY'
     assert newer['docker_container_id'] in live_ids
     assert (ws/'main.py').read_text() == 'new owner code'
 
 
-@pytest.mark.parametrize('force', [False, True])
-def test_definitive_empty_owner_index_still_allows_stop(ownership_env, monkeypatch, force):
+@pytest.mark.parametrize('failure', ['wrong-token', 'wrong-id', 'missing-journal', 'docker-rm'])
+def test_stop_worker_requires_confirmed_resource_result(ownership_env, monkeypatch, failure):
     store, _, _, ws, _, calls, live_ids = ownership_env
     assert apply_start().state == 'SUCCESS'
-    client = SimpleNamespace(smembers=AsyncMock(return_value={b'synthetic'}), srem=AsyncMock())
-    monkeypatch.setattr(tasks, 'cache', SimpleNamespace(get_client=AsyncMock(return_value=client)))
-    monkeypatch.setattr(tasks, '_get_session_meta', AsyncMock(side_effect=lambda _: deepcopy(store)))
-    saved = AsyncMock()
-    monkeypatch.setattr(tasks, '_set_session_meta', saved)
+    owned_id = store['docker_container_id']
+    journal = docker_runtime.WorkspaceOwnership(docker_api._workspace_root(), ws)
+    if failure == 'wrong-token':
+        store['sandbox_owner_token'] = 'another-generation'
+    elif failure == 'wrong-id':
+        store['docker_container_id'] = 'c' * 64
+    elif failure == 'missing-journal':
+        journal.record_path.unlink()
+    else:
+        original = docker_api._run_async
+
+        async def rejected_remove(cmd, **kwargs):
+            if cmd[:2] == ['docker', 'rm']:
+                calls.append(cmd)
+                return 1, '', 'synthetic removal failure'
+            return await original(cmd, **kwargs)
+
+        monkeypatch.setattr(docker_api, '_run_async', rejected_remove)
+
+    store['status'] = 'TERMINATING'
+    result = tasks.stop_session.apply(args=['synthetic', True], throw=False)
+
+    assert result.state == 'FAILURE'
+    assert store['status'] == 'TERMINATING'
+    assert store['error_code'] == 'SANDBOX_STOP_FAILED'
+    assert owned_id in live_ids
+    assert [cmd for cmd in calls if cmd[1] == 'rm'] == (
+        [['docker', 'rm', '-f', owned_id]] if failure == 'docker-rm' else []
+    )
+
+
+@pytest.mark.parametrize('force', [False, True])
+def test_definitive_empty_owner_index_still_allows_stop(ownership_env, force):
+    store, _, _, ws, _, calls, live_ids = ownership_env
+    assert apply_start().state == 'SUCCESS'
     tasks.stop_session.run('synthetic', force=force)
     assert not live_ids
     assert len([cmd for cmd in calls if cmd[1] == 'rm']) == 1
-    assert saved.await_args.args[1]['status'] == 'TERMINATED'
+    assert store['status'] == 'TERMINATED'
+    assert store['stop_confirmed'] is True
+    tasks.cache.get_client.return_value.srem.assert_awaited_once_with('debug:user:701:sessions', 'synthetic')
     assert ws.exists() is (not force)
+
+
+def test_stop_dispatch_retry_only_allows_current_request_to_finalize(ownership_env, monkeypatch):
+    store, _, _, _, _, calls, live_ids = ownership_env
+    assert apply_start().state == 'SUCCESS'
+    publish = Mock(side_effect=[ConnectionError('broker acknowledgement lost'), None])
+    monkeypatch.setattr(sessions_api, 'cache', tasks.cache)
+    monkeypatch.setattr(sessions_api.celery_app, 'send_task', publish)
+
+    def request_stop():
+        return asyncio.run(sessions_api.stop_session('synthetic', current_user={'id': 701}))
+
+    with pytest.raises(HTTPException) as exc:
+        request_stop()
+    assert exc.value.status_code == 503
+    assert store['status'] == 'READY'
+    assert request_stop()['status'] == 'TERMINATING'
+
+    old_dispatch, current_dispatch = (call.kwargs for call in publish.call_args_list)
+    tasks.stop_session.run(*old_dispatch['args'], **old_dispatch['kwargs'])
+    assert live_ids == {store['docker_container_id']}
+    assert store['status'] == 'TERMINATING'
+
+    tasks.stop_session.run(*current_dispatch['args'], **current_dispatch['kwargs'])
+    assert not live_ids
+    assert request_stop()['status'] == 'TERMINATED'
+    assert publish.call_count == 2
+    assert len([cmd for cmd in calls if cmd[1] == 'rm']) == 1
+
+
+def test_stop_worker_transient_ownership_failure_can_be_retried(ownership_env, monkeypatch):
+    store, _, _, _, _, calls, live_ids = ownership_env
+    assert apply_start().state == 'SUCCESS'
+    publish = Mock()
+    monkeypatch.setattr(sessions_api, 'cache', tasks.cache)
+    monkeypatch.setattr(sessions_api.celery_app, 'send_task', publish)
+    client = tasks.cache.get_client.return_value
+    client.smembers.side_effect = [ConnectionError('synthetic membership unavailable'), {b'synthetic'}]
+
+    def request_and_execute():
+        response = asyncio.run(sessions_api.stop_session('synthetic', current_user={'id': 701}))
+        assert response['status'] == 'TERMINATING'
+        payload = publish.call_args.kwargs
+        return tasks.stop_session.apply(args=payload['args'], kwargs=payload['kwargs'], throw=False)
+
+    assert request_and_execute().state == 'FAILURE'
+    assert store['error_code'] == 'SANDBOX_STOP_FAILED'
+    assert live_ids
+    assert request_and_execute().state == 'SUCCESS'
+    assert store['status'] == 'TERMINATED' and store['stop_confirmed'] is True
+    assert not live_ids
+    assert publish.call_count == 2
+    assert len([cmd for cmd in calls if cmd[1] == 'rm']) == 1
+
+
+def test_stop_confirms_removed_generation_after_normal_exit_updates_meta(ownership_env, monkeypatch):
+    store, provider, _, _, _, _, live_ids = ownership_env
+    assert apply_start().state == 'SUCCESS'
+    previous = dict(store, status='TERMINATED', plain_exit_code=0)
+    store.update(status='TERMINATING', stop_task_id='explicit-stop')
+    original = provider.stop_session
+
+    async def stop_with_normal_exit(*args):
+        await original(*args)
+        store.clear()
+        store.update(previous)
+
+    monkeypatch.setattr(provider, 'stop_session', stop_with_normal_exit)
+
+    tasks.stop_session.run('synthetic', stop_task_id='explicit-stop')
+
+    assert not live_ids
+    assert store['stop_confirmed'] is True
+    assert store['plain_exit_code'] == 0
+
+
+def test_stop_before_start_confirms_no_container_without_removing_anything(ownership_env):
+    store, _, _, ws, _, calls, _ = ownership_env
+    journal = docker_runtime.WorkspaceOwnership(docker_api._workspace_root(), ws)
+    journal.record_path.unlink()
+    store['status'] = 'TERMINATING'
+
+    tasks.stop_session.run('synthetic')
+
+    assert store['status'] == 'TERMINATED'
+    assert store['stop_confirmed'] is True
+    assert [cmd[1] for cmd in calls] == ['inspect']
 
 
 @pytest.mark.parametrize('error', [TimeoutError, asyncio.CancelledError])
@@ -605,3 +714,29 @@ def test_writable_legacy_meta_cannot_authorize_external_container(docker_env, jo
     assert (ws / 'main.py').read_text() == 'original active code'
     assert not any(c[1] in {'run', 'rm', 'exec'} for c in calls)
     assert (journal.record_path.read_bytes() if journal.record_path.exists() else None) == before
+
+
+def test_workspace_write_failure_leaves_no_pending_claim(ownership_env):
+    """工作区写入失败不得留下 phase=creating 的归属记录。
+
+    学生可以在自己的 workspace 里把 main.py 换成目录；若归属记录先于工作区写入，
+    这次失败会让该学生后续所有启动都撞上“运行环境归属状态待核对”。
+    """
+    store, provider, _, ws, _, _, _ = ownership_env
+    journal = docker_runtime.WorkspaceOwnership(docker_api._workspace_root(), ws)
+
+    (ws / 'main.py').unlink()
+    (ws / 'main.py').mkdir()
+
+    with pytest.raises(RuntimeError, match='not a regular file'):
+        asyncio.run(provider.start_session('synthetic', 'code', store))
+
+    if journal.record_path.exists():
+        assert json.loads(journal.record_path.read_text())['phase'] != 'creating'
+
+    # 障碍移除后同一会话必须能重新启动，而不是永久被拒。
+    (ws / 'main.py').rmdir()
+    result = asyncio.run(provider.start_session('synthetic', 'code', store))
+    assert result['docker_container_id']
+    assert (ws / 'main.py').read_text() == 'code'
+    assert json.loads(journal.record_path.read_text())['phase'] == 'live'

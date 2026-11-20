@@ -337,16 +337,20 @@ const XbkPage: React.FC = () => {
     const requestSeq = ++metaRequestSeqRef.current;
     try {
       const selectedYear = filters.year?.trim() || undefined;
+      const { term, grade } = filters;
+      // 在本次加载内，相同筛选范围共享一次元数据请求。
+      const globalRequest = xbkDataApi.getMeta();
+      const yearRequest = selectedYear
+        ? xbkDataApi.getMeta({ year: selectedYear })
+        : globalRequest;
+      const scopedRequest =
+        term || grade
+          ? xbkDataApi.getMeta({ year: selectedYear, term, grade })
+          : yearRequest;
       const [globalMeta, yearMeta, scopedMeta] = await Promise.all([
-        xbkDataApi.getMeta(),
-        selectedYear
-          ? xbkDataApi.getMeta({ year: selectedYear })
-          : xbkDataApi.getMeta(),
-        xbkDataApi.getMeta({
-          year: selectedYear,
-          term: filters.term,
-          grade: filters.grade,
-        }),
+        globalRequest,
+        yearRequest,
+        scopedRequest,
       ]);
       if (requestSeq !== metaRequestSeqRef.current) return false;
       setMeta({

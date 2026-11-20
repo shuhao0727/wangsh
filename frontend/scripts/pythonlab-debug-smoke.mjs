@@ -182,13 +182,12 @@ async function apiRequest(page, apiPath, { method = "GET", json = null } = {}) {
 
 async function cleanupOwnSessions(page) {
   const cleanup = await apiRequest(page, "/api/v2/pythonlab/sessions/cleanup", { method: "POST" });
-  if (!cleanup.ok) {
-    throw new Error(`session cleanup failed: ${cleanup.status}`);
+  if (!cleanup.ok || cleanup.data?.ok === false) {
+    throw new Error(`session cleanup dispatch failed: ${cleanup.status}`);
   }
-  const stoppedCount = Number(cleanup.data?.stopped_count || 0);
 
   let listed = await apiRequest(page, "/api/v2/pythonlab/sessions");
-  const deadline = Date.now() + 5_000;
+  const deadline = Date.now() + 20_000;
   while (listed.ok && Array.isArray(listed.data?.items) && listed.data.items.length > 0 && Date.now() < deadline) {
     await page.waitForTimeout(250);
     listed = await apiRequest(page, "/api/v2/pythonlab/sessions");
@@ -202,9 +201,6 @@ async function cleanupOwnSessions(page) {
     throw new Error(`session cleanup incomplete: ${remaining}`);
   }
 
-  if (stoppedCount > 0) {
-    await page.waitForTimeout(16_000);
-  }
 }
 
 async function setBreakpoint(page, lineNumber = 2) {

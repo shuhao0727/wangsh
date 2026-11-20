@@ -4,7 +4,9 @@ import json
 from contextlib import suppress
 
 from fastapi import Request
+from sqlalchemy import select
 
+from app.models import User
 from app.core.session_guard import (
     verify_request_session_detail,
     verify_stream_session_detail,
@@ -41,8 +43,25 @@ async def _request_is_disconnected(request: Request | None) -> bool:
         raise
 
 
-async def _session_status(request: Request | None) -> str:
-    """Return ok, session_invalid, or session_revalidation_unavailable.
+async def _verify_stream_access(user_id, payload, request, allowed_roles):
+    # Keep the existing verifier seam for isolated timeout and failure tests.
+    if verify_request_session_detail is not _DEFAULT_REQUEST_SESSION_DETAIL:
+        return await verify_request_session_detail(user_id, payload, request)
+    result = await verify_stream_session_detail(user_id, payload, request)
+    if not result["ok"] or allowed_roles is None:
+        return result
+
+    from app.db.database import AsyncSessionLocal
+
+    async with AsyncSessionLocal() as db:
+        role = await db.scalar(select(User.role_code).where(User.id == user_id))
+    if role not in allowed_roles:
+        return {"ok": False, "reason": "access_revoked"}
+    return result
+
+
+async def _session_status(request: Request | None, allowed_roles: tuple[str, ...] | None = None) -> str:
+    """Check the admitted session and any role requirement for this stream.
 
     ``None`` is used by direct generator/unit callers that intentionally bypass
     HTTP authentication. Keep that compatibility path live instead of trying to
@@ -58,15 +77,12 @@ async def _session_status(request: Request | None) -> str:
         payload = verify_token(token)
         if not payload:
             return "session_invalid"
-        verifier = verify_stream_session_detail
-        # Keep the old seam available for isolated callers that deliberately
-        # inject a failing verifier to exercise timeout/error cleanup paths.
-        if verify_request_session_detail is not _DEFAULT_REQUEST_SESSION_DETAIL:
-            verifier = verify_request_session_detail
         result = await asyncio.wait_for(
-            verifier(user_id, payload, request),
+            _verify_stream_access(user_id, payload, request, allowed_roles),
             timeout=CHECK_TIMEOUT_SECONDS,
         )
+        if result.get("reason") == "access_revoked":
+            return "access_revoked"
         return "ok" if result.get("ok") else "session_invalid"
     except asyncio.TimeoutError:
         return "session_revalidation_unavailable"
@@ -84,15 +100,17 @@ async def _emit_session_failure(request: Request, status: str):
         return
     if status == "session_invalid":
         yield _session_error_frame("session_invalid", "会话已失效，请重新登录")
+    elif status == "access_revoked":
+        yield _session_error_frame("access_revoked", "权限已变更，此事件流已关闭")
     else:
         yield _session_error_frame("session_revalidation_unavailable", "暂时无法核验会话，请稍后重试")
 
 
-async def _recheck_session(request: Request | None) -> str:
+async def _recheck_session(request: Request | None, allowed_roles: tuple[str, ...] | None) -> str:
     if request is None:
         live = await _session_is_live(request)
         return "ok" if live else "session_invalid"
-    return await _session_status(request)
+    return await _session_status(request, allowed_roles)
 
 
 async def _emit_failure_frames(request: Request | None, status: str):
@@ -101,13 +119,15 @@ async def _emit_failure_frames(request: Request | None, status: str):
             yield frame
 
 
-async def session_checked_stream(source, request: Request | None):
+async def session_checked_stream(
+    source, request: Request | None, *, allowed_roles: tuple[str, ...] | None = None,
+):
     """Check before subscription and each frame; always close the source."""
     pending = None
     try:
         if await _request_is_disconnected(request):
             return
-        status = await _recheck_session(request)
+        status = await _recheck_session(request, allowed_roles)
         if status != "ok":
             async for frame in _emit_failure_frames(request, status):
                 yield frame
@@ -120,7 +140,7 @@ async def session_checked_stream(source, request: Request | None):
             done, _ = await asyncio.wait({pending}, timeout=CHECK_INTERVAL_SECONDS)
             if await _request_is_disconnected(request):
                 return
-            status = await _recheck_session(request)
+            status = await _recheck_session(request, allowed_roles)
             if status != "ok":
                 async for frame in _emit_failure_frames(request, status):
                     yield frame

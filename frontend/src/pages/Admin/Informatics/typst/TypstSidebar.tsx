@@ -300,7 +300,7 @@ export default function TypstSidebar({
                 <span className="text-sm">Ctrl/⌘ + Enter 保存</span>
               </div>
               <div className="flex items-center justify-between rounded-md border border-border-secondary bg-surface-2 px-2.5 py-1.5">
-                <span className="text-sm text-text-tertiary">自动预览</span>
+                <span className="text-sm text-text-tertiary">保存后自动刷新预览</span>
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-text-tertiary">
                     {autoPreview ? "开" : "关"}

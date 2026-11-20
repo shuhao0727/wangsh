@@ -39,6 +39,11 @@ const GameConfigPage: React.FC = () => {
   };
 
   const handleSave = () => {
+    const emptyPool = LOCK_META.find(({ key }) => !pools[key]?.length);
+    if (emptyPool) {
+      showMessage.error(`请为${emptyPool.title}至少填写一个密码`);
+      return;
+    }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(pools));
     showMessage.success("密码池已保存");
   };

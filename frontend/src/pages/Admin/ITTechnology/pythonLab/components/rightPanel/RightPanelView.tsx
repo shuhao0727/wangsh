@@ -104,6 +104,8 @@ export const RightPanel = React.memo(function RightPanel() {
     codeMode: _codeMode,
     setCodeMode,
     generated,
+    canSyncCodeFromFlow,
+    syncCodeFromFlow,
     flowDiagnostics: _flowDiagnostics,
     flowExpandFunctions: _flowExpandFunctions,
     setFlowExpandFunctions: _setFlowExpandFunctions,
@@ -213,12 +215,10 @@ export const RightPanel = React.memo(function RightPanel() {
       recoveredBlankCodeRef.current = true;
       return;
     }
-    const fallback = generated.python?.trim() ?? "";
-    if (!fallback) return;
-    setCodeMode("auto");
-    setCode(generated.python);
+    if (!canSyncCodeFromFlow || !generated.python.trim()) return;
+    syncCodeFromFlow();
     recoveredBlankCodeRef.current = true;
-  }, [code, generated.python, setCode, setCodeMode]);
+  }, [canSyncCodeFromFlow, code, generated.python, syncCodeFromFlow]);
 
   const panelRef = useRef<HTMLDivElement | null>(null);
   const readStoredEditorHeight = (): number | null => {
@@ -395,18 +395,16 @@ export const RightPanel = React.memo(function RightPanel() {
                   <Maximize2 className="h-4 w-4" />
                 </Button>
               </PanelTooltip>
-              <PanelTooltip title="从流程图同步">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setCodeMode("auto");
-                    setCode(generated.python);
-                  }}
-                >
-                  <RefreshCw className="h-4 w-4" />
-                </Button>
-              </PanelTooltip>
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label="从流程图同步"
+                title={canSyncCodeFromFlow ? "从流程图同步" : "流程图内容不完整，已保留编辑器源码"}
+                disabled={!canSyncCodeFromFlow}
+                onClick={syncCodeFromFlow}
+              >
+                <RefreshCw className="h-4 w-4" />
+              </Button>
             </div>
           </div>
 
