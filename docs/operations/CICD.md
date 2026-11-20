@@ -44,8 +44,9 @@ not found（网络、鉴权失败），即失败退出，已发布 tag 不被覆
 ### 2.2 pr-pythonlab-owner-gate.yml — PR 门禁（并发）
 
 影响 PythonLab、sandbox、Celery、认证/启动依赖、Monaco、Compose 或共享脱敏实现的 PR
-调用 `pythonlab-pr-runtime.yml`。runner 启动当前 PR 合并结果的 PG、Redis、backend、
-Celery、sandbox 和 Vite，先跑 Chromium 真实 pointer-click 调试/多断点 Continue，再跑 owner matrix。
+调用 `pythonlab-pr-runtime.yml`。共享 runner 固定为锁定 Playwright 支持的 `ubuntu-24.04`，
+避免 `ubuntu-latest` 滚动到尚不受支持的系统版本。runner 启动当前 PR 合并结果的 PG、Redis、
+backend、Celery、sandbox 和 Vite，先跑 Chromium 真实 pointer-click 调试/多断点 Continue，再跑 owner matrix。
 
 Fork PR 使用临时本地账号，不读取仓库 secrets。密码经 step env 传递，不进命令参数；
 浏览器与 Python smoke 通过 `redact_exec.py` 实时脱敏，保留退出码/信号语义。

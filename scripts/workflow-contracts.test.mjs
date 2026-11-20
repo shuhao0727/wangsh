@@ -1550,6 +1550,12 @@ test("PythonLab PR runtime enrolls durable auth before starting the runtime", ()
 test("PythonLab PR runtime provisions, verifies, and cleans local dependencies", () => {
   const workflow = read(".github/workflows/pythonlab-pr-runtime.yml");
 
+  assert.match(
+    workflow,
+    /^  current-pr-runtime:\n    runs-on:\s*ubuntu-24\.04$/m,
+    "the locked Playwright Chromium needs a supported Ubuntu runner",
+  );
+
   for (const required of [
     "postgres:",
     "redis:",
