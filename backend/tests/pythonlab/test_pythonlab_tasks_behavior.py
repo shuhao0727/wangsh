@@ -37,8 +37,11 @@ def stop_worker_env(monkeypatch):
 ])
 def test_stop_worker_selects_existing_provider_operation(stop_worker_env, monkeypatch, runtime_mode, force, hard_stop):
     provider, fake_cache = stop_worker_env
-    meta = {"session_id": "dbg_done", "owner_user_id": 7, "status": "TERMINATING",
-            "runtime_mode": runtime_mode, "ttl_seconds": 300}
+    meta = {
+        "session_id": "dbg_done", "owner_user_id": 7, "status": "TERMINATING",
+        "runtime_mode": runtime_mode, "ttl_seconds": 300,
+        "docker_container_id": "a" * 64, "sandbox_owner_token": f"fixture-{runtime_mode}",
+    }
     fake_cache.store["debug:session:dbg_done"] = meta
     fake_cache.client.sets["debug:user:7:sessions"] = {"dbg_done"}
     monkeypatch.setattr(pythonlab_tasks, "_confirm_stopped_resource", AsyncMock(return_value=True))

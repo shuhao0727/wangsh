@@ -69,35 +69,6 @@ async def _get_session_meta(session_id: str) -> Optional[Dict[str, Any]]:
     return await cache.get(f"{CACHE_KEY_SESSION_PREFIX}:{session_id}")
 
 
-async def _owner_has_other_active_session(owner_user_id: int, excluding_session_id: str) -> bool:
-    if owner_user_id <= 0:
-        return False
-    try:
-        client = await cache.get_client()
-        user_sessions_key = f"{CACHE_KEY_USER_SESSIONS_PREFIX}:{owner_user_id}:sessions"
-        raw_ids = await client.smembers(user_sessions_key)  # type: ignore[misc]
-    except Exception:
-        # stop_session already treats an ownership-query failure conservatively.
-        # Do not turn an unavailable membership index into permission to delete.
-        logger.exception("_owner_has_other_active_session 获取用户活跃会话失败")
-        raise
-
-    for raw in raw_ids or []:
-        sid = raw.decode("utf-8", errors="ignore") if isinstance(raw, (bytes, bytearray)) else str(raw)
-        sid = sid.strip()
-        if not sid or sid == excluding_session_id:
-            continue
-        # Bypass cache.get's error-to-miss downgrade for destructive decisions.
-        meta = await _get_start_meta(sid)
-        if not isinstance(meta, dict):
-            return True
-        st = str(meta.get("status") or "").upper()
-        # Missing/unknown/terminating metadata cannot prove the resource is idle.
-        if st not in {SESSION_STATUS_TERMINATED, SESSION_STATUS_FAILED}:
-            return True
-    return False
-
-
 async def _get_start_value(key: str):
     # The general cache facade deliberately swallows transport errors. Startup
     # must distinguish a missing value from an unavailable store for retries.
@@ -570,6 +541,19 @@ def cleanup_stale_sessions():
     _run_async(run())
 
 
+async def _other_session_owns_live_sandbox(run_docker, name, record, session_id):
+    from app.core.sandbox.docker_runtime import inspect_container
+
+    if record.get("phase") != "live" or record.get("container_name") != name:
+        return False
+    other_session_id = record.get("session_id")
+    container_id = record.get("container_id")
+    if not other_session_id or other_session_id == session_id or not container_id:
+        return False
+    actual = await inspect_container(run_docker, name)
+    return bool(actual and actual.get("Id") == container_id)
+
+
 async def _confirm_stopped_resource(provider, session_id, meta):
     from app.core.sandbox.docker import _run_async as run_docker, _workspace_root
     from app.core.sandbox.docker_runtime import WorkspaceOwnership, inspect_container
@@ -593,18 +577,21 @@ async def _confirm_stopped_resource(provider, session_id, meta):
                 record.get("container_name") == name and record.get("container_id")
                 and meta.get("startup_task_id") and record.get("startup_task_id") == meta["startup_task_id"]
             )
-        # Stopping before a container was created is a valid outcome. A live or
-        # uncertain journal, or a legacy container without a journal, is not.
-        return (record is None or removed) and await inspect_container(run_docker, name) is None
+        if record is None or removed:
+            return await inspect_container(run_docker, name) is None
+        # A session that never began startup has no claim on a verified sibling sandbox.
+        return not meta.get("startup_task_id") and await _other_session_owns_live_sandbox(
+            run_docker, name, record, session_id,
+        )
 
 
 async def _finish_session_stop(provider, client, key, raw, meta, session_id, force):
     owner = int(meta.get("owner_user_id") or 0)
     ttl = int(meta.get("ttl_seconds") or settings.PYTHONLAB_SESSION_TTL_SECONDS or DEFAULT_SESSION_TTL)
     try:
-        # Force does not bypass the same-owner protection. The provider separately
-        # checks the session, token and exact ID under the resource fence.
-        if not await _owner_has_other_active_session(owner, session_id):
+        # The provider checks the current session, token and exact ID under the
+        # resource fence. Sibling session states carry no ownership authority.
+        if meta.get("docker_container_id") and meta.get("sandbox_owner_token"):
             if force or str(meta.get("runtime_mode") or "debug").lower() == "debug":
                 await provider.terminate_session(session_id, meta)
             else:
