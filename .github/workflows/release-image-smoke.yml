@@ -1,0 +1,81 @@
+name: 2.2.11 official-image smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      reviewed_sha:
+        description: Full SHA of the reviewed main-branch workflow commit
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  official-image-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      REVIEWED_WORKFLOW_SHA: ${{ inputs.reviewed_sha }}
+    steps:
+      - name: Check out the workflow source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: ci
+          persist-credentials: false
+
+      - name: Require the reviewed workflow on a fresh Linux x64 job
+        run: python3 -I -B ci/scripts/prod-smoke/release_images.py --check-context
+
+      - name: Run isolated controller contracts
+        run: python3 -I -B ci/scripts/prod-smoke/test_release_images.py
+
+      - name: Check out the official 2.2.11 smoke sources
+        uses: actions/checkout@v4
+        with:
+          ref: 15c818cbba840aee490198a2652a9fe66641d4fa
+          path: candidate
+          persist-credentials: false
+
+      - name: Read the original official release-set
+        uses: actions/download-artifact@v4
+        with:
+          name: release-set-44002776220
+          run-id: 44002776220
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/wangsh-release-image-artifact
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install the pinned browser test client and engines
+        timeout-minutes: 8
+        working-directory: candidate/frontend
+        run: |
+          npm ci --include=dev --legacy-peer-deps --ignore-scripts --no-audit --no-fund
+          npx --no-install playwright install --with-deps chrome webkit
+
+      - name: Verify and smoke the six official images
+        id: smoke
+        timeout-minutes: 18
+        run: |
+          python3 -I -B ci/scripts/prod-smoke/release_images.py \
+            --source candidate \
+            --release-set "$RUNNER_TEMP/wangsh-release-image-artifact/release-set.txt"
+
+      - name: Recover cleanup for this job if the smoke step was interrupted
+        id: recovery
+        if: always()
+        timeout-minutes: 2
+        run: python3 -I -B ci/scripts/prod-smoke/release_images.py --cleanup --source candidate
+
+      - name: Record sanitized acceptance evidence in the job summary and logs
+        if: always()
+        env:
+          JOB_STATUS: ${{ job.status }}
+          SMOKE_OUTCOME: ${{ steps.smoke.outcome }}
+          RECOVERY_OUTCOME: ${{ steps.recovery.outcome }}
+        run: python3 -I -B ci/scripts/prod-smoke/release_images.py --summary
