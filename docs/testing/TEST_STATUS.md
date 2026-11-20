@@ -19,6 +19,7 @@
 
 | 检查 | 命令 / 范围 | 结果 |
 |---|---|---|
+| 2026-11-20 后端全量 CI 卡点复查 | `.claude/worktrees/pr18-r1-ci-autofix` / `30d2446`。隔离运行此次变动的 25 个非 PostgreSQL 文件及独立 PostgreSQL 16 上的课堂计划用例 | 前者 **679 通过 / 1 跳过 / 15 警告**，后者 **38 通过**。远端三个作业长时间停在 pytest，运行时日志接口无内容。本轮保留原测试及覆盖率，补逐例日志、60 秒堆栈和 20 分钟步骤限时，待 GitHub 给出卡点证据。 |
 | 2026-11-20 PythonLab 同账号批量停止 | `.claude/worktrees/pr18-r1-ci-autofix`，`codex/site-remediation` / `ca8ee39` 加本次修复。禁 dotenv/DNS/外连的运行器执行 PythonLab 归属、启动恢复、worker、会话和重试五个 pytest 文件 | 修复前两种任务顺序均在两个会话进入 `TERMINATING` 后失败。修复后两种顺序都确认停止，未启动会话先执行时保留另一会话的资源。实际容器 ID 不符时保留资源和索引。**238 通过 / 9 警告**，迁移守卫 50 文件，Python 治理 0 错误。此轮使用模拟 Docker 命令与临时归属记录。 |
 | 2026-11-20 PythonLab 回收索引 | `codex/site-remediation` / `38f479e` 加本次修复；用禁 dotenv、DNS 和外连的临时运行器验证会话、worker、沙箱归属及 WS 四文件 | 修复前列表、计数清理和批量清理三个入口均提前移除未确认回收的会话。修复后 **86 通过 / 1 跳过 / 9 警告**，可重试清理，已确认的终态仍可移除。远端全量结果待回读。 |
 | 2026-11-20 合并验证 | GitHub R1 PR `f7e41fe`；`/Users/wsh/wangsh` 的 `codex/site-remediation` 工作区，运行 `type-check`、主应用与 AI 伙伴 Vitest、脚本测试、token/lint/UI 门禁、`build:check`、迁移守卫与两次 Python 治理（含 `--base-ref f7e41fe`） | R1 PR **6 项 CI 通过**，已合入 `main` 的 `7e56e9c`。本地全站整改主应用 **961** 项、AI 伙伴 **59** 项通过，类型检查与构建通过，迁移守卫 **50** 文件，治理 **0 错误 / 43 警告**。未运行 2.2.11 正式镜像验收。 |

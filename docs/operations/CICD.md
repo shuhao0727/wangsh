@@ -86,7 +86,7 @@ ECharts/词云 peer major、manifest 与 lockfile 由 workflow contracts 校验�
 生产 Dockerfile 的 `--legacy-peer-deps` 安装结果不能替代此检查，不以宽松参数绕过缺失 peer 条目。
 后端发布前同时运行普通治理检查及相对原发布基线的 `--base-ref`，不能只看默认 check 的 errors=0。
 保存端点软校验的19项自含用例只在 `repo-config` 的隔离Python入口运行；`backend-pytest`
-精确排除该模块以防正常app导入冲突，不排除其他用例或coverage；workflow合同锁定两处。
+精确排除该模块以防正常 app 导入冲突，其余用例及 coverage 保留。pytest 逐例输出名称，单例执行超过 60 秒打印线程堆栈；全量测试步骤超过 20 分钟按超时失败。
 课堂与测评角色贯通用例由同一阻断 pytest 自动收集，无需另起服务。用例在 SQLite 和合成角色下走真实 ASGI 路由，覆盖发布、答题、到时推进、关窗续答和复盘；不代替远程身份、行锁并发或真实网关联测。
 
 以下仍为非阻断或有限覆盖，不得写成完整端到端已过：

@@ -1649,14 +1649,14 @@ test("CI keeps endpoint warning contracts separate from application pytest", () 
     /- name: isolated endpoint and gateway contracts\n\s+run: \|\n([\s\S]*?)(?=\n\s+- name:)/,
   )?.[1] ?? "";
   const pytestStep = workflow.match(
-    /- name: pytest\n(?:\s+#[^\n]*\n)*\s+run: ([^\n]+)/,
+    /- name: pytest\n\s+timeout-minutes: 20\n(?:\s+#[^\n]*\n)*\s+run: ([^\n]+)/,
   )?.[1] ?? "";
 
   assert.match(
     isolatedStep,
     /env -i PATH=\/usr\/bin:\/bin PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -I -B -S backend\/tests\/ai_agents\/test_agent_endpoint_warning\.py(?:\s|$)/,
   );
-  assert.match(pytestStep, /^pytest -q /);
+  assert.match(pytestStep, /^pytest -vv -o faulthandler_timeout=60 /);
   assert.match(pytestStep, /--ignore=tests\/ai_agents\/test_agent_endpoint_warning\.py(?:\s|$)/);
   assert.match(pytestStep, /--cov=app(?:\s|$)/);
   assert.match(pytestStep, /--cov-report=json(?:\s|$)/);
